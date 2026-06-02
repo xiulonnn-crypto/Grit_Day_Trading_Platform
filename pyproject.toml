@@ -1,0 +1,16 @@
+[project]
+name = "grit-day-trading-platform"
+version = "0.1.0"
+description = "STP TXT review truth-source scaffold for day trading review."
+requires-python = ">=3.13"
+dependencies = [
+  "fastapi",
+  "pydantic",
+  "python-multipart",
+  "uvicorn",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+

@@ -1,0 +1,13 @@
+.pytest_cache/
+.venv/
+__pycache__/
+*.py[cod]
+data/*.db
+data/*.db-shm
+data/*.db-wal
+node_modules/
+web/dist/
+output/
+artifacts/
+.tmp/
+
