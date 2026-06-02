@@ -18,10 +18,12 @@ export interface ImportBatch {
 
 export interface QuarantineRow {
   id: string;
+  quarantine_id: string;
   batch_id: string;
   import_row_id: string;
   raw_line_number: number;
   raw_text: string;
+  raw_line: string;
   failed_field: string;
   reason_code: string;
   reason: string;
@@ -31,6 +33,7 @@ export interface QuarantineRow {
 
 export interface FillRow {
   id: string;
+  fill_id: string;
   account_raw: string;
   account_canonical: string;
   symbol: string;
@@ -45,6 +48,7 @@ export interface FillRow {
   raw_line_number: number;
   parser_version: string;
   field_mapper_version: string;
+  uses_fallback_idempotency_key: boolean;
 }
 
 export interface DailySummary {
@@ -57,4 +61,3 @@ export interface DailySummary {
   quarantine_row_count: number;
   source: "committed_fills_only";
 }
-

@@ -7,6 +7,14 @@ from pathlib import Path
 from typing import Any
 
 
+STORAGE_SCHEMA_VERSION = 1
+ACCOUNT_STRIP_CHARS_SQL = "char(9) || char(10) || char(11) || char(12) || char(13) || char(32)"
+
+
+def _account_canonical_expr(column: str) -> str:
+    return f"upper(trim({column}, {ACCOUNT_STRIP_CHARS_SQL}))"
+
+
 SCHEMA_SQL = """
 PRAGMA foreign_keys = ON;
 
@@ -85,6 +93,108 @@ CREATE TABLE IF NOT EXISTS quarantine_rows (
     repair_hint TEXT NOT NULL,
     review_status TEXT NOT NULL DEFAULT 'open'
 );
+
+CREATE TABLE IF NOT EXISTS storage_migrations (
+    version INTEGER PRIMARY KEY,
+    applied_at TEXT NOT NULL DEFAULT (datetime('now')),
+    description TEXT NOT NULL
+);
+"""
+
+STORAGE_CONTRACT_SQL = f"""
+CREATE UNIQUE INDEX IF NOT EXISTS ux_import_batches_file_hash
+ON import_batches(file_hash);
+
+CREATE UNIQUE INDEX IF NOT EXISTS ux_import_rows_batch_line_hash
+ON import_rows(batch_id, raw_line_number, raw_line_hash);
+
+CREATE UNIQUE INDEX IF NOT EXISTS ux_orders_idempotency_key
+ON orders(idempotency_key);
+
+CREATE UNIQUE INDEX IF NOT EXISTS ux_orders_account_order
+ON orders(account_canonical, order_id);
+
+CREATE UNIQUE INDEX IF NOT EXISTS ux_fills_idempotency_key
+ON fills(idempotency_key);
+
+CREATE UNIQUE INDEX IF NOT EXISTS ux_fills_account_execution
+ON fills(account_canonical, execution_id)
+WHERE execution_id IS NOT NULL AND execution_id <> '';
+
+CREATE UNIQUE INDEX IF NOT EXISTS ux_fills_source_import_row
+ON fills(source_import_row_id);
+
+CREATE UNIQUE INDEX IF NOT EXISTS ux_quarantine_import_row
+ON quarantine_rows(import_row_id)
+WHERE import_row_id IS NOT NULL;
+
+CREATE TRIGGER IF NOT EXISTS trg_import_rows_account_canonical_insert
+BEFORE INSERT ON import_rows
+FOR EACH ROW
+WHEN NOT (
+    (NEW.account_raw IS NULL AND NEW.account_canonical IS NULL)
+    OR (
+        NEW.account_raw IS NOT NULL
+        AND NEW.account_canonical = {_account_canonical_expr("NEW.account_raw")}
+    )
+)
+BEGIN
+    SELECT RAISE(ABORT, 'account_canonical_mismatch');
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_import_rows_account_canonical_update
+BEFORE UPDATE OF account_raw, account_canonical ON import_rows
+FOR EACH ROW
+WHEN NOT (
+    (NEW.account_raw IS NULL AND NEW.account_canonical IS NULL)
+    OR (
+        NEW.account_raw IS NOT NULL
+        AND NEW.account_canonical = {_account_canonical_expr("NEW.account_raw")}
+    )
+)
+BEGIN
+    SELECT RAISE(ABORT, 'account_canonical_mismatch');
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_orders_account_canonical_insert
+BEFORE INSERT ON orders
+FOR EACH ROW
+WHEN NEW.account_raw IS NULL
+    OR NEW.account_canonical IS NULL
+    OR NEW.account_canonical <> {_account_canonical_expr("NEW.account_raw")}
+BEGIN
+    SELECT RAISE(ABORT, 'account_canonical_mismatch');
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_orders_account_canonical_update
+BEFORE UPDATE OF account_raw, account_canonical ON orders
+FOR EACH ROW
+WHEN NEW.account_raw IS NULL
+    OR NEW.account_canonical IS NULL
+    OR NEW.account_canonical <> {_account_canonical_expr("NEW.account_raw")}
+BEGIN
+    SELECT RAISE(ABORT, 'account_canonical_mismatch');
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_fills_account_canonical_insert
+BEFORE INSERT ON fills
+FOR EACH ROW
+WHEN NEW.account_raw IS NULL
+    OR NEW.account_canonical IS NULL
+    OR NEW.account_canonical <> {_account_canonical_expr("NEW.account_raw")}
+BEGIN
+    SELECT RAISE(ABORT, 'account_canonical_mismatch');
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_fills_account_canonical_update
+BEFORE UPDATE OF account_raw, account_canonical ON fills
+FOR EACH ROW
+WHEN NEW.account_raw IS NULL
+    OR NEW.account_canonical IS NULL
+    OR NEW.account_canonical <> {_account_canonical_expr("NEW.account_raw")}
+BEGIN
+    SELECT RAISE(ABORT, 'account_canonical_mismatch');
+END;
 """
 
 
@@ -98,7 +208,17 @@ def connect(db_path: str | Path) -> sqlite3.Connection:
 
 
 def initialize_database(conn: sqlite3.Connection) -> None:
+    conn.execute("PRAGMA foreign_keys = ON")
     conn.executescript(SCHEMA_SQL)
+    conn.executescript(STORAGE_CONTRACT_SQL)
+    conn.execute(
+        """
+        INSERT OR IGNORE INTO storage_migrations (version, description)
+        VALUES (?, ?)
+        """,
+        (STORAGE_SCHEMA_VERSION, "p0_storage_contract_v1"),
+    )
+    conn.execute(f"PRAGMA user_version = {STORAGE_SCHEMA_VERSION}")
     conn.commit()
 
 

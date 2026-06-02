@@ -1,0 +1,7 @@
+Account	Symbol	Side	OrderID	ExecID	Qty	Price	Time	Status	DeskNote
+ acct-qa 	NVDA	B	O-P0-001	E-P0-001-A	10	100.00	2026-06-01T09:31:00	FILLED	open buy
+ACCT-QA	NVDA	S	O-P0-002	E-P0-002-A	5	101.00	2026-06-01T10:00:00	PARTIAL	partial scale out
+ACCT-QA	NVDA	S	O-P0-003		5	102.00	2026-06-01T10:30:00	FILLED	fallback exec id
+ACCT-QA	AMD	B	O-P0-004				2026-06-01T11:00:00	CANCELLED	cancelled order only
+acct-qa	MSFT	B	O-P0-005	E-P0-005-A	2	200.00	2026-06-02T08:01:00	FILLED	cross day premarket
+ACCT-QA	TSLA	B	O-P0-006	E-P0-006-A	3		2026-06-02T12:00:00	FILLED	missing price quarantine

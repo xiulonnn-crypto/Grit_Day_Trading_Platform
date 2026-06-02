@@ -1,6 +1,6 @@
 # Technical Plan
 
-本文档记录当前技术计划、阶段切片、接口草案、测试策略和开放问题。当前项目是文档基线，尚未落地应用代码。
+本文档记录当前技术计划、阶段切片、接口草案、测试策略和开放问题。
 
 ## 当前技术真相
 
@@ -11,6 +11,7 @@
 - 首版只做提醒和复盘，不自动下单。
 - 首个真实 STP TXT 样例将决定 parser fixture 和字段合同。
 - 当前实现前建议先跑工程方案复审，确认数据模型、Web 栈和验收命令。
+- 当前已完成 P0 scaffold：FastAPI、SQLite、STP TXT parser、导入 API、React 复盘台和测试 fixture。
 
 ## 建议技术栈
 
@@ -22,7 +23,7 @@
 - 测试：pytest、Vitest、Playwright 或等价浏览器验收。
 - 行情适配：富途 OpenAPI adapter。
 
-这是建议基线，不是已实现事实。若后续选择不同栈，必须同步更新本节、[ARCHITECTURE.md](./ARCHITECTURE.md) 和 [README.md](./README.md)。
+这是当前 P0 scaffold 的实现基线。若后续选择不同栈，必须同步更新本节、[ARCHITECTURE.md](./ARCHITECTURE.md) 和 [README.md](./README.md)。
 
 ## 阶段切片
 
@@ -188,6 +189,16 @@ Parser 不允许：
 `available` 以外的状态都必须在 UI 可见。
 
 ## 测试计划
+
+当前固定验证命令：
+
+```powershell
+python -m pytest -q
+npm.cmd --prefix web run typecheck
+npm.cmd --prefix web run build
+```
+
+当前 P0 集成测试覆盖 24 个 Python 用例，包含 parser、storage contract、import API 和 DB/API/UI read-model 一致性。
 
 ### P0 Tests
 

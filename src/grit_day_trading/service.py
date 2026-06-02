@@ -79,18 +79,12 @@ def get_batch(conn: sqlite3.Connection, batch_id: str) -> dict[str, Any]:
     batch = row_to_dict(conn.execute("SELECT * FROM import_batches WHERE id = ?", (batch_id,)).fetchone())
     if not batch:
         raise KeyError(batch_id)
-    batch["batch_id"] = batch["id"]
-    batch["file_hash"] = batch["file_hash"]
-    batch["accepted_rows"] = int(batch["accepted_rows"])
-    batch["quarantined_rows"] = int(batch["quarantined_rows"])
-    batch["row_count"] = int(batch["row_count"])
-    batch["duplicate"] = False
-    return batch
+    return _public_batch(batch)
 
 
 def list_batches(conn: sqlite3.Connection) -> list[dict[str, Any]]:
     rows = conn.execute("SELECT * FROM import_batches ORDER BY uploaded_at DESC, id DESC").fetchall()
-    return rows_to_dicts(rows)
+    return [_public_batch(row_to_dict(row)) for row in rows]
 
 
 def list_quarantine(conn: sqlite3.Connection, batch_id: str) -> list[dict[str, Any]]:
@@ -104,7 +98,7 @@ def list_quarantine(conn: sqlite3.Connection, batch_id: str) -> list[dict[str, A
         """,
         (batch_id,),
     ).fetchall()
-    return rows_to_dicts(rows)
+    return [_public_quarantine_row(row) for row in rows_to_dicts(rows)]
 
 
 def list_fills(
@@ -117,13 +111,13 @@ def list_fills(
     clauses: list[str] = []
     params: list[Any] = []
     if date:
-        clauses.append("substr(filled_at, 1, 10) = ?")
+        clauses.append("substr(f.filled_at, 1, 10) = ?")
         params.append(date)
     if account:
-        clauses.append("account_canonical = ?")
+        clauses.append("f.account_canonical = ?")
         params.append(account.strip().upper())
     if symbol:
-        clauses.append("symbol = ?")
+        clauses.append("f.symbol = ?")
         params.append(symbol.strip().upper())
     where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
     rows = conn.execute(
@@ -137,7 +131,7 @@ def list_fills(
         """,
         params,
     ).fetchall()
-    return rows_to_dicts(rows)
+    return [_public_fill(row) for row in rows_to_dicts(rows)]
 
 
 def daily_summary(conn: sqlite3.Connection, date: str) -> dict[str, Any]:
@@ -213,7 +207,7 @@ def _insert_import_row(conn: sqlite3.Connection, batch_id: str, parse_result: Pa
         return
 
     order_record_id = _upsert_order(conn, batch_id, import_row_id, normalized)
-    fill_record_id = _upsert_fill(conn, batch_id, import_row_id, normalized) if normalized.get("has_fill") else None
+    fill_record_id = _upsert_fill(conn, batch_id, import_row_id, normalized, row.raw_line_hash) if normalized.get("has_fill") else None
     conn.execute(
         "UPDATE import_rows SET order_record_id = ?, fill_record_id = ? WHERE id = ?",
         (order_record_id, fill_record_id, import_row_id),
@@ -272,7 +266,13 @@ def _upsert_order(conn: sqlite3.Connection, batch_id: str, import_row_id: str, n
     return order_id
 
 
-def _upsert_fill(conn: sqlite3.Connection, batch_id: str, import_row_id: str, normalized: dict[str, Any]) -> str:
+def _upsert_fill(
+    conn: sqlite3.Connection,
+    batch_id: str,
+    import_row_id: str,
+    normalized: dict[str, Any],
+    raw_line_hash: str,
+) -> str:
     execution_id = normalized.get("execution_id") or ""
     if execution_id:
         key = f"{normalized['account_canonical']}:exec:{execution_id}"
@@ -287,6 +287,7 @@ def _upsert_fill(conn: sqlite3.Connection, batch_id: str, import_row_id: str, no
                 normalized["timestamp"],
                 normalized["quantity"],
                 normalized["price"],
+                raw_line_hash,
             ]
         )
     existing = conn.execute("SELECT id FROM fills WHERE idempotency_key = ?", (key,)).fetchone()
@@ -317,6 +318,35 @@ def _upsert_fill(conn: sqlite3.Connection, batch_id: str, import_row_id: str, no
         ),
     )
     return fill_id
+
+
+def _public_batch(batch: dict[str, Any]) -> dict[str, Any]:
+    return {
+        **batch,
+        "batch_id": batch["id"],
+        "row_count": int(batch["row_count"]),
+        "accepted_rows": int(batch["accepted_rows"]),
+        "quarantined_rows": int(batch["quarantined_rows"]),
+        "duplicate": bool(batch.get("duplicate", False)),
+    }
+
+
+def _public_quarantine_row(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        **row,
+        "quarantine_id": row["id"],
+        "raw_line": row["raw_text"],
+    }
+
+
+def _public_fill(fill: dict[str, Any]) -> dict[str, Any]:
+    return {
+        **fill,
+        "fill_id": fill["id"],
+        "quantity": float(fill["quantity"]),
+        "price": float(fill["price"]),
+        "uses_fallback_idempotency_key": ":fallback:" in fill["idempotency_key"],
+    }
 
 
 def _now() -> str:
