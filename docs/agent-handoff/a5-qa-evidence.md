@@ -14,14 +14,14 @@
 - Added negative acceptance tests for empty files and missing required fields.
 - Converted the original strict `xfail` for `GET /api/imports` `batch_id` alias into a hard passing contract after A3 fixed the read model.
 - Updated [docs/p0_acceptance.md](../p0_acceptance.md) with PASS status for the batch-list alias.
+- Added evidence coverage for no-header fill TXT, parser replay, fallback read-model dedupe, same-file duplicate raw rows, and round-trip KPI semantics.
 
 ## Validation
 
-- Main integration passed `python -m pytest -q` with `24 passed`.
-- Main API smoke observed duplicate upload reuse, `fills=3`, `quarantine=1`, and `summary_source=committed_fills_only`.
+- Current main integration passed `python -m pytest -q` with `35 passed`.
+- Current frontend contract validation passed `npm.cmd --prefix web run typecheck` and `npm.cmd --prefix web run build`.
 
 ## Remaining Risk
 
 - No verified broker-original STP TXT sample is present yet.
 - Browser DOM/screenshot acceptance was not run for this cleanup slice.
-

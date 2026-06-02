@@ -132,7 +132,7 @@ h2 {
 .kpis {
   display: grid;
   gap: 12px;
-  grid-template-columns: minmax(180px, 1.2fr) repeat(5, minmax(124px, 1fr));
+  grid-template-columns: minmax(180px, 1.2fr) repeat(6, minmax(118px, 1fr));
   margin-bottom: 16px;
 }
 

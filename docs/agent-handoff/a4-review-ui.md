@@ -26,3 +26,10 @@
 ## Changelog Candidate
 
 - **P0 复盘台体验**: 强化上传、批次状态、异常行、成交表和空状态展示，让导入结果和基础复盘指标更容易核对。
+
+## Integration Update
+
+- A0 later synced `web/src/types.ts` with `batch_id`, `trade_group_count`, `traded_quantity`, and fallback execution-id fields.
+- Current validation passed `npm.cmd --prefix web run typecheck`.
+- Current validation passed `npm.cmd --prefix web run build`.
+- Current full backend validation passed `python -m pytest -q` with `35 passed`.

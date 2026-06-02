@@ -55,6 +55,7 @@ export interface DailySummary {
   date: string;
   fill_count: number;
   trade_group_count: number;
+  traded_quantity: number;
   pnl: number;
   win_rate: number;
   profit_factor: number | null;

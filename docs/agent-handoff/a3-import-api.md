@@ -14,14 +14,16 @@
 - Fixed account and symbol filtering to avoid ambiguous SQL columns.
 - Added fallback fill idempotency key with raw line hash for missing execution id.
 - Added tests for list/detail contracts, duplicate upload, cross-batch normalized idempotency, fallback execution id, file-level failures, and 404/422 error contracts.
+- Added replay support for old zero-row file-level failed batches when parser or mapper versions drift.
+- Added rebuild support for old committed batches when parser or mapper versions drift.
+- Added committed fill read-model dedupe across changed-hash fallback batches while preserving same-file duplicate raw rows.
+- Added round-trip daily summary logic for PnL, win rate, profit factor, and paired traded quantity.
 
 ## Validation
 
-- `python -m pytest -p no:cacheprovider tests/test_import_api.py -q` passed with `9 passed`.
-- Main integration later passed API smoke with duplicate upload reusing the same batch.
-- Main integration later passed `python -m pytest -q` with `24 passed`.
+- Current main integration passed `python -m pytest -q` with `35 passed`.
+- Current frontend contract validation passed `npm.cmd --prefix web run typecheck` and `npm.cmd --prefix web run build`.
 
 ## Remaining Risk
 
 - A0 did not add Pydantic response models yet; response shape is locked by tests rather than explicit FastAPI model classes.
-

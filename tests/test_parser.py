@@ -49,6 +49,84 @@ def test_unknown_columns_are_preserved_in_payload():
     assert result.rows[0].parsed_payload["_field_mapping"]["unknown_columns"] == ["Mystery"]
 
 
+def test_headerless_chinese_fill_rows_use_default_contract_and_synthetic_order_ids():
+    raw = (
+        "\n"
+        "2026-06-01\t09:31:00\tAAPL\t买入\t100\t10.00\t acct-hk \tDMA\n"
+        "01/06/2026\t10:15\tAAPL\t卖出\t100\t11.50\tACCT-HK\tDMA\n"
+    ).encode()
+
+    result = parse_stp_txt(raw)
+
+    assert result.file_error is None
+    assert len(result.rows) == 2
+    first = result.rows[0]
+    assert first.row_number == 2
+    assert first.row_status == "accepted"
+    assert first.normalized["account_raw"] == "acct-hk"
+    assert first.normalized["account_canonical"] == "ACCT-HK"
+    assert first.normalized["symbol"] == "AAPL"
+    assert first.normalized["side"] == "BUY"
+    assert first.normalized["timestamp"] == "2026-06-01T09:31:00"
+    assert first.normalized["order_id"].startswith("ROW-")
+    assert first.normalized["order_id_missing"] is True
+    assert first.normalized["order_idempotency_basis"] == "fallback:raw_line_hash"
+    assert first.normalized["execution_id_missing"] is True
+    assert first.normalized["fill_idempotency_basis"].startswith("fallback:")
+    assert first.parsed_payload["_field_mapping"]["header_source"] == "inferred_headerless_zh_fill"
+    assert first.parsed_payload["_field_mapping"]["synthetic_fields"] == {
+        "order_id": "raw_line_hash",
+        "timestamp": "trade_date+trade_time",
+    }
+    assert result.rows[1].normalized["side"] == "SELL"
+    assert result.rows[1].normalized["timestamp"] == "2026-06-01T10:15:00"
+
+
+def test_headerless_utf16_comma_rows_can_keep_order_id_and_unknown_tail_column():
+    raw_text = (
+        "26/06/01,09:31:00,AAPL,BOT,100,10.00, acct-hk ,DMA,12345678,\n"
+        "26/06/01,10:15:00,AAPL,SLD SHRT,100,11.50,ACCT-HK,DMA,12345679,note\n"
+    )
+
+    result = parse_stp_txt(raw_text.encode("utf-16le"))
+
+    assert result.file_error is None
+    assert len(result.rows) == 2
+    first = result.rows[0]
+    assert first.row_status == "accepted"
+    assert first.normalized["order_id"] == "12345678"
+    assert first.normalized["order_id_missing"] is False
+    assert first.normalized["order_idempotency_basis"] == "account_canonical+order_id"
+    assert first.normalized["side"] == "BUY"
+    assert first.normalized["timestamp"] == "2026-06-01T09:31:00"
+    assert first.parsed_payload["_field_mapping"]["header_source"] == "inferred_headerless_zh_fill"
+    assert first.parsed_payload["_field_mapping"]["synthetic_fields"] == {"timestamp": "trade_date+trade_time"}
+    assert first.parsed_payload["_unknown_columns"] == ["备注"]
+    assert result.rows[1].normalized["side"] == "SELL"
+    assert result.rows[1].normalized["timestamp"] == "2026-06-01T10:15:00"
+
+
+def test_headerless_chinese_fill_row_with_missing_price_is_quarantined():
+    raw = "2026-06-01\t09:31:00\tAAPL\t买入\t100\t\tacct-hk\tDMA\n".encode()
+
+    result = parse_stp_txt(raw)
+
+    assert result.file_error is None
+    assert result.rows[0].row_status == "quarantine"
+    assert result.rows[0].failed_field == "price"
+    assert result.rows[0].reason_code == "missing_required_field"
+    assert result.rows[0].parsed_payload["_field_mapping"]["header_source"] == "inferred_headerless_zh_fill"
+
+
+def test_short_headerless_rows_still_fail_as_missing_header():
+    raw = "2026-06-01\t09:31:00\tAAPL\t买入\t100\t10.00\tacct-hk\n".encode()
+
+    result = parse_stp_txt(raw)
+
+    assert result.file_error == "missing_header"
+    assert result.rows == []
+
+
 def test_account_canonicalization_contract():
     assert canonicalize_account(" acct-01 \n") == "ACCT-01"
 

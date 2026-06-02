@@ -18,9 +18,9 @@
 ## Validation
 
 - `python -m pytest -p no:cacheprovider tests/test_storage_contract.py -q` passed with `4 passed`.
-- Main integration later passed `python -m pytest -q` with `24 passed`.
+- Current main integration passed `python -m pytest -q` with `35 passed`.
+- Current frontend contract validation passed `npm.cmd --prefix web run typecheck` and `npm.cmd --prefix web run build`.
 
 ## Remaining Risk
 
 - Existing legacy databases with conflicting duplicate data would need a repair migration before these unique indexes can be applied safely.
-

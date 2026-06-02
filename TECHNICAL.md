@@ -12,6 +12,11 @@
 - 首个真实 STP TXT 样例将决定 parser fixture 和字段合同。
 - 当前实现前建议先跑工程方案复审，确认数据模型、Web 栈和验收命令。
 - 当前已完成 P0 scaffold：FastAPI、SQLite、STP TXT parser、导入 API、React 复盘台和测试 fixture。
+- 当前 parser 支持无表头成交 TXT：基础列为 `日期、时间、标的、买卖、股数、价格、账号、通道`，第 9 列存在时作为 `order_id`。
+- 当前 import service 支持旧 parser 造成的零行 file-level 失败批次重解析。
+- 当前 daily summary 的交易股数使用每个账号和标的的 BUY/SELL 配对股数，不用单边成交行数量累加。
+- 当前成交 read-model 支持跨批重导去重：同一 fallback 成交签名只计算最新批次，同一文件内部重复 raw rows 仍逐行保留。
+- 当前 daily summary 的 PnL、胜率和盈亏比按已平仓 round-trip 统计，每次 B&S 或 S&B 回到平仓状态算一笔。
 
 ## 建议技术栈
 
@@ -142,6 +147,8 @@ Parser 必须输出：
 - `raw_line`
 - `row_number`
 - `raw_line_sha256`
+- `header_source`
+- `synthetic_fields`
 - `account_raw`
 - `account_canonical`
 - `symbol`
@@ -161,6 +168,8 @@ Parser 不允许：
 - 用空字符串填补关键字段后继续成功。
 - 直接覆盖旧 parser version 的历史结果。
 - 将账号 canonical 值替代原始账号文本保存。
+
+无表头成交 TXT 是 P0 的 fill-only 例外口径。Parser 必须自行补 `日期、时间、标的、买卖、股数、价格、账号、通道`，将日期和时间合成为 timestamp。第 9 列存在时作为 `order_id`；缺第 9 列时用 raw line hash 合成 fallback order id。该合成事实必须进入字段映射诊断，不得伪装成原始 TXT 字段。
 
 ## Matching 合同
 
@@ -198,11 +207,35 @@ npm.cmd --prefix web run typecheck
 npm.cmd --prefix web run build
 ```
 
-当前 P0 集成测试覆盖 24 个 Python 用例，包含 parser、storage contract、import API 和 DB/API/UI read-model 一致性。
+当前 P0 集成测试覆盖 35 个 Python 用例，包含 parser、storage contract、import API 和 DB/API/UI read-model 一致性。
+
+## 本地登录入口
+
+根目录提供 `Login-Grit-DayTrading.cmd` 作为 Windows 双击入口：
+
+- 后端默认端口：`8001`。
+- 前端默认端口：`5173`。
+- 前端 API 代理默认指向默认后端端口。
+- `--check` 只检查 Python、npm 和端口配置，不启动服务。
+- `GRIT_NO_BROWSER=1` 可跳过自动打开浏览器，便于脚本验证。
+- `GRIT_NO_PAUSE=1` 可让失败时直接返回退出码，便于自动化验证。
+
+服务 helper：
+
+```powershell
+.\scripts\run-backend.cmd
+.\scripts\run-frontend.cmd
+```
 
 ### P0 Tests
 
 - 真实 STP TXT 样例。
+- 无表头成交 TXT 和第 9 列 `order_id`。
+- 旧 parser 的零行 file-level 失败批次重解析。
+- 缺 execution id 重复成交行逐行入账。
+- 缺 execution id 跨批修正重导不重复计算 read-model。
+- 已平仓 round-trip 胜率和盈亏比。
+- Daily summary 交易股数和 PnL。
 - 重复导入。
 - 空文件。
 - 缺字段。

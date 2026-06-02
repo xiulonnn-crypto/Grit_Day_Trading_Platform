@@ -5,6 +5,8 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 
 from grit_day_trading.api import create_app
+from grit_day_trading.parser import FIELD_MAPPER_VERSION, PARSER_VERSION
+from grit_day_trading.storage import connect, initialize_database
 
 
 SAMPLE_PATH = Path("tests/fixtures/stp_sample.tsv")
@@ -95,9 +97,34 @@ def test_daily_summary_uses_committed_fills_only(tmp_path):
 
         assert summary["source"] == "committed_fills_only"
         assert summary["fill_count"] == 2
+        assert summary["traded_quantity"] == 100
         assert summary["quarantine_row_count"] == 1
         assert summary["pnl"] == 150.0
         assert summary["win_rate"] == 1.0
+
+
+def test_daily_summary_groups_each_flat_round_trip_for_win_rate_and_profit_factor(tmp_path):
+    raw = (
+        "Account\tSymbol\tSide\tOrderID\tExecID\tQty\tPrice\tTime\tStatus\n"
+        "acct-rt\tAAPL\tBOT\tO-1\tE-1\t100\t10.00\t2026-06-01T09:30:00\tFILLED\n"
+        "acct-rt\tAAPL\tSLD\tO-2\tE-2\t100\t11.00\t2026-06-01T09:35:00\tFILLED\n"
+        "acct-rt\tAAPL\tBOT\tO-3\tE-3\t100\t12.00\t2026-06-01T10:00:00\tFILLED\n"
+        "acct-rt\tAAPL\tSLD\tO-4\tE-4\t100\t11.50\t2026-06-01T10:30:00\tFILLED\n"
+        "acct-rt\tMSFT\tSLD\tO-5\tE-5\t50\t20.00\t2026-06-01T11:00:00\tFILLED\n"
+        "acct-rt\tMSFT\tBOT\tO-6\tE-6\t50\t18.00\t2026-06-01T11:30:00\tFILLED\n"
+    ).encode()
+
+    with TestClient(create_app(tmp_path / "round-trips.db")) as client:
+        batch = client.post("/api/imports/stp-txt", files={"file": ("round-trips.tsv", raw, "text/plain")}).json()
+        summary = client.get("/api/review/daily-summary?date=2026-06-01").json()
+
+    assert batch["status"] == "committed"
+    assert summary["fill_count"] == 6
+    assert summary["trade_group_count"] == 3
+    assert summary["traded_quantity"] == 250
+    assert summary["pnl"] == 150.0
+    assert summary["win_rate"] == 0.666667
+    assert summary["profit_factor"] == 4.0
 
 
 def test_batch_detail_and_list_api_contracts_are_stable(tmp_path):
@@ -188,6 +215,273 @@ def test_fallback_fill_key_is_visible_when_execution_id_is_missing(tmp_path):
         assert fill["execution_id"] is None
         assert fill["uses_fallback_idempotency_key"] is True
         assert raw_line_hash in fill["idempotency_key"]
+
+
+def test_headerless_chinese_fill_txt_imports_and_remains_idempotent(tmp_path):
+    db_path = tmp_path / "headerless.db"
+    raw = (
+        "2026-06-01\t09:31:00\tAAPL\t买入\t100\t10.00\t acct-hk \tDMA\n"
+        "2026-06-01\t10:15:00\tAAPL\t卖出\t100\t11.50\tACCT-HK\tDMA\n"
+    ).encode()
+
+    with TestClient(create_app(db_path)) as client:
+        first = client.post("/api/imports/stp-txt", files={"file": ("headerless.txt", raw, "text/plain")}).json()
+        first_counts = _table_counts(db_path, ("import_batches", "import_rows", "orders", "fills", "quarantine_rows"))
+        second = client.post("/api/imports/stp-txt", files={"file": ("headerless.txt", raw, "text/plain")}).json()
+        second_counts = _table_counts(db_path, ("import_batches", "import_rows", "orders", "fills", "quarantine_rows"))
+        fills = client.get("/api/fills?date=2026-06-01").json()["items"]
+        summary = client.get("/api/review/daily-summary?date=2026-06-01").json()
+
+    assert first["status"] == "committed"
+    assert first["status_reason"] is None
+    assert first["row_count"] == 2
+    assert first["accepted_rows"] == 2
+    assert first["quarantined_rows"] == 0
+    assert first["parser_version"] == PARSER_VERSION
+    assert first["field_mapper_version"] == FIELD_MAPPER_VERSION
+    assert second["batch_id"] == first["batch_id"]
+    assert second["duplicate"] is True
+    assert second_counts == first_counts
+    assert first_counts == {
+        "import_batches": 1,
+        "import_rows": 2,
+        "orders": 2,
+        "fills": 2,
+        "quarantine_rows": 0,
+    }
+    assert len(fills) == 2
+    assert {fill["side"] for fill in fills} == {"BUY", "SELL"}
+    assert all(fill["account_canonical"] == "ACCT-HK" for fill in fills)
+    assert all(fill["execution_id"] is None for fill in fills)
+    assert all(fill["uses_fallback_idempotency_key"] is True for fill in fills)
+    assert summary["source"] == "committed_fills_only"
+    assert summary["fill_count"] == 2
+    assert summary["traded_quantity"] == 100
+    assert summary["quarantine_row_count"] == 0
+
+
+def test_fallback_fills_preserve_duplicate_raw_rows_in_same_file(tmp_path):
+    db_path = tmp_path / "duplicate-rows.db"
+    raw = (
+        "26/06/01,09:31:00,AAPL,BOT,100,10.00,acct-hk,DMA,12345678,\n"
+        "26/06/01,09:31:00,AAPL,BOT,100,10.00,acct-hk,DMA,12345678,\n"
+        "26/06/01,10:15:00,AAPL,SLD,200,11.00,acct-hk,DMA,12345679,\n"
+    ).encode("utf-16le")
+
+    with TestClient(create_app(db_path)) as client:
+        batch = client.post("/api/imports/stp-txt", files={"file": ("dups.txt", raw, "text/plain")}).json()
+        fills = client.get("/api/fills?date=2026-06-01").json()["items"]
+        summary = client.get("/api/review/daily-summary?date=2026-06-01").json()
+
+    assert batch["status"] == "committed"
+    assert batch["accepted_rows"] == 3
+    assert len(fills) == 3
+    assert summary["fill_count"] == 3
+    assert summary["traded_quantity"] == 200
+    assert summary["pnl"] == 200.0
+
+
+def test_fallback_read_model_dedupes_overlapping_changed_hash_batches(tmp_path):
+    db_path = tmp_path / "overlapping-fallback.db"
+    raw = (
+        "26/06/01,09:31:00,AAPL,BOT,100,10.00,acct-hk,DMA,12345678,\n"
+        "26/06/01,09:31:00,AAPL,BOT,100,10.00,acct-hk,DMA,12345678,\n"
+        "26/06/01,10:15:00,AAPL,SLD,200,11.00,acct-hk,DMA,12345679,\n"
+    ).encode("utf-16le")
+    same_rows_changed_file_hash = raw + "\n".encode("utf-16le")
+
+    with TestClient(create_app(db_path)) as client:
+        first = client.post("/api/imports/stp-txt", files={"file": ("dups.txt", raw, "text/plain")}).json()
+        second = client.post(
+            "/api/imports/stp-txt",
+            files={"file": ("dups-fixed.txt", same_rows_changed_file_hash, "text/plain")},
+        ).json()
+        counts = _table_counts(db_path, ("import_batches", "import_rows", "orders", "fills", "quarantine_rows"))
+        fills = client.get("/api/fills?date=2026-06-01").json()["items"]
+        summary = client.get("/api/review/daily-summary?date=2026-06-01").json()
+
+    assert second["batch_id"] != first["batch_id"]
+    assert first["accepted_rows"] == 3
+    assert second["accepted_rows"] == 3
+    assert counts == {
+        "import_batches": 2,
+        "import_rows": 6,
+        "orders": 2,
+        "fills": 6,
+        "quarantine_rows": 0,
+    }
+    assert len(fills) == 3
+    assert summary["fill_count"] == 3
+    assert summary["traded_quantity"] == 200
+    assert summary["pnl"] == 200.0
+
+
+def test_fallback_read_model_dedupes_parser_order_id_shape_drift(tmp_path):
+    db_path = tmp_path / "order-id-shape-drift.db"
+    raw = "26/06/01,09:31:00,AAPL,BOT,100,10.00,acct-hk,DMA,123456789012,\n".encode("utf-16le")
+    conn = connect(db_path)
+    try:
+        initialize_database(conn)
+        conn.executescript(
+            """
+            INSERT INTO import_batches (
+                id, file_name, file_hash, uploaded_at, parser_version, field_mapper_version,
+                status, status_reason, row_count, accepted_rows, quarantined_rows
+            ) VALUES (
+                'batch_old_shape', 'old.txt', 'old-shape-hash', '2026-06-01T09:30:00Z',
+                'stp_txt_parser_v0.3.0', 'stp_txt_mapping_v0.3.0',
+                'committed', NULL, 1, 1, 0
+            );
+            INSERT INTO import_rows (
+                id, batch_id, raw_line_number, raw_text, raw_line_hash, parser_version,
+                field_mapper_version, account_raw, account_canonical, parsed_payload_json,
+                row_status, order_id, execution_id, fill_record_id
+            ) VALUES (
+                'row_old_shape_1', 'batch_old_shape', 1, 'redacted', 'hash_old_shape_1',
+                'stp_txt_parser_v0.3.0', 'stp_txt_mapping_v0.3.0',
+                'acct-hk', 'ACCT-HK', '{}', 'accepted', '12345678', NULL, 'fill_old_shape_1'
+            );
+            INSERT INTO orders (
+                id, account_raw, account_canonical, symbol, side, order_id, order_status,
+                submitted_at, source_batch_id, source_import_row_id, idempotency_key
+            ) VALUES (
+                'order_old_shape_1', 'acct-hk', 'ACCT-HK', 'AAPL', 'BUY', '12345678', 'FILLED',
+                '2026-06-01T09:31:00', 'batch_old_shape', 'row_old_shape_1',
+                'ACCT-HK:12345678'
+            );
+            INSERT INTO fills (
+                id, account_raw, account_canonical, symbol, side, order_id, execution_id,
+                filled_at, quantity, price, source_batch_id, source_import_row_id, idempotency_key
+            ) VALUES (
+                'fill_old_shape_1', 'acct-hk', 'ACCT-HK', 'AAPL', 'BUY', '12345678', NULL,
+                '2026-06-01T09:31:00', 100, 10, 'batch_old_shape', 'row_old_shape_1',
+                'ACCT-HK:fallback:old:12345678:AAPL:BUY:2026-06-01T09:31:00:100:10'
+            );
+            """
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    with TestClient(create_app(db_path)) as client:
+        new_batch = client.post("/api/imports/stp-txt", files={"file": ("new.txt", raw, "text/plain")}).json()
+        counts = _table_counts(db_path, ("import_batches", "import_rows", "orders", "fills", "quarantine_rows"))
+        fills = client.get("/api/fills?date=2026-06-01").json()["items"]
+        summary = client.get("/api/review/daily-summary?date=2026-06-01").json()
+
+    assert new_batch["status"] == "committed"
+    assert counts["import_batches"] == 2
+    assert counts["fills"] == 2
+    assert len(fills) == 1
+    assert fills[0]["order_id"] == "123456789012"
+    assert summary["fill_count"] == 1
+    assert summary["traded_quantity"] == 0
+    assert summary["trade_group_count"] == 0
+    assert summary["pnl"] == 0
+
+
+def test_old_file_level_failed_batch_reparses_after_parser_upgrade(tmp_path):
+    db_path = tmp_path / "reparse.db"
+    raw = "26/06/01,09:31:00,AAPL,BOT,100,10.00,acct-hk,DMA,12345678,\n".encode("utf-16le")
+    file_hash = hashlib.sha256(raw).hexdigest()
+    conn = connect(db_path)
+    try:
+        initialize_database(conn)
+        conn.execute(
+            """
+            INSERT INTO import_batches (
+                id, file_name, file_hash, uploaded_at, parser_version, field_mapper_version,
+                status, status_reason, row_count, accepted_rows, quarantined_rows
+            ) VALUES (
+                'batch_old_missing_header', 'headerless.txt', ?, '2026-06-01T09:30:00Z',
+                'stp_txt_parser_v0.2.0', 'stp_txt_mapping_v0.2.0',
+                'failed', 'missing_header', 0, 0, 0
+            )
+            """,
+            (file_hash,),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    with TestClient(create_app(db_path)) as client:
+        batch = client.post("/api/imports/stp-txt", files={"file": ("headerless.txt", raw, "text/plain")}).json()
+        listed = client.get("/api/imports").json()["items"]
+        fills = client.get("/api/fills?date=2026-06-01").json()["items"]
+
+    assert batch["batch_id"] == "batch_old_missing_header"
+    assert batch["duplicate"] is False
+    assert batch["status"] == "committed"
+    assert batch["status_reason"] is None
+    assert batch["parser_version"] == PARSER_VERSION
+    assert batch["field_mapper_version"] == FIELD_MAPPER_VERSION
+    assert batch["row_count"] == 1
+    assert batch["accepted_rows"] == 1
+    assert batch["quarantined_rows"] == 0
+    assert len(listed) == 1
+    assert len(fills) == 1
+    assert fills[0]["order_id"] == "12345678"
+
+
+def test_old_committed_batch_rebuilds_normalized_rows_after_mapper_upgrade(tmp_path):
+    db_path = tmp_path / "committed-rebuild.db"
+    raw = (
+        "26/06/01,09:31:00,AAPL,BOT,100,10.00,acct-hk,DMA,12345678,\n"
+        "26/06/01,09:31:00,AAPL,BOT,100,10.00,acct-hk,DMA,12345678,\n"
+        "26/06/01,10:15:00,AAPL,SLD,200,11.00,acct-hk,DMA,12345679,\n"
+    ).encode("utf-16le")
+    file_hash = hashlib.sha256(raw).hexdigest()
+    conn = connect(db_path)
+    try:
+        initialize_database(conn)
+        conn.executescript(
+            """
+            INSERT INTO import_batches (
+                id, file_name, file_hash, uploaded_at, parser_version, field_mapper_version,
+                status, status_reason, row_count, accepted_rows, quarantined_rows
+            ) VALUES (
+                'batch_old_committed', 'dups.txt', 'HASH_PLACEHOLDER', '2026-06-01T09:30:00Z',
+                'stp_txt_parser_v0.3.0', 'stp_txt_mapping_v0.3.0',
+                'committed', NULL, 3, 3, 0
+            );
+            INSERT INTO import_rows (
+                id, batch_id, raw_line_number, raw_text, raw_line_hash, parser_version,
+                field_mapper_version, account_raw, account_canonical, parsed_payload_json,
+                row_status, order_id, execution_id, fill_record_id
+            ) VALUES (
+                'row_old_1', 'batch_old_committed', 1, 'redacted', 'hash_old_1',
+                'stp_txt_parser_v0.3.0', 'stp_txt_mapping_v0.3.0',
+                'acct-hk', 'ACCT-HK', '{}', 'accepted', '12345678', NULL, 'fill_old_1'
+            );
+            INSERT INTO fills (
+                id, account_raw, account_canonical, symbol, side, order_id, execution_id,
+                filled_at, quantity, price, source_batch_id, source_import_row_id, idempotency_key
+            ) VALUES (
+                'fill_old_1', 'acct-hk', 'ACCT-HK', 'AAPL', 'BUY', '12345678', NULL,
+                '2026-06-01T09:31:00', 100, 10, 'batch_old_committed', 'row_old_1',
+                'old-fallback-key'
+            );
+            """
+        )
+        conn.execute("UPDATE import_batches SET file_hash = ? WHERE id = 'batch_old_committed'", (file_hash,))
+        conn.commit()
+    finally:
+        conn.close()
+
+    with TestClient(create_app(db_path)) as client:
+        batch = client.post("/api/imports/stp-txt", files={"file": ("dups.txt", raw, "text/plain")}).json()
+        fills = client.get("/api/fills?date=2026-06-01").json()["items"]
+        summary = client.get("/api/review/daily-summary?date=2026-06-01").json()
+
+    assert batch["batch_id"] == "batch_old_committed"
+    assert batch["status"] == "committed"
+    assert batch["parser_version"] == PARSER_VERSION
+    assert batch["field_mapper_version"] == FIELD_MAPPER_VERSION
+    assert batch["accepted_rows"] == 3
+    assert len(fills) == 3
+    assert summary["fill_count"] == 3
+    assert summary["traded_quantity"] == 200
+    assert summary["pnl"] == 200.0
 
 
 def test_file_level_no_data_rows_failure_is_visible(tmp_path):

@@ -13,33 +13,57 @@ from .storage import dumps_json, new_id, row_to_dict, rows_to_dicts
 def import_stp_txt(conn: sqlite3.Connection, file_name: str, raw_bytes: bytes) -> dict[str, Any]:
     file_hash = hashlib.sha256(raw_bytes).hexdigest()
     existing = conn.execute("SELECT * FROM import_batches WHERE file_hash = ?", (file_hash,)).fetchone()
+    reparse_batch_id: str | None = None
     if existing:
-        summary = get_batch(conn, existing["id"])
-        summary["duplicate"] = True
-        return summary
+        if _should_reparse_existing_batch(existing):
+            reparse_batch_id = existing["id"]
+        else:
+            summary = get_batch(conn, existing["id"])
+            summary["duplicate"] = True
+            return summary
 
     parse_result = parse_stp_txt(raw_bytes)
-    batch_id = new_id("batch")
+    batch_id = reparse_batch_id or new_id("batch")
     if parse_result.file_error:
-        conn.execute(
-            """
-            INSERT INTO import_batches (
-                id, file_name, file_hash, uploaded_at, parser_version, field_mapper_version,
-                status, status_reason, row_count, accepted_rows, quarantined_rows
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 0)
-            """,
-            (
-                batch_id,
-                Path(file_name).name or "stp.txt",
-                file_hash,
-                _now(),
-                parse_result.parser_version,
-                parse_result.field_mapper_version,
-                "failed",
-                parse_result.file_error,
-            ),
-        )
-        conn.commit()
+        if reparse_batch_id:
+            conn.execute(
+                """
+                UPDATE import_batches
+                SET file_name = ?, uploaded_at = ?, parser_version = ?, field_mapper_version = ?,
+                    status = ?, status_reason = ?, row_count = 0, accepted_rows = 0, quarantined_rows = 0
+                WHERE id = ?
+                """,
+                (
+                    Path(file_name).name or "stp.txt",
+                    _now(),
+                    parse_result.parser_version,
+                    parse_result.field_mapper_version,
+                    "failed",
+                    parse_result.file_error,
+                    batch_id,
+                ),
+            )
+            conn.commit()
+        else:
+            conn.execute(
+                """
+                INSERT INTO import_batches (
+                    id, file_name, file_hash, uploaded_at, parser_version, field_mapper_version,
+                    status, status_reason, row_count, accepted_rows, quarantined_rows
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 0)
+                """,
+                (
+                    batch_id,
+                    Path(file_name).name or "stp.txt",
+                    file_hash,
+                    _now(),
+                    parse_result.parser_version,
+                    parse_result.field_mapper_version,
+                    "failed",
+                    parse_result.file_error,
+                ),
+            )
+            conn.commit()
         return get_batch(conn, batch_id)
 
     accepted = sum(1 for row in parse_result.rows if row.row_status == "accepted")
@@ -48,27 +72,53 @@ def import_stp_txt(conn: sqlite3.Connection, file_name: str, raw_bytes: bytes) -
     status_reason = "contains_quarantine_rows" if accepted > 0 and quarantined else ("no_valid_rows" if accepted == 0 else None)
 
     with conn:
-        conn.execute(
-            """
-            INSERT INTO import_batches (
-                id, file_name, file_hash, uploaded_at, parser_version, field_mapper_version,
-                status, status_reason, row_count, accepted_rows, quarantined_rows
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                batch_id,
-                Path(file_name).name or "stp.txt",
-                file_hash,
-                _now(),
-                parse_result.parser_version,
-                parse_result.field_mapper_version,
-                status,
-                status_reason,
-                len(parse_result.rows),
-                accepted,
-                quarantined,
-            ),
-        )
+        if reparse_batch_id:
+            conn.execute("DELETE FROM fills WHERE source_batch_id = ?", (batch_id,))
+            conn.execute("DELETE FROM orders WHERE source_batch_id = ?", (batch_id,))
+            conn.execute("DELETE FROM quarantine_rows WHERE batch_id = ?", (batch_id,))
+            conn.execute("DELETE FROM import_rows WHERE batch_id = ?", (batch_id,))
+            conn.execute(
+                """
+                UPDATE import_batches
+                SET file_name = ?, uploaded_at = ?, parser_version = ?, field_mapper_version = ?,
+                    status = ?, status_reason = ?, row_count = ?, accepted_rows = ?, quarantined_rows = ?
+                WHERE id = ?
+                """,
+                (
+                    Path(file_name).name or "stp.txt",
+                    _now(),
+                    parse_result.parser_version,
+                    parse_result.field_mapper_version,
+                    status,
+                    status_reason,
+                    len(parse_result.rows),
+                    accepted,
+                    quarantined,
+                    batch_id,
+                ),
+            )
+        else:
+            conn.execute(
+                """
+                INSERT INTO import_batches (
+                    id, file_name, file_hash, uploaded_at, parser_version, field_mapper_version,
+                    status, status_reason, row_count, accepted_rows, quarantined_rows
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    batch_id,
+                    Path(file_name).name or "stp.txt",
+                    file_hash,
+                    _now(),
+                    parse_result.parser_version,
+                    parse_result.field_mapper_version,
+                    status,
+                    status_reason,
+                    len(parse_result.rows),
+                    accepted,
+                    quarantined,
+                ),
+            )
         for row in parse_result.rows:
             _insert_import_row(conn, batch_id, parse_result, row)
 
@@ -122,7 +172,8 @@ def list_fills(
     where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
     rows = conn.execute(
         f"""
-        SELECT f.*, r.raw_line_number, b.parser_version, b.field_mapper_version
+        SELECT f.*, r.raw_line_number, b.parser_version, b.field_mapper_version,
+               b.uploaded_at AS _batch_uploaded_at
         FROM fills f
         JOIN import_rows r ON r.id = f.source_import_row_id
         JOIN import_batches b ON b.id = f.source_batch_id
@@ -131,24 +182,24 @@ def list_fills(
         """,
         params,
     ).fetchall()
-    return [_public_fill(row) for row in rows_to_dicts(rows)]
+    return [_public_fill(row) for row in _dedupe_fill_read_model(rows_to_dicts(rows))]
 
 
 def daily_summary(conn: sqlite3.Connection, date: str) -> dict[str, Any]:
     fills = list_fills(conn, date=date)
-    positions: dict[tuple[str, str], float] = {}
-    pnl_by_key: dict[tuple[str, str], float] = {}
+    buy_qty_by_key: dict[tuple[str, str], float] = {}
+    sell_qty_by_key: dict[tuple[str, str], float] = {}
     for fill in fills:
         key = (fill["account_canonical"], fill["symbol"])
-        signed_cash = float(fill["quantity"]) * float(fill["price"])
+        quantity = float(fill["quantity"])
         if fill["side"] == "BUY":
-            positions[key] = positions.get(key, 0.0) + float(fill["quantity"])
-            pnl_by_key[key] = pnl_by_key.get(key, 0.0) - signed_cash
+            buy_qty_by_key[key] = buy_qty_by_key.get(key, 0.0) + quantity
         else:
-            positions[key] = positions.get(key, 0.0) - float(fill["quantity"])
-            pnl_by_key[key] = pnl_by_key.get(key, 0.0) + signed_cash
+            sell_qty_by_key[key] = sell_qty_by_key.get(key, 0.0) + quantity
 
-    realized = list(pnl_by_key.values())
+    realized = _closed_round_trip_pnls(fills)
+    trade_keys = set(buy_qty_by_key) | set(sell_qty_by_key)
+    traded_quantity = sum(min(buy_qty_by_key.get(key, 0.0), sell_qty_by_key.get(key, 0.0)) for key in trade_keys)
     wins = [value for value in realized if value > 0]
     losses = [value for value in realized if value < 0]
     gross_profit = sum(wins)
@@ -167,12 +218,101 @@ def daily_summary(conn: sqlite3.Connection, date: str) -> dict[str, Any]:
         "date": date,
         "fill_count": len(fills),
         "trade_group_count": len(realized),
+        "traded_quantity": _round_quantity(traded_quantity),
         "pnl": round(sum(realized), 6),
         "win_rate": round(win_rate, 6),
         "profit_factor": None if profit_factor is None else round(profit_factor, 6),
         "quarantine_row_count": quarantine_count,
         "source": "committed_fills_only",
     }
+
+
+def _should_reparse_existing_batch(existing: sqlite3.Row) -> bool:
+    version_drifted = existing["parser_version"] != PARSER_VERSION or existing["field_mapper_version"] != FIELD_MAPPER_VERSION
+    if not version_drifted:
+        return False
+    if existing["status"] == "failed" and int(existing["row_count"]) == 0:
+        return True
+    return existing["status"] == "committed"
+
+
+def _round_quantity(value: float) -> int | float:
+    return int(value) if value.is_integer() else round(value, 6)
+
+
+def _closed_round_trip_pnls(fills: list[dict[str, Any]]) -> list[float]:
+    states: dict[tuple[str, str], dict[str, float]] = {}
+    realized: list[float] = []
+    for fill in sorted(fills, key=lambda item: (item["account_canonical"], item["symbol"], item["filled_at"], item["id"])):
+        key = (fill["account_canonical"], fill["symbol"])
+        state = states.setdefault(key, {"position": 0.0, "cash": 0.0})
+        _apply_fill_to_round_trip_state(state, fill, realized)
+    return realized
+
+
+def _apply_fill_to_round_trip_state(state: dict[str, float], fill: dict[str, Any], realized: list[float]) -> None:
+    remaining_quantity = float(fill["quantity"])
+    price = float(fill["price"])
+    side_sign = 1.0 if fill["side"] == "BUY" else -1.0
+    while remaining_quantity > 0:
+        position = state["position"]
+        if _is_flat(position) or (position > 0 and side_sign > 0) or (position < 0 and side_sign < 0):
+            _open_or_add_position(state, side_sign, remaining_quantity, price)
+            return
+
+        close_quantity = min(abs(position), remaining_quantity)
+        state["cash"] += _cash_delta(side_sign, close_quantity, price)
+        state["position"] += side_sign * close_quantity
+        remaining_quantity -= close_quantity
+        if _is_flat(state["position"]):
+            realized.append(round(state["cash"], 6))
+            state["position"] = 0.0
+            state["cash"] = 0.0
+
+
+def _open_or_add_position(state: dict[str, float], side_sign: float, quantity: float, price: float) -> None:
+    state["position"] += side_sign * quantity
+    state["cash"] += _cash_delta(side_sign, quantity, price)
+
+
+def _cash_delta(side_sign: float, quantity: float, price: float) -> float:
+    return -quantity * price if side_sign > 0 else quantity * price
+
+
+def _is_flat(position: float) -> bool:
+    return abs(position) < 1e-9
+
+
+def _dedupe_fill_read_model(fills: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    occurrences_by_batch: dict[tuple[str, tuple[Any, ...]], int] = {}
+    latest_by_signature: dict[tuple[Any, ...], dict[str, Any]] = {}
+    for fill in sorted(fills, key=lambda item: (item["_batch_uploaded_at"], item["source_batch_id"], item["id"])):
+        semantic_key = _fill_semantic_key(fill)
+        batch_occurrence_key = (fill["source_batch_id"], semantic_key)
+        occurrence = occurrences_by_batch.get(batch_occurrence_key, 0) + 1
+        occurrences_by_batch[batch_occurrence_key] = occurrence
+        read_model_key = (*semantic_key, occurrence)
+        latest_by_signature[read_model_key] = fill
+    return sorted(latest_by_signature.values(), key=lambda fill: (fill["filled_at"], fill["id"]))
+
+
+def _fill_semantic_key(fill: dict[str, Any]) -> tuple[Any, ...]:
+    execution_id = fill.get("execution_id")
+    if execution_id:
+        return ("execution", fill["account_canonical"], execution_id)
+    return (
+        "fallback",
+        fill["account_canonical"],
+        fill["symbol"],
+        fill["side"],
+        fill["filled_at"],
+        _numeric_signature(fill["quantity"]),
+        _numeric_signature(fill["price"]),
+    )
+
+
+def _numeric_signature(value: Any) -> str:
+    return f"{float(value):.12g}"
 
 
 def _insert_import_row(conn: sqlite3.Connection, batch_id: str, parse_result: ParseResult, row: ParsedRow) -> None:
@@ -281,6 +421,8 @@ def _upsert_fill(
             [
                 normalized["account_canonical"],
                 "fallback",
+                batch_id,
+                import_row_id,
                 normalized["order_id"],
                 normalized["symbol"],
                 normalized["side"],
@@ -340,8 +482,9 @@ def _public_quarantine_row(row: dict[str, Any]) -> dict[str, Any]:
 
 
 def _public_fill(fill: dict[str, Any]) -> dict[str, Any]:
+    public_fill = {key: value for key, value in fill.items() if not key.startswith("_")}
     return {
-        **fill,
+        **public_fill,
         "fill_id": fill["id"],
         "quantity": float(fill["quantity"]),
         "price": float(fill["price"]),

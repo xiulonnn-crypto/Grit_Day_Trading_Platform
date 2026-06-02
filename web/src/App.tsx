@@ -138,6 +138,7 @@ export default function App() {
           <input value={date} onChange={(event) => setDate(event.target.value)} type="date" />
         </label>
         <Metric label="成交数" value={formatInteger(summary?.fill_count ?? 0)} note={summaryNote} />
+        <Metric label="交易股数" value={formatInteger(summary?.traded_quantity ?? 0)} note="BUY/SELL 配对股数" />
         <Metric label="PnL" value={formatPnl(summary?.pnl ?? 0)} tone={summaryTone(summary?.pnl ?? 0)} />
         <Metric label="胜率" value={formatWinRate(summary)} />
         <Metric label="盈亏比" value={formatProfitFactor(summary)} />
@@ -412,12 +413,12 @@ function summaryTone(value: number): "neutral" | "ok" | "bad" {
 }
 
 function formatWinRate(summary: DailySummary | null) {
-  if (!summary || summary.fill_count === 0) return "N/A";
-  return `${Math.round(summary.win_rate * 100)}%`;
+  if (!summary || summary.trade_group_count === 0) return "N/A";
+  return `${decimalFormatter.format(summary.win_rate * 100)}%`;
 }
 
 function formatProfitFactor(summary: DailySummary | null) {
-  if (!summary || summary.fill_count === 0 || summary.profit_factor === null) return "N/A";
+  if (!summary || summary.trade_group_count === 0 || summary.profit_factor === null) return "N/A";
   return decimalFormatter.format(summary.profit_factor);
 }
 
