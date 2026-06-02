@@ -6,6 +6,7 @@ import {
   FileText,
   FileUp,
   Hash,
+  ListChecks,
   RefreshCw,
   TableProperties
 } from "lucide-react";
@@ -31,6 +32,25 @@ const statusMeta: Record<
 const sourceLabel: Record<DailySummary["source"], string> = {
   committed_fills_only: "只基于 committed fills"
 };
+
+const releaseHighlights = [
+  {
+    title: "无表头 TXT",
+    detail: "按默认成交字段合同解析，缺价格等问题进入异常行。"
+  },
+  {
+    title: "修正重导",
+    detail: "证据批次保留，成交列表和 KPI 不重复计算重叠成交。"
+  },
+  {
+    title: "Fallback 成交",
+    detail: "缺 execution id 的成交在表格中明确标识 fallback key。"
+  },
+  {
+    title: "Round-trip KPI",
+    detail: "PnL、胜率和盈亏比只按已平仓交易分组计算。"
+  }
+];
 
 const integerFormatter = new Intl.NumberFormat("en-US");
 const decimalFormatter = new Intl.NumberFormat("en-US", {
@@ -131,6 +151,27 @@ export default function App() {
           <span>{error}</span>
         </div>
       ) : null}
+
+      <section className="releasePanel" aria-label="本次更新点">
+        <header>
+          <div>
+            <h2>
+              <ListChecks size={18} />
+              本次更新点
+            </h2>
+            <p className="panelNote">P0 复盘真相源已完成集成验证。</p>
+          </div>
+          <span className="sourcePill">P0 已验证</span>
+        </header>
+        <div className="releaseGrid">
+          {releaseHighlights.map((item) => (
+            <article className="releaseItem" key={item.title}>
+              <strong>{item.title}</strong>
+              <p>{item.detail}</p>
+            </article>
+          ))}
+        </div>
+      </section>
 
       <section className="kpis" aria-label="P0 复盘指标">
         <label className="dateControl">

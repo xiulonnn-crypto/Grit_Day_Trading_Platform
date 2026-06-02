@@ -27,6 +27,7 @@ button {
 }
 
 .topbar,
+.releasePanel,
 .kpis,
 .layout,
 .panel {
@@ -127,6 +128,47 @@ h2 {
   margin: 0 auto 16px;
   max-width: 1280px;
   padding: 10px 12px;
+}
+
+.releasePanel {
+  background: #ffffff;
+  border: 1px solid #dce3e8;
+  border-radius: 8px;
+  margin-bottom: 16px;
+  padding: 14px 16px;
+}
+
+.releasePanel header {
+  align-items: flex-start;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.releaseGrid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.releaseItem {
+  border-left: 3px solid #4f63a8;
+  min-width: 0;
+  padding-left: 10px;
+}
+
+.releaseItem strong {
+  display: block;
+  font-size: 14px;
+  margin-bottom: 5px;
+}
+
+.releaseItem p {
+  color: #607080;
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
 }
 
 .kpis {
@@ -530,6 +572,10 @@ th:nth-child(8) {
   .batchFacts {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  .releaseGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 900px) {
@@ -544,6 +590,11 @@ th:nth-child(8) {
 
   .topbar {
     align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .releasePanel header {
+    align-items: stretch;
     flex-direction: column;
   }
 
@@ -571,6 +622,7 @@ th:nth-child(8) {
   }
 
   .kpis,
+  .releaseGrid,
   .batchFacts {
     grid-template-columns: 1fr;
   }
