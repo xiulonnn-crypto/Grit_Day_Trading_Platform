@@ -101,6 +101,9 @@ def test_daily_summary_uses_committed_fills_only(tmp_path):
         assert summary["quarantine_row_count"] == 1
         assert summary["pnl"] == 150.0
         assert summary["win_rate"] == 1.0
+        assert summary["expected_value_per_trade"] == 150.0
+        assert summary["net_profit_per_share"] == 1.5
+        assert summary["max_single_day_drawdown"] == 0.0
 
 
 def test_daily_summary_groups_each_flat_round_trip_for_win_rate_and_profit_factor(tmp_path):
@@ -125,6 +128,9 @@ def test_daily_summary_groups_each_flat_round_trip_for_win_rate_and_profit_facto
     assert summary["pnl"] == 150.0
     assert summary["win_rate"] == 0.666667
     assert summary["profit_factor"] == 4.0
+    assert summary["expected_value_per_trade"] == 50.0
+    assert summary["net_profit_per_share"] == 0.6
+    assert summary["max_single_day_drawdown"] == 0.0
 
 
 def test_batch_detail_and_list_api_contracts_are_stable(tmp_path):
@@ -503,7 +509,10 @@ def test_missing_batch_and_invalid_query_return_error_contracts(tmp_path):
         missing_quarantine = client.get("/api/imports/batch_missing/quarantine")
         invalid_fills_date = client.get("/api/fills?date=20260601")
         invalid_summary_date = client.get("/api/review/daily-summary?date=20260601")
+        invalid_summary_group = client.get("/api/review/summary-groups?group_by=account")
         missing_upload_file = client.post("/api/imports/stp-txt")
+        empty_summary = client.get("/api/review/summary").json()
+        empty_summary_groups = client.get("/api/review/summary-groups?group_by=date").json()["items"]
 
         assert missing_batch.status_code == 404
         assert missing_batch.json() == {"detail": "batch_not_found"}
@@ -511,6 +520,10 @@ def test_missing_batch_and_invalid_query_return_error_contracts(tmp_path):
         assert missing_quarantine.json() == {"detail": "batch_not_found"}
         assert invalid_fills_date.status_code == 422
         assert invalid_summary_date.status_code == 422
+        assert invalid_summary_group.status_code == 422
         assert missing_upload_file.status_code == 422
         assert isinstance(missing_upload_file.json()["detail"], list)
+        assert empty_summary["fill_count"] == 0
+        assert empty_summary["trade_group_count"] == 0
+        assert empty_summary_groups == []
 

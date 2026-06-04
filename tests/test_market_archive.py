@@ -1,0 +1,204 @@
+from pathlib import Path
+
+from grit_day_trading.market_archive import (
+    archive_yahoo_minutes_for_committed_fills,
+    archive_yahoo_minutes_for_symbol_window,
+    list_market_minute_archives,
+)
+from grit_day_trading.market_provider import FakeMarketDataProvider, MarketBar
+from grit_day_trading.service import import_stp_txt, list_fills
+from grit_day_trading.storage import connect, initialize_database
+from grit_day_trading.strategy import DEFAULT_MOMENTUM_MEAN_REVERSION_STRATEGY_ID, update_strategy_config
+
+
+SAMPLE_PATH = Path("tests/fixtures/stp_sample.tsv")
+
+
+def test_archive_yahoo_minutes_groups_committed_fill_symbols_by_trade_date(tmp_path):
+    conn = _seed_db(tmp_path)
+    provider = FakeMarketDataProvider(
+        minute_bars={
+            "AAPL": [
+                MarketBar("2026-06-01T09:30:00", 99.5, 101.0, 99.0, 100.0, 100),
+                MarketBar("2026-06-01T09:31:00", 100.5, 103.0, 100.0, 102.0, 300),
+            ]
+        }
+    )
+    try:
+        summary = archive_yahoo_minutes_for_committed_fills(
+            conn,
+            trade_date="2026-06-01",
+            provider=provider,
+        )
+
+        assert summary["status"] == "completed"
+        assert summary["provider"] == "yahoo"
+        assert summary["target_count"] == 1
+        assert summary["available_count"] == 1
+        archive = summary["items"][0]
+        assert archive["provider"] == "yahoo"
+        assert archive["symbol"] == "AAPL"
+        assert archive["trade_date"] == "2026-06-01"
+        assert archive["requested_start"] == "2026-06-01T04:00:00"
+        assert archive["requested_end"] == "2026-06-01T20:00:00"
+        assert archive["source_fill_count"] == 2
+        assert archive["data_status"] == "available"
+        assert archive["bar_count"] == 2
+        assert archive["vwap"] == 101.5
+        assert archive["day_high"] == 103.0
+        assert archive["day_low"] == 99.0
+        assert len(archive["bars_hash"]) == 64
+
+        stored = list_market_minute_archives(conn, trade_date="2026-06-01")
+        assert [item["archive_id"] for item in stored] == [archive["archive_id"]]
+        assert conn.execute("SELECT COUNT(*) FROM market_data_provider_attempts").fetchone()[0] == 1
+        assert [fill["price"] for fill in list_fills(conn, date="2026-06-01")] == [10.0, 11.5]
+    finally:
+        conn.close()
+
+
+def test_archive_yahoo_minutes_includes_enabled_momentum_context_symbols(tmp_path):
+    conn = _seed_db(tmp_path)
+    provider = FakeMarketDataProvider(
+        minute_bars={
+            "AAPL": [MarketBar("2026-06-01T11:00:00", 99.5, 101.0, 99.0, 100.0, 100)],
+            "QQQ": [MarketBar("2026-06-01T11:00:00", 400.0, 401.0, 399.0, 400.5, 1000)],
+            "SMH": [MarketBar("2026-06-01T11:00:00", 250.0, 251.0, 249.0, 250.5, 1000)],
+        }
+    )
+    try:
+        update_strategy_config(conn, DEFAULT_MOMENTUM_MEAN_REVERSION_STRATEGY_ID, enabled=True)
+
+        summary = archive_yahoo_minutes_for_committed_fills(
+            conn,
+            trade_date="2026-06-01",
+            provider=provider,
+        )
+        repeated = archive_yahoo_minutes_for_committed_fills(
+            conn,
+            trade_date="2026-06-01",
+            provider=provider,
+        )
+
+        by_symbol = {item["symbol"]: item for item in summary["items"]}
+        assert summary["status"] == "completed"
+        assert summary["target_count"] == 3
+        assert set(by_symbol) == {"AAPL", "QQQ", "SMH"}
+        assert by_symbol["AAPL"]["source_fill_count"] == 2
+        assert by_symbol["QQQ"]["source_fill_count"] == 0
+        assert by_symbol["SMH"]["source_fill_count"] == 0
+        assert all(item["data_status"] == "available" for item in by_symbol.values())
+        assert {item["archive_id"] for item in repeated["items"]} == {item["archive_id"] for item in summary["items"]}
+        assert conn.execute("SELECT COUNT(*) FROM market_minute_archives").fetchone()[0] == 3
+        assert conn.execute("SELECT COUNT(*) FROM market_data_provider_attempts").fetchone()[0] == 3
+    finally:
+        conn.close()
+
+
+def test_archive_yahoo_minutes_is_idempotent_without_force(tmp_path):
+    conn = _seed_db(tmp_path)
+    try:
+        provider = FakeMarketDataProvider()
+        first = archive_yahoo_minutes_for_committed_fills(conn, trade_date="2026-06-01", provider=provider)["items"][0]
+        second = archive_yahoo_minutes_for_committed_fills(conn, trade_date="2026-06-01", provider=provider)["items"][0]
+
+        assert second["archive_id"] == first["archive_id"]
+        assert conn.execute("SELECT COUNT(*) FROM market_minute_archives").fetchone()[0] == 1
+        assert conn.execute("SELECT COUNT(*) FROM market_data_provider_attempts").fetchone()[0] == 1
+    finally:
+        conn.close()
+
+
+def test_archive_yahoo_minutes_preserves_provider_failure_as_visible_archive(tmp_path):
+    conn = _seed_db(tmp_path)
+    provider = FakeMarketDataProvider(minute_status={"AAPL": "provider_failed"})
+    try:
+        summary = archive_yahoo_minutes_for_committed_fills(
+            conn,
+            trade_date="2026-06-01",
+            provider=provider,
+        )
+
+        archive = summary["items"][0]
+        assert summary["provider_failed_count"] == 1
+        assert archive["data_status"] == "provider_failed"
+        assert archive["failure_reason"] == "fake_provider_failed"
+        assert archive["bar_count"] == 0
+        attempt = conn.execute("SELECT * FROM market_data_provider_attempts").fetchone()
+        assert attempt["request_type"] == "archive_minute_bars"
+        assert attempt["status"] == "failed"
+    finally:
+        conn.close()
+
+
+def test_archive_yahoo_minutes_returns_no_targets_without_committed_fills(tmp_path):
+    conn = _seed_db(tmp_path)
+    try:
+        summary = archive_yahoo_minutes_for_committed_fills(conn, trade_date="2026-06-03")
+
+        assert summary["status"] == "no_targets"
+        assert summary["target_count"] == 0
+        assert summary["items"] == []
+        assert conn.execute("SELECT COUNT(*) FROM market_data_provider_attempts").fetchone()[0] == 0
+    finally:
+        conn.close()
+
+
+def test_archive_yahoo_minutes_for_symbol_window_does_not_require_committed_fills(tmp_path):
+    conn = _seed_db(tmp_path)
+    provider = FakeMarketDataProvider()
+    try:
+        summary = archive_yahoo_minutes_for_symbol_window(
+            conn,
+            symbol="msft",
+            end_date="2026-06-05",
+            window_trading_days=3,
+            provider=provider,
+        )
+
+        assert summary["status"] == "completed"
+        assert summary["symbol"] == "MSFT"
+        assert summary["requested_trade_dates"] == ["2026-06-03", "2026-06-04", "2026-06-05"]
+        assert summary["target_count"] == 3
+        assert summary["selected_symbol_available_count"] == 3
+        assert {item["symbol"] for item in summary["items"]} == {"MSFT"}
+        assert {item["source_fill_count"] for item in summary["items"]} == {0}
+        assert len(list_market_minute_archives(conn, symbol="MSFT", provider="yahoo")) == 3
+        assert [fill["symbol"] for fill in list_fills(conn, date="2026-06-01")] == ["AAPL", "AAPL"]
+    finally:
+        conn.close()
+
+
+def test_archive_yahoo_minutes_for_symbol_window_includes_momentum_context_when_enabled(tmp_path):
+    conn = _seed_db(tmp_path)
+    provider = FakeMarketDataProvider()
+    try:
+        update_strategy_config(conn, DEFAULT_MOMENTUM_MEAN_REVERSION_STRATEGY_ID, enabled=True)
+
+        summary = archive_yahoo_minutes_for_symbol_window(
+            conn,
+            symbol="aapl",
+            end_date="2026-06-02",
+            window_trading_days=2,
+            provider=provider,
+        )
+
+        assert summary["requested_trade_dates"] == ["2026-06-01", "2026-06-02"]
+        assert summary["target_count"] == 6
+        assert {(item["trade_date"], item["symbol"]) for item in summary["items"]} == {
+            ("2026-06-01", "AAPL"),
+            ("2026-06-01", "QQQ"),
+            ("2026-06-01", "SMH"),
+            ("2026-06-02", "AAPL"),
+            ("2026-06-02", "QQQ"),
+            ("2026-06-02", "SMH"),
+        }
+    finally:
+        conn.close()
+
+
+def _seed_db(tmp_path):
+    conn = connect(tmp_path / "archive.db")
+    initialize_database(conn)
+    import_stp_txt(conn, "sample.tsv", SAMPLE_PATH.read_bytes())
+    return conn

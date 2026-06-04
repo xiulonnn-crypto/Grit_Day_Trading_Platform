@@ -15,7 +15,24 @@ def test_storage_contract_creates_required_indexes_triggers_and_migration_marker
             "SELECT description FROM storage_migrations WHERE version = ?",
             (STORAGE_SCHEMA_VERSION,),
         ).fetchone()
-        assert migration["description"] == "p0_storage_contract_v1"
+        expected_current_migrations = {
+            3: "p1_yahoo_minute_archive_contract_v3",
+            4: "p2_strategy_signal_contract_v4",
+            5: "p2_strategy_testing_optimization_contract_v5",
+        }
+        assert migration["description"] == expected_current_migrations[STORAGE_SCHEMA_VERSION]
+        p0_migration = conn.execute("SELECT description FROM storage_migrations WHERE version = 1").fetchone()
+        assert p0_migration["description"] == "p0_storage_contract_v1"
+        p1_migration = conn.execute("SELECT description FROM storage_migrations WHERE version = 2").fetchone()
+        assert p1_migration["description"] == "p1_market_context_contract_v2"
+        yahoo_migration = conn.execute("SELECT description FROM storage_migrations WHERE version = 3").fetchone()
+        assert yahoo_migration["description"] == "p1_yahoo_minute_archive_contract_v3"
+        if STORAGE_SCHEMA_VERSION >= 4:
+            strategy_migration = conn.execute("SELECT description FROM storage_migrations WHERE version = 4").fetchone()
+            assert strategy_migration["description"] == "p2_strategy_signal_contract_v4"
+        if STORAGE_SCHEMA_VERSION >= 5:
+            strategy_test_migration = conn.execute("SELECT description FROM storage_migrations WHERE version = 5").fetchone()
+            assert strategy_test_migration["description"] == "p2_strategy_testing_optimization_contract_v5"
         assert {
             "ux_import_batches_file_hash",
             "ux_import_rows_batch_line_hash",
@@ -28,6 +45,43 @@ def test_storage_contract_creates_required_indexes_triggers_and_migration_marker
             "ux_fills_source_import_row",
             "ux_quarantine_import_row",
         }.issubset(_index_names(conn, "fills") | _index_names(conn, "quarantine_rows"))
+        assert {
+            "ux_market_context_snapshot_window",
+            "ix_market_context_symbol_created",
+            "ix_market_attempts_symbol_created",
+            "ux_market_minute_archive_window",
+            "ux_market_minute_archive_idempotency",
+            "ix_market_minute_archive_date_symbol",
+            "ux_watchlist_run_contract",
+            "ux_watchlist_items_run_symbol",
+            "ix_watchlist_items_date_rank",
+            "ix_strategy_configs_template_enabled",
+            "ux_strategy_signal_run_idempotency",
+            "ix_strategy_signal_runs_lookup",
+            "ix_strategy_signals_run_time",
+            "ux_strategy_test_batch_idempotency",
+            "ix_strategy_test_batches_lookup",
+            "ux_strategy_test_day_batch_date",
+            "ix_strategy_test_day_results_run",
+            "ux_strategy_optimization_idempotency",
+            "ix_strategy_optimization_lookup",
+            "ux_strategy_optimization_candidate_params",
+            "ix_strategy_optimization_candidate_rank",
+        }.issubset(
+            _index_names(conn, "market_context_snapshots")
+            | _index_names(conn, "market_minute_archives")
+            | _index_names(conn, "market_data_provider_attempts")
+            | _index_names(conn, "watchlist_runs")
+            | _index_names(conn, "watchlist_items")
+            | _index_names(conn, "strategy_configs")
+            | _index_names(conn, "strategy_signal_runs")
+            | _index_names(conn, "strategy_signals")
+            | _index_names(conn, "strategy_test_batches")
+            | _index_names(conn, "strategy_test_day_results")
+            | _index_names(conn, "strategy_optimization_runs")
+            | _index_names(conn, "strategy_optimization_candidates")
+        )
+        assert "params_json" in _column_names(conn, "strategy_signal_runs")
         assert {
             "trg_import_rows_account_canonical_insert",
             "trg_orders_account_canonical_insert",
@@ -66,6 +120,299 @@ def test_storage_contract_rejects_non_canonical_account_fields(tmp_path):
                 account_canonical="ACCT_01",
                 execution_id="E-1",
                 idempotency_key="bad-fill-key",
+            )
+    finally:
+        conn.close()
+
+
+def test_p1_storage_contract_enforces_market_snapshot_and_watchlist_keys(tmp_path):
+    conn = connect(tmp_path / "p1.db")
+    try:
+        initialize_database(conn)
+        _insert_batch(conn)
+        _insert_import_row(conn, row_id="row_1", raw_line_number=1, order_id="O-1", execution_id="E-1")
+        _insert_fill(
+            conn,
+            record_id="fill_1",
+            source_row_id="row_1",
+            account_raw="acct-01",
+            account_canonical="ACCT-01",
+            execution_id="E-1",
+            idempotency_key="fill-key-1",
+        )
+        conn.execute(
+            """
+            INSERT INTO market_context_snapshots (
+                id, fill_id, provider, symbol, requested_start, requested_end, provider_timezone,
+                bar_count, bars_hash, bars_json, vwap, day_high, day_low,
+                volume_context, data_status, failure_reason
+            ) VALUES (
+                'mctx_1', 'fill_1', 'fake', 'NVDA', '2026-06-01T09:00:00',
+                '2026-06-01T10:00:00', 'America/New_York', 1, 'hash_1', '[]',
+                100, 101, 99, '{}', 'available', NULL
+            )
+            """
+        )
+        conn.execute(
+            """
+            INSERT INTO watchlist_runs (
+                id, trade_date, provider, rules_version, status, item_count
+            ) VALUES ('watchrun_1', '2026-06-01', 'fake', 'rules_v1', 'completed', 1)
+            """
+        )
+        conn.execute(
+            """
+            INSERT INTO watchlist_items (
+                id, run_id, trade_date, symbol, rank, reason_codes_json,
+                metrics_json, source, status
+            ) VALUES (
+                'watchitem_1', 'watchrun_1', '2026-06-01', 'NVDA', 1,
+                '{"codes":["relative_volume_spike"]}', '{"relative_volume":2.0}',
+                'provider_summary', 'included'
+            )
+            """
+        )
+        conn.execute(
+            """
+            INSERT INTO market_minute_archives (
+                id, provider, symbol, trade_date, requested_start, requested_end, provider_timezone,
+                bar_count, bars_hash, bars_json, volume_context, data_status, source_fill_count,
+                archive_version, idempotency_key
+            ) VALUES (
+                'minbar_1', 'yahoo', 'NVDA', '2026-06-01', '2026-06-01T04:00:00',
+                '2026-06-01T20:00:00', 'America/New_York', 1, 'hash_1', '[]',
+                '{}', 'available', 1, 'market_minute_archive_v1',
+                'yahoo:NVDA:2026-06-01:2026-06-01T04:00:00:2026-06-01T20:00:00'
+            )
+            """
+        )
+        conn.commit()
+
+        with pytest.raises(sqlite3.IntegrityError):
+            conn.execute(
+                """
+                INSERT INTO market_context_snapshots (
+                    id, fill_id, provider, symbol, requested_start, requested_end, provider_timezone,
+                    bar_count, bars_hash, bars_json, volume_context, data_status
+                ) VALUES (
+                    'mctx_duplicate', 'fill_1', 'fake', 'NVDA', '2026-06-01T09:00:00',
+                    '2026-06-01T10:00:00', 'America/New_York', 0, 'hash_2', '[]',
+                    '{}', 'missing'
+                )
+                """
+            )
+        conn.rollback()
+
+        with pytest.raises(sqlite3.IntegrityError):
+            conn.execute(
+                """
+                INSERT INTO market_context_snapshots (
+                    id, fill_id, provider, symbol, requested_start, requested_end, provider_timezone,
+                    bar_count, bars_hash, bars_json, volume_context, data_status
+                ) VALUES (
+                    'mctx_bad_status', 'fill_1', 'fake', 'NVDA', '2026-06-01T08:00:00',
+                    '2026-06-01T08:30:00', 'America/New_York', 0, 'hash_3', '[]',
+                    '{}', 'empty_chart_success'
+                )
+                """
+            )
+        conn.rollback()
+
+        with pytest.raises(sqlite3.IntegrityError):
+            conn.execute(
+                """
+                INSERT INTO market_minute_archives (
+                    id, provider, symbol, trade_date, requested_start, requested_end, provider_timezone,
+                    bar_count, bars_hash, bars_json, volume_context, data_status, source_fill_count,
+                    archive_version, idempotency_key
+                ) VALUES (
+                    'minbar_duplicate', 'yahoo', 'NVDA', '2026-06-01', '2026-06-01T04:00:00',
+                    '2026-06-01T20:00:00', 'America/New_York', 1, 'hash_2', '[]',
+                    '{}', 'available', 1, 'market_minute_archive_v1',
+                    'duplicate-key'
+                )
+                """
+            )
+        conn.rollback()
+
+        with pytest.raises(sqlite3.IntegrityError):
+            conn.execute(
+                """
+                INSERT INTO market_minute_archives (
+                    id, provider, symbol, trade_date, requested_start, requested_end, provider_timezone,
+                    bar_count, bars_hash, bars_json, volume_context, data_status, source_fill_count,
+                    archive_version, idempotency_key
+                ) VALUES (
+                    'minbar_bad_status', 'yahoo', 'NVDA', '2026-06-02', '2026-06-02T04:00:00',
+                    '2026-06-02T20:00:00', 'America/New_York', 0, 'hash_3', '[]',
+                    '{}', 'empty_chart_success', 1, 'market_minute_archive_v1',
+                    'yahoo:NVDA:2026-06-02:2026-06-02T04:00:00:2026-06-02T20:00:00'
+                )
+                """
+            )
+    finally:
+        conn.close()
+
+
+def test_p2_storage_contract_enforces_strategy_run_status_and_idempotency(tmp_path):
+    conn = connect(tmp_path / "p2.db")
+    try:
+        initialize_database(conn)
+        conn.execute(
+            """
+            INSERT INTO strategy_configs (
+                id, name, template_key, template_version, enabled, params_json, params_hash
+            ) VALUES (
+                'strategy_1', 'BB', 'bb_squeeze_breakout_v1', 'bb_squeeze_breakout_v1',
+                1, '{}', 'params_hash_1'
+            )
+            """
+        )
+        conn.execute(
+            """
+            INSERT INTO strategy_signal_runs (
+                id, strategy_id, provider, symbol, trade_date, source_archive_id,
+                bars_hash, params_hash, indicator_engine_version, status,
+                indicator_series_json, indicator_hash, signal_count, idempotency_key
+            ) VALUES (
+                'stratrun_1', 'strategy_1', 'yahoo', 'NVDA', '2026-06-01', NULL,
+                'bars_hash_1', 'params_hash_1', 'strategy_indicator_engine_v1',
+                'completed', '[]', 'indicator_hash_1', 0, 'strategy-run-key'
+            )
+            """
+        )
+        conn.commit()
+
+        with pytest.raises(sqlite3.IntegrityError):
+            conn.execute(
+                """
+                INSERT INTO strategy_signal_runs (
+                    id, strategy_id, provider, symbol, trade_date, bars_hash,
+                    params_hash, indicator_engine_version, status, indicator_series_json,
+                    indicator_hash, signal_count, idempotency_key
+                ) VALUES (
+                    'stratrun_duplicate', 'strategy_1', 'yahoo', 'NVDA', '2026-06-01',
+                    'bars_hash_2', 'params_hash_1', 'strategy_indicator_engine_v1',
+                    'completed', '[]', 'indicator_hash_2', 0, 'strategy-run-key'
+                )
+                """
+            )
+        conn.rollback()
+
+        with pytest.raises(sqlite3.IntegrityError):
+            conn.execute(
+                """
+                INSERT INTO strategy_signal_runs (
+                    id, strategy_id, provider, symbol, trade_date, bars_hash,
+                    params_hash, indicator_engine_version, status, indicator_series_json,
+                    indicator_hash, signal_count, idempotency_key
+                ) VALUES (
+                    'stratrun_bad_status', 'strategy_1', 'yahoo', 'NVDA', '2026-06-01',
+                    'bars_hash_3', 'params_hash_1', 'strategy_indicator_engine_v1',
+                    'empty_chart_success', '[]', 'indicator_hash_3', 0, 'bad-status-key'
+                )
+                """
+            )
+    finally:
+        conn.close()
+
+
+def test_p2_strategy_testing_optimization_storage_contract(tmp_path):
+    conn = connect(tmp_path / "p2_v5.db")
+    try:
+        initialize_database(conn)
+        conn.execute(
+            """
+            INSERT INTO strategy_configs (
+                id, name, template_key, template_version, enabled, params_json, params_hash
+            ) VALUES (
+                'strategy_1', 'BB', 'bb_squeeze_breakout_v1', 'bb_squeeze_breakout_v1',
+                1, '{}', 'params_hash_1'
+            )
+            """
+        )
+        conn.execute(
+            """
+            INSERT INTO strategy_test_batches (
+                id, strategy_id, provider, symbol, end_date, window_trading_days,
+                archive_scope_hash, params_json, params_hash, template_version,
+                indicator_engine_version, status, idempotency_key
+            ) VALUES (
+                'test_1', 'strategy_1', 'yahoo', 'NVDA', '2026-06-30', 30,
+                'scope_hash_1', '{}', 'params_hash_1', 'bb_squeeze_breakout_v1',
+                'strategy_indicator_engine_v2', 'completed', 'test-key'
+            )
+            """
+        )
+        conn.execute(
+            """
+            INSERT INTO strategy_optimization_runs (
+                id, strategy_id, provider, symbol, end_date, window_trading_days,
+                archive_scope_hash, search_space_json, search_space_hash, objective,
+                template_version, indicator_engine_version, status, idempotency_key
+            ) VALUES (
+                'opt_1', 'strategy_1', 'yahoo', 'NVDA', '2026-06-30', 30,
+                'scope_hash_1', '{}', 'search_hash_1', 'stable_profitability_v1',
+                'bb_squeeze_breakout_v1', 'strategy_indicator_engine_v2', 'completed',
+                'opt-key'
+            )
+            """
+        )
+        conn.execute(
+            """
+            INSERT INTO strategy_optimization_candidates (
+                id, optimization_run_id, rank, params_json, params_hash, day_results_json,
+                status
+            ) VALUES (
+                'cand_1', 'opt_1', 1, '{}', 'params_hash_1', '[]', 'eligible'
+            )
+            """
+        )
+        conn.commit()
+
+        with pytest.raises(sqlite3.IntegrityError):
+            conn.execute(
+                """
+                INSERT INTO strategy_test_batches (
+                    id, strategy_id, provider, symbol, end_date, window_trading_days,
+                    archive_scope_hash, params_json, params_hash, template_version,
+                    indicator_engine_version, status, idempotency_key
+                ) VALUES (
+                    'test_dup', 'strategy_1', 'yahoo', 'NVDA', '2026-06-30', 30,
+                    'scope_hash_2', '{}', 'params_hash_1', 'bb_squeeze_breakout_v1',
+                    'strategy_indicator_engine_v2', 'completed', 'test-key'
+                )
+                """
+            )
+        conn.rollback()
+
+        with pytest.raises(sqlite3.IntegrityError):
+            conn.execute(
+                """
+                INSERT INTO strategy_optimization_candidates (
+                    id, optimization_run_id, rank, params_json, params_hash, day_results_json,
+                    status
+                ) VALUES (
+                    'cand_dup', 'opt_1', 2, '{}', 'params_hash_1', '[]', 'eligible'
+                )
+                """
+            )
+        conn.rollback()
+
+        with pytest.raises(sqlite3.IntegrityError):
+            conn.execute(
+                """
+                INSERT INTO strategy_optimization_runs (
+                    id, strategy_id, provider, symbol, end_date, window_trading_days,
+                    archive_scope_hash, search_space_json, search_space_hash, objective,
+                    template_version, indicator_engine_version, status, idempotency_key
+                ) VALUES (
+                    'opt_bad', 'strategy_1', 'yahoo', 'NVDA', '2026-06-30', 30,
+                    'scope_hash_1', '{}', 'search_hash_2', 'stable_profitability_v1',
+                    'bb_squeeze_breakout_v1', 'strategy_indicator_engine_v2',
+                    'rendered_fake_success', 'bad-opt-key'
+                )
+                """
             )
     finally:
         conn.close()
@@ -156,6 +503,10 @@ def test_initialize_database_migrates_legacy_schema_with_contract_indexes(tmp_pa
 
 def _index_names(conn: sqlite3.Connection, table_name: str) -> set[str]:
     return {row["name"] for row in conn.execute(f"PRAGMA index_list({table_name})").fetchall()}
+
+
+def _column_names(conn: sqlite3.Connection, table_name: str) -> set[str]:
+    return {row["name"] for row in conn.execute(f"PRAGMA table_info({table_name})").fetchall()}
 
 
 def _trigger_names(conn: sqlite3.Connection) -> set[str]:

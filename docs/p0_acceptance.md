@@ -38,12 +38,13 @@
 | 重复成交行 | 同一文件内重复 raw rows 各自生成 fill | Daily summary 计入每条 committed fill | 成交数逐行显示，不压缩重复回报 | PASS |
 | 跨批修正重导 | 不删除旧批次和 evidence rows | fills 和 summary read-model 不重复计算同一 fallback 成交签名 | 成交列表和 KPI 使用去重后的 committed read-model | PASS |
 | 交易股数 | 按账号和标的配对 BUY/SELL 数量 | Summary 返回 `traded_quantity` | KPI 展示交易股数 | PASS |
-| 已平仓交易分组 | 同账号同标的按成交序列从开仓到平仓分段 | Summary 返回 round-trip `trade_group_count`、PnL、胜率和盈亏比 | KPI 胜率和盈亏比不按 symbol 净额合并 | PASS |
+| 已平仓交易分组 | 同账号同标的按成交序列从开仓到平仓分段 | Summary 返回 round-trip `trade_group_count`、PnL、胜率、盈亏比、单笔期望值、每股净收益和最大单日回撤 | KPI 不按 symbol 净额或前端成交列表合并 | PASS |
+| 成交组持仓回撤 | Replay 交易组引用已归档分钟线 | 交易组返回基于开仓到清仓窗口 high/low 的持仓最大回撤、每股回撤和 bars hash | 缺分钟线、provider failure 或未清仓不得显示成功回撤 | PASS |
 | 账号 canonicalization | `account_raw` 保留，`account_canonical = strip().upper()` | fills payload 返回 canonical account | 成交列表显示 canonical account | PASS |
 | quarantine 行 | `quarantine_rows` 保存失败字段和修复提示 | quarantine API 返回 reason code、failed field、review status | 异常行卡片可显示 line、reason、failed field | PASS |
 | normalized orders/fills | `orders` 和 `fills` 只写 accepted 语义 | fills API 按日期返回 committed fills | 成交列表使用 committed fills | PASS |
 | 重复导入幂等 | 重复上传后 DB 表计数不增加 | 第二次上传返回同一 `batch_id` 且 `duplicate=true` | UI 应复用同一批次响应 | PASS |
-| KPI committed-only | daily summary 从 `fills` 计算 | API 返回 `source=committed_fills_only` | KPI 卡片使用 daily summary | PASS |
+| KPI committed-only | daily summary 从 committed fills 和 closed trade groups 计算 | API 返回 `source=committed_fills_only` 和扩展 KPI 字段 | KPI 卡片使用 summary read model | PASS |
 | 纯失败批次 | 无 orders/fills 写入 | failed batch 和 quarantine rows 可查 | 失败状态可由批次 read-model 显示 | PASS |
 | 批次列表选择字段 | `import_batches.id` 存在 | `GET /api/imports` 返回 `batch_id` alias | React 批次列表读取 `batch_id` | PASS |
 
@@ -57,7 +58,7 @@
 | Day 1 fills | `3` | `3` | 成交列表 `3` 行 | `fills` | 否 | PASS |
 | Day 2 fills | `1` | `1` | 成交列表可按日期查询 | `fills` | 否 | PASS |
 | Fallback execution id | `execution_id IS NULL` | `execution_id=null` | Exec ID 显示 `fallback` | `fills.idempotency_key` | 否 | PASS |
-| Daily summary source | committed fills only | `source=committed_fills_only` | KPI 卡片读取同一 summary | `fills` | 否 | PASS |
+| Daily summary source | committed fills only | `source=committed_fills_only` | KPI 卡片读取同一 summary | `fills` + closed trade groups | 否 | PASS |
 | Batch list id alias | `id` | 返回 `batch_id` alias | 批次列表读取 `batch_id` | `import_batches.id` | 否 | PASS |
 
 ## Negative Acceptance
@@ -69,7 +70,8 @@
 - 旧 parser 零行失败：新 parser 可重解析同一文件，已有 evidence rows 的批次不走该路径。
 - 缺 execution id 重复成交：同一文件内逐行入账，重复上传仍不重复记账。
 - 缺 execution id 跨批修正重导：底层证据保留多批，成交 read-model 和 KPI 不重复计算重叠成交。
-- 单边未平仓成交：不进入胜率、盈亏比或已实现 PnL。
+- 单边未平仓成交：不进入胜率、盈亏比、单笔期望值、每股净收益、最大单日回撤或已实现 PnL。
+- 成交组缺少可用分钟线：持仓最大回撤返回缺数据状态，不能用 0 或空图冒充成功。
 - 取消单：写入 order，不写入 fill。
 - 缺 execution id 成交：写入 fill，并在 UI read-model 中显示 fallback。
 
@@ -78,4 +80,4 @@
 - 当前没有可验证的真实 STP 原始样例；需要真实样例后补 broker-format fixture 并复跑 parser 验收。
 - `GET /api/imports` 已返回前端消费的 `batch_id` alias，并进入硬验收。
 - 本次没有启动浏览器做 DOM 几何或截图验收；UI 证据限定为当前 React 页面消费的 API read model。
-- `CHANGELOG.md` 已同步当前用户可见修复；后续新增 Trade Plan 或行情上下文时仍需重新补充。
+- `CHANGELOG.md` 已同步当前用户可见修复；后续新增行情上下文时仍需重新补充。

@@ -110,12 +110,18 @@ def test_p0_import_evidence_is_consistent_across_db_api_and_ui_read_model(tmp_pa
     assert summary_day_1["pnl"] == 15.0
     assert summary_day_1["win_rate"] == 1.0
     assert summary_day_1["profit_factor"] is None
+    assert summary_day_1["expected_value_per_trade"] == 15.0
+    assert summary_day_1["net_profit_per_share"] == 1.5
+    assert summary_day_1["max_single_day_drawdown"] == 0.0
 
     assert summary_day_2["source"] == "committed_fills_only"
     assert summary_day_2["fill_count"] == len(fills_day_2)
     assert summary_day_2["traded_quantity"] == 0
     assert summary_day_2["trade_group_count"] == 0
     assert summary_day_2["pnl"] == 0
+    assert summary_day_2["expected_value_per_trade"] is None
+    assert summary_day_2["net_profit_per_share"] is None
+    assert summary_day_2["max_single_day_drawdown"] == 0.0
 
     ui_batch = _ui_batch_card(first_payload)
     ui_fills = [_ui_fill_row(fill) for fill in fills_day_1]
@@ -132,12 +138,12 @@ def test_p0_import_evidence_is_consistent_across_db_api_and_ui_read_model(tmp_pa
     assert all(row["trace"].startswith("line ") and PARSER_VERSION in row["trace"] for row in ui_fills)
     assert ui_quarantine == [{"line": 7, "reason_code": "missing_required_field", "failed_field": "price"}]
     assert ui_summary == {
-        "成交数": 3,
         "交易股数": 10,
         "PnL": 15.0,
         "胜率": "100.00%",
-        "盈亏比": "N/A",
-        "异常行": 1,
+        "盈亏比": "∞",
+        "每股净收益": "+1.50",
+        "持仓最大回撤": "0.00",
     }
 
 
@@ -281,11 +287,17 @@ def _ui_quarantine_card(row):
 
 
 def _ui_summary_cards(summary):
+    if summary["trade_group_count"] == 0:
+        profit_factor = "N/A"
+    elif summary["profit_factor"] is None:
+        profit_factor = "∞" if summary["pnl"] > 0 else "N/A"
+    else:
+        profit_factor = summary["profit_factor"]
     return {
-        "成交数": summary["fill_count"],
         "交易股数": summary["traded_quantity"],
         "PnL": summary["pnl"],
         "胜率": "N/A" if summary["trade_group_count"] == 0 else f"{summary['win_rate'] * 100:.2f}%",
-        "盈亏比": summary["profit_factor"] if summary["profit_factor"] is not None else "N/A",
-        "异常行": summary["quarantine_row_count"],
+        "盈亏比": profit_factor,
+        "每股净收益": "N/A" if summary["net_profit_per_share"] is None else f"{summary['net_profit_per_share']:+.2f}",
+        "持仓最大回撤": f"{summary['max_single_day_drawdown']:.2f}",
     }
