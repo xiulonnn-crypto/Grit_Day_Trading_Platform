@@ -12,186 +12,581 @@
       body {
         margin: 0;
         min-height: 100vh;
-        display: grid;
-        place-items: center;
-        padding: 24px;
         font-family: "Segoe UI", "Microsoft YaHei", Arial, sans-serif;
-        color: #17211f;
-        background:
-          linear-gradient(180deg, rgba(255, 255, 255, 0.75), rgba(247, 243, 234, 0.96)),
-          #f7f3ea;
+        color: #082035;
+        background: #f3f6f8;
       }
 
-      main {
-        width: min(860px, 100%);
+      button,
+      input {
+        font: inherit;
       }
 
-      .panel {
-        padding: 28px;
-        border: 1px solid #d8d1c3;
-        border-radius: 8px;
-        background: #ffffff;
+      .shell {
+        width: min(1440px, calc(100% - 72px));
+        margin: 0 auto;
+        padding: 14px 0 40px;
       }
 
-      .eyebrow {
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-        margin: 0 0 16px;
-        color: #225f8f;
+      .topbar {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 24px;
+        margin-bottom: 18px;
+      }
+
+      .stage {
+        margin: 0 0 6px;
+        color: #3540b4;
         font-size: 13px;
-        font-weight: 700;
+        font-weight: 800;
         letter-spacing: 0;
         text-transform: uppercase;
       }
 
-      .eyebrow::before {
-        width: 10px;
-        height: 10px;
-        content: "";
-        background: #16784b;
-        border: 2px solid #17211f;
-      }
-
       h1 {
         margin: 0;
-        font-size: clamp(34px, 8vw, 64px);
-        line-height: 1;
+        font-size: 34px;
+        line-height: 1.1;
         letter-spacing: 0;
       }
 
-      p {
-        margin: 18px 0 0;
-        max-width: 720px;
-        color: #50605b;
-        line-height: 1.7;
+      .subtitle {
+        margin: 8px 0 0;
+        color: #426076;
+        font-size: 15px;
       }
 
-      .actions {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 12px;
-        margin-top: 24px;
-      }
-
-      a,
-      button {
-        min-height: 42px;
-        padding: 0 14px;
-        border: 1px solid #16784b;
-        border-radius: 6px;
-        font: inherit;
-        font-weight: 700;
-        text-decoration: none;
-        cursor: pointer;
-      }
-
-      a.primary,
-      button.primary {
-        color: #ffffff;
-        background: #16784b;
-      }
-
-      a.secondary {
-        display: inline-flex;
-        align-items: center;
-        color: #16784b;
+      .upload {
+        min-height: 44px;
+        padding: 0 16px;
+        border: 1px solid #bdcbd8;
+        border-radius: 8px;
+        color: #082035;
         background: #ffffff;
+        font-weight: 700;
       }
 
-      .facts {
+      .tabs {
+        display: flex;
+        width: max-content;
+        margin: 12px auto 16px;
+        padding: 4px;
+        border: 1px solid #d0dce6;
+        border-radius: 9px;
+        background: #eaf1f4;
+      }
+
+      .tab {
+        min-height: 40px;
+        padding: 0 14px;
+        border: 0;
+        border-radius: 7px;
+        color: #23384d;
+        background: transparent;
+        font-weight: 800;
+      }
+
+      .tab.active {
+        color: #ffffff;
+        background: #197a73;
+      }
+
+      .kpis {
         display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 14px;
-        margin-top: 18px;
+        grid-template-columns: repeat(7, minmax(0, 1fr));
+        gap: 12px;
+        margin-bottom: 16px;
       }
 
-      .fact {
-        min-height: 132px;
-        padding: 16px;
-        border: 1px solid #d8d1c3;
+      .card,
+      .panel,
+      .field,
+      .watch,
+      .chart {
+        border: 1px solid #d2dde7;
         border-radius: 8px;
         background: #ffffff;
       }
 
-      .fact strong {
+      .card {
+        min-height: 98px;
+        padding: 14px 12px;
+      }
+
+      .label {
         display: block;
-        margin-bottom: 8px;
-        color: #17211f;
+        color: #436174;
+        font-size: 13px;
       }
 
-      .fact span {
-        color: #50605b;
-        line-height: 1.6;
+      .value {
+        display: block;
+        margin-top: 8px;
+        font-size: 22px;
+        font-weight: 900;
+        letter-spacing: 0;
       }
 
-      code {
-        color: #b43d2b;
-        font-family: Consolas, "Cascadia Mono", monospace;
-        font-weight: 700;
+      .positive {
+        color: #008000;
       }
 
-      @media (max-width: 720px) {
-        body {
-          place-items: start center;
+      .risk {
+        color: #ad6900;
+      }
+
+      .hint {
+        display: block;
+        margin-top: 6px;
+        color: #426076;
+        font-size: 12px;
+      }
+
+      .drilldown {
+        display: grid;
+        grid-template-columns: 30% 1fr;
+        gap: 18px;
+        padding: 16px;
+        margin-bottom: 16px;
+      }
+
+      .panel-title {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 12px;
+      }
+
+      h2,
+      h3 {
+        margin: 0;
+        letter-spacing: 0;
+      }
+
+      h2 {
+        font-size: 18px;
+      }
+
+      h3 {
+        font-size: 16px;
+      }
+
+      .muted {
+        margin: 4px 0 0;
+        color: #426076;
+        font-size: 12px;
+        line-height: 1.5;
+      }
+
+      .segmented {
+        display: flex;
+        gap: 4px;
+        padding: 4px;
+        border: 1px solid #d0dce6;
+        border-radius: 8px;
+        background: #eef4f7;
+      }
+
+      .segmented button {
+        min-height: 36px;
+        padding: 0 12px;
+        border: 1px solid #c1d3e0;
+        border-radius: 7px;
+        color: #0b2840;
+        background: #ffffff;
+        font-weight: 800;
+      }
+
+      .segmented .selected {
+        color: #ffffff;
+        border-color: #197a73;
+        background: #197a73;
+      }
+
+      .date-list {
+        display: grid;
+        gap: 8px;
+      }
+
+      .date-item,
+      .symbol-card {
+        border: 1px solid #c8d6e2;
+        border-radius: 7px;
+        background: #ffffff;
+      }
+
+      .date-item {
+        padding: 12px;
+      }
+
+      .date-item.active {
+        border: 2px solid #197a73;
+      }
+
+      .date-main {
+        display: block;
+        margin-bottom: 5px;
+        font-size: 17px;
+        font-weight: 900;
+      }
+
+      .summary {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 16px;
+        padding: 14px;
+        margin: 28px 0 12px;
+        border: 1px solid #d2dde7;
+        border-radius: 8px;
+        background: #f8fafc;
+      }
+
+      .summary strong {
+        display: block;
+        margin-top: 4px;
+      }
+
+      .symbol-card {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 18px;
+        padding: 16px 12px;
+        border-color: #197a73;
+      }
+
+      .symbol-name {
+        display: block;
+        margin-bottom: 4px;
+        font-size: 18px;
+        font-weight: 900;
+      }
+
+      .small-action {
+        min-height: 32px;
+        padding: 0 12px;
+        border: 1px solid #bfd0de;
+        border-radius: 7px;
+        color: #3540b4;
+        background: #ffffff;
+        font-weight: 800;
+      }
+
+      .filters {
+        display: grid;
+        grid-template-columns: 1.35fr 1.35fr repeat(5, 1fr);
+        gap: 12px;
+        margin-bottom: 16px;
+      }
+
+      .field {
+        min-height: 98px;
+        padding: 14px 12px;
+      }
+
+      .input-like {
+        margin-top: 8px;
+        min-height: 38px;
+        padding: 9px 10px;
+        border: 1px solid #cbd8e3;
+        border-radius: 7px;
+        background: #ffffff;
+      }
+
+      .lower {
+        display: grid;
+        grid-template-columns: 1fr 380px;
+        gap: 14px;
+      }
+
+      .chart,
+      .watch {
+        min-height: 220px;
+        padding: 16px;
+      }
+
+      .badges {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin: 12px 0;
+      }
+
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        min-height: 26px;
+        padding: 0 10px;
+        border: 1px solid #cbd8e3;
+        border-radius: 999px;
+        color: #15324a;
+        background: #f5f8fb;
+        font-size: 12px;
+        font-weight: 800;
+      }
+
+      .badge.green {
+        color: #008000;
+        border-color: #cbe6c1;
+        background: #eff9ec;
+      }
+
+      .plot {
+        position: relative;
+        height: 210px;
+        overflow: hidden;
+        border: 1px solid #dbe4ed;
+        border-radius: 8px;
+        background:
+          repeating-linear-gradient(to bottom, #ffffff, #ffffff 39px, #edf2f6 40px),
+          #ffffff;
+      }
+
+      .line {
+        position: absolute;
+        left: 18px;
+        right: 18px;
+        height: 3px;
+        border-radius: 3px;
+        background: #197a73;
+      }
+
+      .line.one {
+        top: 118px;
+        transform: rotate(-8deg);
+      }
+
+      .line.two {
+        top: 78px;
+        background: #ad6900;
+        transform: rotate(5deg);
+      }
+
+      .marker {
+        position: absolute;
+        width: 68px;
+        min-height: 28px;
+        padding: 5px 8px;
+        border-radius: 6px;
+        color: #ffffff;
+        font-size: 12px;
+        font-weight: 900;
+        text-align: center;
+      }
+
+      .buy {
+        left: 11%;
+        top: 126px;
+        background: #008000;
+      }
+
+      .sell {
+        left: 72%;
+        top: 64px;
+        background: #b3372a;
+      }
+
+      .watch-empty {
+        display: grid;
+        place-items: center;
+        min-height: 136px;
+        margin-top: 12px;
+        border: 1px dashed #c8d6e2;
+        border-radius: 8px;
+        color: #426076;
+        background: #fbfdff;
+        text-align: center;
+      }
+
+      .right-actions {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .status {
+        color: #3540b4;
+        background: #eef0ff;
+      }
+
+      @media (max-width: 1100px) {
+        .shell {
+          width: min(100% - 32px, 920px);
         }
 
-        .facts {
+        .kpis,
+        .filters {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .drilldown,
+        .lower {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      @media (max-width: 640px) {
+        .shell {
+          width: min(100% - 20px, 520px);
+          padding-top: 18px;
+        }
+
+        .topbar,
+        .panel-title,
+        .symbol-card {
+          display: grid;
+        }
+
+        .kpis,
+        .filters,
+        .summary {
           grid-template-columns: 1fr;
         }
 
-        a,
-        button {
+        .tabs,
+        .segmented,
+        .upload,
+        .small-action {
           width: 100%;
-          justify-content: center;
         }
       }
     </style>
-    <script>
-      const localAppUrl = ["http:", "//", "127.0.0.1", ":5173", "/"].join("");
-
-      if (window.location.protocol === "file:") {
-        window.location.replace(localAppUrl);
-      }
-
-      window.addEventListener("DOMContentLoaded", () => {
-        const localButton = document.querySelector("[data-local-app]");
-        if (localButton) {
-          localButton.addEventListener("click", () => {
-            window.location.href = localAppUrl;
-          });
-        }
-      });
-    </script>
   </head>
   <body>
-    <main>
-      <section class="panel" aria-label="GitHub Pages 入口">
-        <p class="eyebrow">GitHub Pages Preview</p>
-        <h1>Grit Day Trading Platform</h1>
-        <p>
-          这是可公开访问的项目入口页。完整复盘台依赖本地后端、SQLite 数据和前端开发服务；
-          GitHub Pages 只承载静态说明，不读取 STP 成交、行情归档或策略 run 数据。
-        </p>
-        <div class="actions">
-          <button class="primary" type="button" data-local-app>打开本地复盘台</button>
-          <a class="secondary" href="./README.md">查看 README</a>
-        </div>
+    <main class="shell">
+      <header class="topbar">
+        <section>
+          <p class="stage">P2 REVIEW DESK</p>
+          <h1>日内复盘台</h1>
+          <p class="subtitle">STP 成交证据、行情上下文、盘前 watchlist 与策略复盘信号</p>
+        </section>
+        <button class="upload" type="button">上传 STP TXT</button>
+      </header>
+
+      <nav class="tabs" aria-label="工作区">
+        <button class="tab active" type="button">交易复盘</button>
+        <button class="tab" type="button">策略测试</button>
+      </nav>
+
+      <section class="kpis" aria-label="复盘总览">
+        <article class="card"><span class="label">成交股数</span><span class="value">4,525</span><span class="hint">仅来自 committed fills</span></article>
+        <article class="card"><span class="label">PnL</span><span class="value positive">+3,443.11</span></article>
+        <article class="card"><span class="label">胜率</span><span class="value">95.17%</span></article>
+        <article class="card"><span class="label">盈亏比</span><span class="value">3.05</span></article>
+        <article class="card"><span class="label">单笔期望值</span><span class="value positive">+23.75</span></article>
+        <article class="card"><span class="label">每股净收益</span><span class="value positive">+0.76</span></article>
+        <article class="card"><span class="label">持仓最大回撤</span><span class="value risk">1,106.00</span></article>
       </section>
 
-      <section class="facts" aria-label="事实源边界">
-        <article class="fact">
-          <strong>P0 成交真相</strong>
-          <span>STP TXT 和 committed fills 是订单与成交事实源。</span>
+      <section class="panel drilldown" aria-label="下钻复盘">
+        <aside>
+          <div class="panel-title">
+            <div>
+              <h2>下钻复盘</h2>
+              <p class="muted">先按交易日或标的查看次级汇总，再进入当前复盘模块</p>
+            </div>
+          </div>
+          <div class="date-list">
+            <article class="date-item active"><span class="date-main">2026-06-04</span><span class="muted">成交 123 · 平仓 35 · PnL +1,338.95</span></article>
+            <article class="date-item"><span class="date-main">2026-06-03</span><span class="muted">成交 129 · 平仓 39 · PnL +928.10</span></article>
+            <article class="date-item"><span class="date-main">2026-06-02</span><span class="muted">成交 166 · 平仓 44 · PnL +628.85</span></article>
+            <article class="date-item"><span class="date-main">2026-06-01</span><span class="muted">成交 88 · 平仓 27 · PnL +547.21</span></article>
+          </div>
+        </aside>
+
+        <section>
+          <div class="panel-title">
+            <div>
+              <h3>2026-06-04 日统计</h3>
+              <p class="muted">选择标的进入复盘模块</p>
+            </div>
+            <div>
+              <div class="segmented">
+                <button class="selected" type="button">按交易日</button>
+                <button type="button">按标的</button>
+              </div>
+              <p class="muted" style="text-align: right;">1 个标的</p>
+            </div>
+          </div>
+
+          <div class="summary">
+            <div><span class="label">成交股数</span><strong>1,040</strong></div>
+            <div><span class="label">PNL</span><strong class="positive">+1,338.95</strong></div>
+            <div><span class="label">胜率</span><strong>100.00%</strong></div>
+            <div><span class="label">盈亏比</span><strong>∞</strong></div>
+            <div><span class="label">持仓最大回撤</span><strong>1,106.00</strong></div>
+          </div>
+
+          <article class="symbol-card">
+            <div>
+              <span class="symbol-name">MU</span>
+              <span class="muted">成交 123 · 平仓 35 · PnL +1,338.95</span>
+            </div>
+            <button class="small-action" type="button">进入复盘</button>
+          </article>
+        </section>
+      </section>
+
+      <section class="filters" aria-label="当前复盘">
+        <article class="field"><span class="label">当前复盘日期</span><div class="input-like">04/06/2026</div></article>
+        <article class="field"><span class="label">当前复盘标的</span><div class="input-like">MU</div></article>
+        <article class="field"><span class="label">成交股数</span><span class="value">1,040</span><span class="hint">BUY/SELL 平仓数量</span></article>
+        <article class="field"><span class="label">PnL</span><span class="value positive">+1,338.95</span></article>
+        <article class="field"><span class="label">胜率</span><span class="value">100.00%</span></article>
+        <article class="field"><span class="label">盈亏比</span><span class="value">∞</span></article>
+        <article class="field"><span class="label">持仓最大回撤</span><span class="value risk">1,106.00</span></article>
+      </section>
+
+      <section class="lower">
+        <article class="chart" aria-label="分钟蜡烛复盘">
+          <div class="panel-title">
+            <div>
+              <h2>分钟蜡烛复盘</h2>
+              <p class="muted">分钟线和成交点来自已保存 read model；策略研究请切换到策略测试</p>
+            </div>
+            <div class="right-actions">
+              <span class="badge green">数据可用</span>
+              <span class="badge">买卖点</span>
+              <button class="small-action" type="button">重新归档</button>
+            </div>
+          </div>
+          <div class="badges">
+            <span class="badge">MU</span>
+            <span class="badge">YAHOO</span>
+            <span class="badge">Bars 533</span>
+            <span class="badge">VWAP 999.37</span>
+            <span class="badge">High 1,079.57</span>
+            <span class="badge">Low 971.68</span>
+            <span class="badge">Volume 34,616,554</span>
+            <span class="badge">hash 6f7e1d93f9...72c10087</span>
+          </div>
+          <div class="plot">
+            <div class="line one"></div>
+            <div class="line two"></div>
+            <div class="marker buy">BUY</div>
+            <div class="marker sell">SELL</div>
+          </div>
         </article>
-        <article class="fact">
-          <strong>P1 行情上下文</strong>
-          <span>分钟线和 watchlist 只引用成交事实，不能覆盖成交。</span>
-        </article>
-        <article class="fact">
-          <strong>P2 策略复盘</strong>
-          <span>策略 run 只读取已归档分钟线，信号只做研究证据。</span>
-        </article>
+
+        <aside class="watch" aria-label="盘前 Watchlist">
+          <div class="panel-title">
+            <div>
+              <h2>盘前 Watchlist</h2>
+              <p class="muted">reason codes 与 metrics hash 来自 watchlist read model</p>
+            </div>
+            <div class="right-actions">
+              <span class="badge status">未生成</span>
+              <button class="small-action" type="button">生成</button>
+            </div>
+          </div>
+          <div class="watch-empty">
+            当前日期尚未生成 watchlist<br />
+            可在本地复盘台连接后端后重新生成
+          </div>
+        </aside>
       </section>
     </main>
   </body>
