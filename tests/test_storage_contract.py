@@ -19,6 +19,9 @@ def test_storage_contract_creates_required_indexes_triggers_and_migration_marker
             3: "p1_yahoo_minute_archive_contract_v3",
             4: "p2_strategy_signal_contract_v4",
             5: "p2_strategy_testing_optimization_contract_v5",
+            6: "p2_strategy_config_history_contract_v6",
+            7: "p2_strategy_config_history_rollback_contract_v7",
+            8: "p3_trade_review_journal_contract_v8",
         }
         assert migration["description"] == expected_current_migrations[STORAGE_SCHEMA_VERSION]
         p0_migration = conn.execute("SELECT description FROM storage_migrations WHERE version = 1").fetchone()
@@ -33,6 +36,19 @@ def test_storage_contract_creates_required_indexes_triggers_and_migration_marker
         if STORAGE_SCHEMA_VERSION >= 5:
             strategy_test_migration = conn.execute("SELECT description FROM storage_migrations WHERE version = 5").fetchone()
             assert strategy_test_migration["description"] == "p2_strategy_testing_optimization_contract_v5"
+        if STORAGE_SCHEMA_VERSION >= 6:
+            strategy_history_migration = conn.execute(
+                "SELECT description FROM storage_migrations WHERE version = 6"
+            ).fetchone()
+            assert strategy_history_migration["description"] == "p2_strategy_config_history_contract_v6"
+        if STORAGE_SCHEMA_VERSION >= 7:
+            strategy_history_rollback_migration = conn.execute(
+                "SELECT description FROM storage_migrations WHERE version = 7"
+            ).fetchone()
+            assert strategy_history_rollback_migration["description"] == "p2_strategy_config_history_rollback_contract_v7"
+        if STORAGE_SCHEMA_VERSION >= 8:
+            trade_review_migration = conn.execute("SELECT description FROM storage_migrations WHERE version = 8").fetchone()
+            assert trade_review_migration["description"] == "p3_trade_review_journal_contract_v8"
         assert {
             "ux_import_batches_file_hash",
             "ux_import_rows_batch_line_hash",
@@ -67,6 +83,11 @@ def test_storage_contract_creates_required_indexes_triggers_and_migration_marker
             "ix_strategy_optimization_lookup",
             "ux_strategy_optimization_candidate_params",
             "ix_strategy_optimization_candidate_rank",
+            "ux_strategy_config_history_idempotency",
+            "ix_strategy_config_history_strategy_created",
+            "ux_trade_reviews_group",
+            "ux_trade_reviews_idempotency",
+            "ix_trade_reviews_symbol_date",
         }.issubset(
             _index_names(conn, "market_context_snapshots")
             | _index_names(conn, "market_minute_archives")
@@ -80,8 +101,62 @@ def test_storage_contract_creates_required_indexes_triggers_and_migration_marker
             | _index_names(conn, "strategy_test_day_results")
             | _index_names(conn, "strategy_optimization_runs")
             | _index_names(conn, "strategy_optimization_candidates")
+            | _index_names(conn, "strategy_config_history")
+            | _index_names(conn, "trade_reviews")
         )
         assert "params_json" in _column_names(conn, "strategy_signal_runs")
+        assert {"previous_params_json", "next_params_json", "source_history_id"}.issubset(
+            _column_names(conn, "strategy_config_history")
+        )
+        assert {
+            "trade_group_id",
+            "reason_category",
+            "reason_code",
+            "reason_label",
+            "parser_versions_json",
+            "field_mapper_versions_json",
+            "idempotency_key",
+        }.issubset(_column_names(conn, "trade_reviews"))
+        conn.execute(
+            """
+            INSERT INTO strategy_configs (
+                id, name, template_key, template_version, enabled,
+                params_json, params_hash, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, 1, ?, ?, ?, ?)
+            """,
+            (
+                "strategy_storage_contract",
+                "Storage Contract Strategy",
+                "bb_squeeze_breakout_v1",
+                "bb_squeeze_breakout_v1",
+                "{}",
+                "strategy_storage_hash",
+                "2026-06-10T00:00:00Z",
+                "2026-06-10T00:00:00Z",
+            ),
+        )
+        conn.execute(
+            """
+            INSERT INTO strategy_config_history (
+                id, strategy_id, change_source, previous_template_version,
+                next_template_version, previous_params_hash, next_params_hash,
+                previous_params_json, next_params_json, change_reason, idempotency_key
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "stratchg_history_rollback",
+                "strategy_storage_contract",
+                "history_rollback",
+                "template_v1",
+                "template_v2",
+                "old_hash",
+                "new_hash",
+                "{}",
+                "{}",
+                "history_rollback",
+                "history_rollback_key",
+            ),
+        )
         assert {
             "trg_import_rows_account_canonical_insert",
             "trg_orders_account_canonical_insert",

@@ -16,6 +16,7 @@ def test_trade_groups_pair_long_short_partial_close_and_open_positions(tmp_path)
     with TestClient(create_app(db_path)) as client:
         batch = client.post("/api/imports/stp-txt", files={"file": ("groups.tsv", raw, "text/plain")}).json()
         groups = client.get("/api/trade-groups?date=2026-06-01").json()["items"]
+        light_groups = client.get("/api/trade-groups?date=2026-06-01&include_details=false").json()["items"]
         repeated = client.get("/api/trade-groups?date=2026-06-01").json()["items"]
         summary = client.get("/api/review/daily-summary?date=2026-06-01").json()
 
@@ -40,9 +41,18 @@ def test_trade_groups_pair_long_short_partial_close_and_open_positions(tmp_path)
     assert aapl["holding_minutes"] == 20
     assert aapl["position_drawdown"]["status"] == "insufficient_market_data"
     assert aapl["position_drawdown"]["max_drawdown"] is None
+    assert aapl["position_drawdown"]["entry_atr_multiple"] is None
+    assert aapl["position_drawdown"]["entry_atr_regime"] == "missing"
+    assert aapl["position_drawdown"]["entry_atr_failure_reason"] == "missing_market_data"
     assert aapl["evaluation"]["evaluation_status"] == "insufficient_market_data"
     assert {fill["parser_version"] for fill in aapl["fills"]} == set(aapl["parser_versions"])
     assert {fill["field_mapper_version"] for fill in aapl["fills"]} == set(aapl["field_mapper_versions"])
+    light_aapl = next(group for group in light_groups if group["symbol"] == "AAPL")
+    assert aapl["details_loaded"] is True
+    assert light_aapl["details_loaded"] is False
+    assert light_aapl["fills"] == []
+    assert light_aapl["evaluation"]["factors"] == []
+    assert light_aapl["position_drawdown"]["status"] == aapl["position_drawdown"]["status"]
 
     assert msft["status"] == "closed"
     assert msft["direction"] == "SHORT"
@@ -95,6 +105,28 @@ def test_review_summary_and_drilldown_groups_use_committed_trade_groups(tmp_path
     assert [item["group_key"] for item in by_symbol_for_date] == ["AAPL", "MSFT", "TSLA"]
 
 
+def test_trade_groups_can_read_all_dates_for_loss_review_tab(tmp_path):
+    db_path = tmp_path / "all-date-loss-groups.db"
+    raw = (
+        "Account\tSymbol\tSide\tOrderID\tExecID\tQty\tPrice\tTime\tStatus\n"
+        "acct-rt\tAMD\tBOT\tOL-1\tEL-1\t100\t12.00\t2026-06-01T09:30:00\tFILLED\n"
+        "acct-rt\tAMD\tSLD\tOL-2\tEL-2\t100\t11.00\t2026-06-01T09:45:00\tFILLED\n"
+        "acct-rt\tNVDA\tBOT\tON-1\tEN-1\t10\t100.00\t2026-06-02T09:30:00\tFILLED\n"
+        "acct-rt\tNVDA\tSLD\tON-2\tEN-2\t10\t98.00\t2026-06-02T09:45:00\tFILLED\n"
+    ).encode()
+
+    with TestClient(create_app(db_path)) as client:
+        client.post("/api/imports/stp-txt", files={"file": ("losses.tsv", raw, "text/plain")})
+        groups = client.get("/api/trade-groups?include_details=false").json()["items"]
+        invalid_date = client.get("/api/trade-groups?date=20260601")
+
+    losses = [group for group in groups if group["status"] == "closed" and group["pnl"] < 0]
+    assert invalid_date.status_code == 422
+    assert [group["symbol"] for group in losses] == ["AMD", "NVDA"]
+    assert all(group["details_loaded"] is False for group in losses)
+    assert all(group["fills"] == [] for group in losses)
+
+
 def test_trade_group_evaluation_uses_minute_archive_without_mutating_fills(tmp_path):
     db_path = tmp_path / "trade-eval.db"
 
@@ -109,6 +141,7 @@ def test_trade_group_evaluation_uses_minute_archive_without_mutating_fills(tmp_p
             symbol="AAPL",
             trade_date="2026-06-01",
             source_fill_count=4,
+            force=True,
             provider=FakeMarketDataProvider(
                 minute_bars={
                     "AAPL": [
@@ -137,6 +170,12 @@ def test_trade_group_evaluation_uses_minute_archive_without_mutating_fills(tmp_p
     assert len(drawdown["bars_hash"]) == 64
     assert drawdown["bar_count"] == 5
     assert drawdown["price_basis"] == "minute_high_low"
+    assert drawdown["entry_atr_period"] == 20
+    assert drawdown["entry_atr_multiple"] is None
+    assert drawdown["entry_atr_regime"] == "missing"
+    assert drawdown["entry_atr_source_archive_id"].startswith("minbar_")
+    assert len(drawdown["entry_atr_bars_hash"]) == 64
+    assert drawdown["entry_atr_failure_reason"] == "insufficient_atr_history"
     assert drawdown["window_high"] == 10.9
     assert drawdown["window_low"] == 9.9
     assert drawdown["worst_price"] == 9.9
@@ -158,6 +197,57 @@ def test_trade_group_evaluation_uses_minute_archive_without_mutating_fills(tmp_p
     assert [fill["price"] for fill in fills] == [10.0, 10.2, 10.5, 10.8]
 
 
+def test_trade_group_entry_atr_multiple_uses_previous_20_minute_bars(tmp_path):
+    db_path = tmp_path / "trade-entry-atr.db"
+    raw = (
+        "Account\tSymbol\tSide\tOrderID\tExecID\tQty\tPrice\tTime\tStatus\n"
+        "acct-rt\tAMD\tBOT\tO-1\tE-1\t100\t100.00\t2026-06-01T09:50:00\tFILLED\n"
+        "acct-rt\tAMD\tSLD\tO-2\tE-2\t100\t101.00\t2026-06-01T10:00:00\tFILLED\n"
+    ).encode()
+    bars = [
+        MarketBar(f"2026-06-01T09:{minute:02d}:00", 100.0, 100.5, 99.5, 100.0, 1000)
+        for minute in range(30, 50)
+    ]
+    bars.extend(
+        [
+            MarketBar("2026-06-01T09:50:00", 100.0, 101.5, 99.5, 101.0, 3000),
+            MarketBar("2026-06-01T10:00:00", 101.0, 101.2, 100.8, 101.0, 1800),
+        ]
+    )
+
+    with TestClient(create_app(db_path)) as client:
+        client.post("/api/imports/stp-txt", files={"file": ("entry-atr.tsv", raw, "text/plain")})
+
+    conn = connect(db_path)
+    try:
+        initialize_database(conn)
+        archive_market_minutes(
+            conn,
+            symbol="AMD",
+            trade_date="2026-06-01",
+            source_fill_count=2,
+            force=True,
+            provider=FakeMarketDataProvider(minute_bars={"AMD": bars}),
+        )
+    finally:
+        conn.close()
+
+    with TestClient(create_app(db_path)) as client:
+        group = client.get("/api/trade-groups?date=2026-06-01&symbol=AMD").json()["items"][0]
+
+    drawdown = group["position_drawdown"]
+    assert drawdown["status"] == "available"
+    assert drawdown["entry_atr_period"] == 20
+    assert drawdown["entry_atr"] == pytest.approx(1.0)
+    assert drawdown["entry_bar_range"] == pytest.approx(2.0)
+    assert drawdown["entry_atr_multiple"] == pytest.approx(2.0)
+    assert drawdown["entry_atr_regime"] == "high"
+    assert drawdown["entry_atr_source_archive_id"].startswith("minbar_")
+    assert len(drawdown["entry_atr_bars_hash"]) == 64
+    assert drawdown["entry_atr_bar_timestamp"] == "2026-06-01T09:50:00"
+    assert drawdown["entry_atr_failure_reason"] is None
+
+
 def test_short_trade_group_position_drawdown_uses_window_high(tmp_path):
     db_path = tmp_path / "short-drawdown.db"
 
@@ -172,6 +262,7 @@ def test_short_trade_group_position_drawdown_uses_window_high(tmp_path):
             symbol="MSFT",
             trade_date="2026-06-01",
             source_fill_count=3,
+            force=True,
             provider=FakeMarketDataProvider(
                 minute_bars={
                     "MSFT": [
@@ -212,6 +303,7 @@ def test_trade_group_evaluation_does_not_score_failed_archives(tmp_path):
             symbol="AAPL",
             trade_date="2026-06-01",
             source_fill_count=4,
+            force=True,
             provider=FakeMarketDataProvider(minute_status={"AAPL": "provider_failed"}),
         )
     finally:
@@ -228,6 +320,64 @@ def test_trade_group_evaluation_does_not_score_failed_archives(tmp_path):
     assert group["position_drawdown"]["max_drawdown"] is None
 
 
+def test_loss_trade_review_persists_reason_without_mutating_fills(tmp_path):
+    db_path = tmp_path / "loss-review.db"
+
+    with TestClient(create_app(db_path)) as client:
+        client.post("/api/imports/stp-txt", files={"file": ("loss.tsv", _losing_trade_group_fixture(), "text/plain")})
+        group = client.get("/api/trade-groups?date=2026-06-01").json()["items"][0]
+        fills_before = client.get("/api/fills?date=2026-06-01&symbol=AMD").json()["items"]
+
+        review = client.put(
+            f"/api/trade-groups/{group['trade_group_id']}/review",
+            json={
+                "reason_category": "opening_signal",
+                "reason_code": "weak_confirmation",
+                "note": "入场前没有等二次确认。",
+            },
+        ).json()
+        reviewed_group = client.get("/api/trade-groups?date=2026-06-01").json()["items"][0]
+        updated_review = client.put(
+            f"/api/trade-groups/{group['trade_group_id']}/review",
+            json={
+                "reason_category": "closing_signal",
+                "reason_code": "stop_too_late",
+                "note": "",
+            },
+        ).json()
+        fills_after = client.get("/api/fills?date=2026-06-01&symbol=AMD").json()["items"]
+
+    assert group["status"] == "closed"
+    assert group["pnl"] == -100.0
+    assert review["source"] == "review_journal"
+    assert review["artifact_source"] == "trade_group_read_model"
+    assert review["reason_category_label"] == "开仓信号"
+    assert review["reason_label"] == "确认不足"
+    assert review["parser_versions"] == group["parser_versions"]
+    assert reviewed_group["review"]["reason_code"] == "weak_confirmation"
+    assert updated_review["id"] == review["id"]
+    assert updated_review["reason_category_label"] == "平仓信号"
+    assert updated_review["reason_label"] == "止损过慢"
+    assert fills_after == fills_before
+
+
+def test_trade_review_rejects_non_loss_trade_group(tmp_path):
+    db_path = tmp_path / "loss-review-rejects-profit.db"
+
+    with TestClient(create_app(db_path)) as client:
+        client.post("/api/imports/stp-txt", files={"file": ("groups.tsv", _trade_group_fixture(), "text/plain")})
+        profitable = next(
+            group for group in client.get("/api/trade-groups?date=2026-06-01").json()["items"] if group["symbol"] == "AAPL"
+        )
+        response = client.put(
+            f"/api/trade-groups/{profitable['trade_group_id']}/review",
+            json={"reason_category": "misoperation", "reason_code": "duplicate_order"},
+        )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == "trade_review_requires_loss"
+
+
 def _trade_group_fixture() -> bytes:
     return (
         "Account\tSymbol\tSide\tOrderID\tExecID\tQty\tPrice\tTime\tStatus\n"
@@ -239,4 +389,12 @@ def _trade_group_fixture() -> bytes:
         "acct-rt\tMSFT\tBOT\tO-6\tE-6\t25\t19.00\t2026-06-01T10:10:00\tFILLED\n"
         "acct-rt\tMSFT\tBOT\tO-7\tE-7\t25\t18.50\t2026-06-01T10:20:00\tFILLED\n"
         "acct-rt\tTSLA\tBOT\tO-8\tE-8\t10\t250.00\t2026-06-01T11:00:00\tFILLED\n"
+    ).encode()
+
+
+def _losing_trade_group_fixture() -> bytes:
+    return (
+        "Account\tSymbol\tSide\tOrderID\tExecID\tQty\tPrice\tTime\tStatus\n"
+        "acct-rt\tAMD\tBOT\tOL-1\tEL-1\t100\t12.00\t2026-06-01T09:30:00\tFILLED\n"
+        "acct-rt\tAMD\tSLD\tOL-2\tEL-2\t100\t11.00\t2026-06-01T09:45:00\tFILLED\n"
     ).encode()

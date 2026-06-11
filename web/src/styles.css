@@ -36,6 +36,7 @@ button {
 .kpis,
 .reviewDrillPanel,
 .reviewWorkspace,
+.liveTradingWorkspace,
 .strategyTestingWorkspace,
 .tradeLedgerPanel,
 .evidenceGrid {
@@ -117,6 +118,7 @@ h2 {
 .uploadButton:hover,
 .panel button:hover,
 .panel .linkButton:hover,
+.lossReviewPanel button:hover,
 .strategyModal button:hover,
 .strategySignalModal button:hover {
   border-color: #4f63a8;
@@ -230,6 +232,17 @@ h2 {
   margin-bottom: 16px;
 }
 
+.dataReviewDrilldown {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+
+.reviewDrillPanel .kpis {
+  margin-bottom: 0;
+  max-width: none;
+}
+
 .reviewDrillTabs {
   align-items: center;
   background: #eef3f4;
@@ -239,6 +252,19 @@ h2 {
   flex: 0 0 auto;
   gap: 4px;
   padding: 4px;
+}
+
+.reviewDrillSurfaceTabs {
+  align-items: center;
+  background: #eef3f4;
+  border: 1px solid #d8e2e6;
+  border-radius: 8px;
+  display: inline-flex;
+  flex: 0 0 auto;
+  gap: 4px;
+  margin-bottom: 14px;
+  padding: 4px;
+  width: fit-content;
 }
 
 .reviewDrillTab {
@@ -252,7 +278,27 @@ h2 {
   padding: 7px 12px;
 }
 
+.reviewDrillSurfaceTab {
+  align-items: center;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: #405060;
+  cursor: pointer;
+  display: inline-flex;
+  font-weight: 800;
+  gap: 6px;
+  min-height: 34px;
+  padding: 7px 12px;
+}
+
 .reviewDrillTab.active {
+  background: #1f6f67;
+  border-color: #1f6f67;
+  color: #ffffff;
+}
+
+.reviewDrillSurfaceTab.active {
   background: #1f6f67;
   border-color: #1f6f67;
   color: #ffffff;
@@ -355,6 +401,513 @@ h2 {
 
 .summaryMiniFacts dd.bad {
   color: #a8071a;
+}
+
+.lossReviewDrilldown {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+
+.lossReviewDrillHeader {
+  align-items: flex-start;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.lossReviewSummaryGrid {
+  background: #f8fafb;
+  border: 1px solid #e3e9ed;
+  border-radius: 8px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  padding: 10px;
+}
+
+.lossReviewSummaryRow {
+  align-items: stretch;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.lossReviewTimeFilter {
+  align-items: center;
+  background: #fbfcfd;
+  border: 1px solid #e3e9ed;
+  border-radius: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: space-between;
+  padding: 10px;
+}
+
+.lossReviewTimeFilterButtons {
+  align-items: center;
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.lossReviewCustomRange {
+  align-items: center;
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.lossReviewCustomRange label {
+  align-items: center;
+  color: #405160;
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 800;
+  gap: 6px;
+}
+
+.lossReviewCustomRange input {
+  background: #ffffff;
+  border: 1px solid #c8d1d9;
+  border-radius: 8px;
+  color: #1f2933;
+  min-height: 32px;
+  padding: 5px 8px;
+}
+
+.lossReviewDrillLayout {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: minmax(280px, 0.42fr) minmax(0, 1fr);
+}
+
+.lossReviewCategoryPanel,
+.lossReviewListPanel {
+  align-content: start;
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.lossReviewCategoryList,
+.lossReviewTradeList {
+  display: grid;
+  gap: 8px;
+}
+
+.lossReviewReasonChart {
+  background: #fbfcfd;
+  border: 1px solid #e3e9ed;
+  border-radius: 8px;
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+}
+
+.lossReviewMatrixPanel {
+  background: #fbfcfd;
+  border: 1px solid #dce3e8;
+  border-radius: 8px;
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  padding: 12px;
+}
+
+.lossReviewMatrixHeader {
+  align-items: flex-start;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.lossReviewMatrixHeader h3 {
+  color: #1f2933;
+  font-size: 15px;
+  margin: 0 0 4px;
+}
+
+.lossReviewMatrixSummary {
+  align-items: flex-end;
+  display: grid;
+  gap: 5px;
+  justify-items: end;
+  min-width: 220px;
+  text-align: right;
+}
+
+.lossReviewMatrixSummary strong {
+  color: #1f2933;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.lossReviewMatrixSummary strong.ok,
+.lossReviewMatrixSummary small.ok {
+  color: #237804;
+}
+
+.lossReviewMatrixSummary strong.bad,
+.lossReviewMatrixSummary small.bad {
+  color: #a8071a;
+}
+
+.lossReviewMatrixSummary strong.neutral,
+.lossReviewMatrixSummary small.neutral {
+  color: #607080;
+}
+
+.lossReviewMatrixSummary small,
+.lossReviewMatrixNote {
+  color: #607080;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.lossReviewMatrixScroll {
+  min-width: 0;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+
+.lossReviewMatrixGrid {
+  display: grid;
+  gap: 6px;
+  grid-template-columns: minmax(150px, 0.9fr) repeat(5, minmax(112px, 1fr));
+  min-width: 720px;
+}
+
+.lossReviewMatrixAxis,
+.lossReviewMatrixCorner,
+.lossReviewMatrixCell {
+  border-radius: 8px;
+  min-height: 66px;
+  min-width: 0;
+}
+
+.lossReviewMatrixAxis {
+  background: #ffffff;
+  border: 1px solid #e3e9ed;
+  display: grid;
+  gap: 4px;
+  padding: 9px 10px;
+}
+
+.lossReviewMatrixColumnHead {
+  align-content: center;
+  justify-items: center;
+  text-align: center;
+}
+
+.lossReviewMatrixRowHead {
+  align-content: center;
+}
+
+.lossReviewMatrixAxis strong {
+  color: #1f2933;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.lossReviewMatrixAxis small {
+  color: #607080;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.3;
+}
+
+.lossReviewMatrixCorner {
+  background: #eef3f4;
+  border: 1px solid #d8e2e6;
+}
+
+.lossReviewMatrixCell {
+  background: #f8fafb;
+  border: 1px solid #e3e9ed;
+  color: #344658;
+  cursor: pointer;
+  display: grid;
+  gap: 3px;
+  justify-items: start;
+  padding: 8px;
+  text-align: left;
+}
+
+.lossReviewMatrixCell.readOnly {
+  cursor: default;
+}
+
+.lossReviewMatrixCell.empty,
+.lossReviewMatrixCell:disabled {
+  background: #f5f7f8;
+  color: #95a1aa;
+  cursor: default;
+  opacity: 1;
+}
+
+.lossReviewMatrixCell.active {
+  border-color: #1f6f67;
+  box-shadow: 0 0 0 3px rgba(31, 111, 103, 0.16);
+}
+
+.lossReviewMatrixCell.intensity1 {
+  background: #fff7e6;
+  border-color: #ffe0a3;
+}
+
+.lossReviewMatrixCell.intensity2 {
+  background: #ffe7bf;
+  border-color: #ffc66f;
+}
+
+.lossReviewMatrixCell.intensity3 {
+  background: #ffd0a1;
+  border-color: #ff9f43;
+}
+
+.lossReviewMatrixCell.intensity4 {
+  background: #fff1f0;
+  border-color: #ff7875;
+}
+
+.lossReviewMatrixCell strong {
+  color: #17212b;
+  font-size: 17px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.lossReviewMatrixCell span {
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.lossReviewMatrixCell span.ok {
+  color: #237804;
+}
+
+.lossReviewMatrixCell span.bad {
+  color: #a8071a;
+}
+
+.lossReviewMatrixCell span.neutral {
+  color: #344658;
+}
+
+.lossReviewMatrixCell small {
+  color: #607080;
+  font-size: 11px;
+  line-height: 1.3;
+}
+
+.lossReviewReasonChartHead {
+  align-items: flex-start;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+}
+
+.lossReviewReasonChartHead > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.lossReviewReasonChartHead strong {
+  color: #1f2933;
+}
+
+.lossReviewReasonChartHead small {
+  color: #607080;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.lossReviewPieWrap {
+  align-items: center;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 118px minmax(0, 1fr);
+}
+
+.lossReviewPie {
+  align-items: center;
+  aspect-ratio: 1;
+  border: 1px solid #d8e2e6;
+  border-radius: 50%;
+  display: grid;
+  justify-items: center;
+  padding: 18px;
+  position: relative;
+}
+
+.lossReviewPie::after {
+  background: #ffffff;
+  border: 1px solid #e3e9ed;
+  border-radius: 50%;
+  content: "";
+  inset: 23%;
+  position: absolute;
+}
+
+.lossReviewPie span,
+.lossReviewPie small {
+  position: relative;
+  z-index: 1;
+}
+
+.lossReviewPie span {
+  color: #17212b;
+  font-size: 22px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.lossReviewPie small {
+  color: #607080;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.lossReviewPieLegend {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+}
+
+.lossReviewFilterOption {
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid #e3e9ed;
+  border-radius: 8px;
+  cursor: pointer;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: auto auto minmax(0, 1fr);
+  min-width: 0;
+  padding: 8px;
+}
+
+.lossReviewFilterOption.active {
+  background: #eef8f6;
+  border-color: #2d8b7f;
+}
+
+.lossReviewFilterOption input {
+  margin: 0;
+}
+
+.lossReviewLegendSwatch {
+  border-radius: 4px;
+  height: 16px;
+  width: 16px;
+}
+
+.lossReviewLegendText {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.lossReviewLegendText strong,
+.lossReviewLegendText small {
+  overflow-wrap: anywhere;
+}
+
+.lossReviewLegendText strong {
+  color: #1f2933;
+  font-size: 13px;
+}
+
+.lossReviewLegendText small {
+  color: #607080;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.lossReviewCategoryItem,
+.lossReviewTradeItem {
+  background: #fbfcfd;
+  border: 1px solid #e3e9ed;
+  border-radius: 8px;
+  min-width: 0;
+}
+
+.lossReviewCategoryItem {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  padding: 10px 12px;
+}
+
+.lossReviewCategoryItem > div,
+.lossReviewTradeMain {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.lossReviewCategoryItem strong,
+.lossReviewTradeMain strong {
+  color: #1f2933;
+  overflow-wrap: anywhere;
+}
+
+.lossReviewCategoryItem small,
+.lossReviewTradeMain small {
+  color: #607080;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.lossReviewCategoryItem .badValue {
+  color: #a8071a;
+  font-weight: 900;
+}
+
+.lossReviewTradeItem {
+  align-items: center;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(180px, 1fr) minmax(260px, 0.85fr) auto;
+  padding: 10px 12px;
+}
+
+.lossReviewTradeFacts {
+  background: transparent;
+  border: 0;
+  gap: 8px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  padding: 0;
+}
+
+.lossReviewListToolbar,
+.lossReviewPagination {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.lossReviewSortControl {
+  align-items: center;
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.smallButton.active {
+  background: #1f6f67;
+  border-color: #1f6f67;
+  color: #ffffff;
+}
+
+.lossReviewPagination {
+  border-top: 1px solid #eef2f4;
+  color: #405160;
+  font-size: 12px;
+  font-weight: 800;
+  padding-top: 10px;
 }
 
 .drillSecondaryItem {
@@ -505,10 +1058,292 @@ h2 {
   gap: 14px;
 }
 
+.liveTradingWorkspace {
+  display: grid;
+  gap: 16px;
+}
+
+.liveTradingHero,
+.liveSignalPanel {
+  display: grid;
+  gap: 14px;
+}
+
+.liveControlGrid {
+  align-items: end;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(220px, 1.4fr) repeat(3, minmax(140px, 0.8fr)) auto;
+}
+
+.liveControl {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.liveControl span {
+  color: #607080;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.liveControl select {
+  border: 1px solid #c8d1d9;
+  border-radius: 8px;
+  color: #1f2933;
+  min-height: 38px;
+  min-width: 0;
+  padding: 7px 9px;
+  width: 100%;
+}
+
+.liveRefreshButton {
+  min-height: 38px;
+  white-space: nowrap;
+}
+
+.liveSymbolSelect {
+  min-height: 92px;
+}
+
+.liveMonitorMeta {
+  align-items: center;
+  color: #607080;
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 12px;
+  font-weight: 700;
+  gap: 8px 14px;
+}
+
+.liveTradingGrid {
+  align-items: start;
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
+}
+
+.liveSignalList,
+.liveEvidenceList {
+  display: grid;
+  gap: 12px;
+}
+
+.liveSignalCard,
+.liveEvidenceCard {
+  background: #ffffff;
+  border: 1px solid #e3e9ed;
+  border-radius: 8px;
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+}
+
+.liveSignalCardHeader,
+.liveEvidenceCard header {
+  align-items: flex-start;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+}
+
+.liveSignalTitle {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.liveSignalTitle strong,
+.liveEvidenceCard strong {
+  color: #17212b;
+}
+
+.liveSignalTitle small {
+  color: #607080;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.liveOrderFacts {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.liveOrderReasonCodeList {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.liveSignalOrderCard {
+  padding-top: 14px;
+}
+
+.liveSignalIntent {
+  align-items: center;
+  background: #f8fafb;
+  border: 1px solid #e3e9ed;
+  border-radius: 8px;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: auto minmax(0, 1fr);
+  padding: 12px;
+}
+
+.liveSignalIntent > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.liveSignalIntent strong,
+.liveSignalIntent small {
+  overflow-wrap: anywhere;
+}
+
+.liveSignalIntent small {
+  color: #607080;
+  font-size: 12px;
+}
+
+.liveIntentPill {
+  align-items: center;
+  border-radius: 8px;
+  display: inline-flex;
+  font-size: 13px;
+  font-weight: 800;
+  justify-content: center;
+  min-height: 42px;
+  min-width: 70px;
+  padding: 8px 12px;
+}
+
+.liveIntentPill.buy {
+  background: #edf7ed;
+  color: #237804;
+}
+
+.liveIntentPill.sell {
+  background: #fff1f0;
+  color: #a8071a;
+}
+
+.liveIntentPill.hold {
+  background: #eef3ff;
+  color: #2f4594;
+}
+
 .strategyWorkflowSteps {
   display: grid;
   gap: 8px;
   grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.strategyScreenerStrip {
+  align-items: center;
+  background: #f8fafb;
+  border: 1px solid #e3e9ed;
+  border-radius: 8px;
+  color: #405160;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  padding: 9px 10px;
+}
+
+.strategyScreenerStrip span {
+  align-items: center;
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 800;
+  gap: 6px;
+  min-height: 24px;
+}
+
+.strategyScreenerStrip small {
+  color: #607080;
+  font-size: 12px;
+  line-height: 1.35;
+  min-width: min(100%, 280px);
+  overflow-wrap: anywhere;
+}
+
+.strategyArchivePrompt {
+  border: 1px solid #dce3e8;
+  border-radius: 8px;
+  display: grid;
+  gap: 9px;
+  padding: 10px;
+}
+
+.strategyArchivePrompt.ok {
+  background: #f3fbf6;
+  border-color: #cfead7;
+}
+
+.strategyArchivePrompt.warn {
+  background: #fff8eb;
+  border-color: #ffe0a6;
+}
+
+.strategyArchivePrompt.danger {
+  background: #fff3f3;
+  border-color: #ffcaca;
+}
+
+.strategyArchivePromptHeader {
+  align-items: center;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: auto minmax(0, 1fr);
+}
+
+.strategyArchivePromptHeader > div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.strategyArchivePromptHeader strong {
+  color: #1f2933;
+  font-size: 13px;
+}
+
+.strategyArchivePromptHeader span {
+  color: #607080;
+  font-size: 12px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.strategyArchiveRangeList {
+  display: grid;
+  gap: 6px;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.strategyArchiveRangeRow {
+  background: rgba(255, 255, 255, 0.68);
+  border: 1px solid rgba(127, 145, 160, 0.22);
+  border-radius: 6px;
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  padding: 7px 8px;
+}
+
+.strategyArchiveRangeRow strong {
+  color: #102033;
+  font-size: 12px;
+  line-height: 1.2;
+}
+
+.strategyArchiveRangeRow span {
+  color: #405160;
+  font-size: 12px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
 }
 
 .strategyWorkflowSteps span {
@@ -541,6 +1376,38 @@ h2 {
   gap: 8px;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   margin: 0;
+}
+
+.strategyOverallOverview {
+  background: #ffffff;
+  border: 1px solid #dce6e9;
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  padding: 10px;
+}
+
+.strategyOverallOverview header {
+  margin: 0;
+}
+
+.strategyOverallOverview header > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.strategyOverallOverview strong {
+  color: #0f2535;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.strategyOverallOverview small {
+  color: #607080;
+  font-size: 12px;
+  line-height: 1.35;
 }
 
 .strategyResearchMetrics div,
@@ -647,10 +1514,8 @@ h2 {
 
 .strategyDayOrderList {
   gap: 10px;
-  max-height: 460px;
-  overflow: auto;
-  padding-right: 2px;
-  scrollbar-gutter: stable;
+  overflow: visible;
+  padding-right: 0;
 }
 
 .strategyDayOrderCard .signalGroupBody {
@@ -674,6 +1539,232 @@ h2 {
   overflow-wrap: anywhere;
 }
 
+.strategyReviewExplorer {
+  align-self: start;
+  background: #fbfcfd;
+  border: 1px solid #dce6e9;
+  border-radius: 8px;
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 8px;
+}
+
+.strategyReviewExplorerHeader {
+  align-items: flex-start;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  min-width: 0;
+}
+
+.strategyReviewExplorerHeader > div:first-child {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.strategyReviewExplorerHeader strong {
+  color: #0f2535;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.strategyReviewExplorerHeader small {
+  color: #607080;
+  font-size: 12px;
+  line-height: 1.25;
+}
+
+.segmentedControl {
+  align-items: center;
+  background: #eef4f4;
+  border: 1px solid #d5e2e1;
+  border-radius: 8px;
+  display: inline-flex;
+  flex: 0 0 auto;
+  gap: 3px;
+  padding: 3px;
+}
+
+.segmentedControl button {
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  color: #405160;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 900;
+  min-height: 28px;
+  padding: 5px 9px;
+}
+
+.segmentedControl button.active,
+.segmentedControl button[aria-selected="true"] {
+  background: #ffffff;
+  color: #0f6f66;
+  box-shadow: 0 1px 2px rgba(31, 41, 51, 0.12);
+}
+
+.strategySummaryList {
+  align-content: start;
+  display: grid;
+  gap: 7px;
+  max-height: 520px;
+  min-width: 0;
+  overflow: auto;
+  scrollbar-gutter: stable;
+}
+
+.strategySummaryCard {
+  background: #ffffff;
+  border: 1px solid #e1e8ed;
+  border-radius: 8px;
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  padding: 7px;
+}
+
+.strategySummaryMain {
+  background: transparent;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  display: grid;
+  gap: 6px;
+  padding: 0;
+  text-align: left;
+  width: 100%;
+}
+
+.strategySummaryMain:hover .strategySummaryTitle strong {
+  color: #0f6f66;
+}
+
+.strategySummaryMain:disabled {
+  cursor: not-allowed;
+  opacity: 0.72;
+}
+
+.strategySummaryTitle {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+  min-width: 0;
+}
+
+.strategySummaryIdentity {
+  align-items: center;
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+
+.strategySummaryTitle strong {
+  color: #0f2535;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.strategySummaryIdentity span {
+  background: #f2f6f8;
+  border: 1px solid #dfe8ed;
+  border-radius: 999px;
+  color: #607080;
+  flex: 0 0 auto;
+  font-size: 11px;
+  font-weight: 900;
+  line-height: 1;
+  padding: 3px 6px;
+}
+
+.strategySummaryMain small {
+  color: #607080;
+  font-size: 12px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.strategySummaryEmptyLine {
+  color: #607080;
+  font-size: 12px;
+  line-height: 1.3;
+}
+
+.strategySummaryMiniMetrics {
+  display: grid;
+  gap: 4px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin: 0;
+}
+
+.strategySummaryMiniMetrics div {
+  background: transparent;
+  border: 0;
+  border-left: 1px solid #edf2f4;
+  min-width: 0;
+  padding: 0 0 0 6px;
+}
+
+.strategySummaryMiniMetrics div:first-child {
+  border-left: 0;
+  padding-left: 0;
+}
+
+.strategySummaryMiniMetrics dt {
+  color: #607080;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.strategySummaryMiniMetrics dd {
+  color: #1f2933;
+  font-size: 12px;
+  font-weight: 900;
+  margin: 1px 0 0;
+}
+
+.strategyReviewChipRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  min-width: 0;
+}
+
+.strategyReviewChip {
+  align-items: center;
+  background: #f8fafb;
+  border: 1px solid #dfe7eb;
+  border-radius: 7px;
+  color: #344658;
+  cursor: pointer;
+  display: inline-flex;
+  gap: 4px;
+  min-height: 24px;
+  padding: 3px 6px;
+}
+
+.strategyReviewChip:hover,
+.strategyReviewChip.active {
+  background: #eaf7f3;
+  border-color: #86bfb5;
+  color: #0f6f66;
+}
+
+.strategyReviewChip span {
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.strategyReviewChip small {
+  color: #607080;
+  font-size: 11px;
+  font-weight: 800;
+}
+
 .bestCandidateCallout {
   background: #f4fbf9;
   border-color: #bfe1da;
@@ -689,6 +1780,96 @@ h2 {
   display: grid;
   gap: 10px;
   min-width: 0;
+}
+
+.strategyScanResults {
+  background: #fbfcfd;
+  border: 1px solid #e3e9ed;
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  padding: 10px;
+}
+
+.strategyScanResultsHeader {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  min-width: 0;
+}
+
+.strategyScanResultsHeader strong {
+  color: #1f2933;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.strategyScanResultsHeader span {
+  color: #607080;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.strategyScanGrid {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.strategyScanCard {
+  background: #ffffff;
+  border: 1px solid #e1e8ed;
+  border-radius: 8px;
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 10px;
+}
+
+.strategyScanCard.pending {
+  background: #fffaf0;
+  border-color: #f2d7a6;
+}
+
+.strategyScanCard header {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+  margin: 0;
+}
+
+.strategyScanCard header strong {
+  color: #0f2535;
+  font-size: 14px;
+}
+
+.strategyScanCard dl {
+  display: grid;
+  gap: 6px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: 0;
+}
+
+.strategyScanCard dt {
+  color: #607080;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.strategyScanCard dd {
+  color: #1f2933;
+  font-size: 12px;
+  font-weight: 900;
+  margin: 2px 0 0;
+}
+
+.strategyScanCard small {
+  color: #607080;
+  font-size: 12px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
 }
 
 .candidateGroupHeader {
@@ -840,8 +2021,7 @@ h2 {
   display: grid;
   gap: 16px;
   grid-template-columns: minmax(210px, 0.72fr) minmax(430px, 1.35fr) minmax(330px, 0.95fr);
-  max-height: min(670px, calc(100vh - 170px));
-  min-height: min(620px, calc(100vh - 170px));
+  min-height: 0;
 }
 
 .strategyList,
@@ -912,6 +2092,7 @@ h2 {
   min-height: 0;
   overflow: auto;
   padding: 2px 3px 2px 0;
+  scrollbar-gutter: stable;
 }
 
 .strategyListItem {
@@ -1128,6 +2309,97 @@ h2 {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
+.strategyVersionHistory {
+  background: #ffffff;
+  border: 1px solid #e6ecf1;
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+}
+
+.strategyVersionHistory > header {
+  align-items: flex-start;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+}
+
+.strategyVersionHistory > header strong {
+  color: #1f2933;
+  display: block;
+  font-size: 14px;
+}
+
+.strategyVersionHistory > header small {
+  color: #607080;
+  display: block;
+  font-size: 12px;
+  margin-top: 3px;
+}
+
+.strategyVersionList {
+  display: grid;
+  gap: 8px;
+}
+
+.strategyVersionItem {
+  align-items: center;
+  border: 1px solid #eef2f4;
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1.4fr) max-content;
+  padding: 10px;
+}
+
+.strategyVersionMain {
+  align-items: flex-start;
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.strategyVersionMain strong,
+.strategyVersionMain small {
+  overflow-wrap: anywhere;
+}
+
+.strategyVersionMain strong {
+  color: #1f2933;
+  font-size: 13px;
+}
+
+.strategyVersionMain small {
+  color: #607080;
+  font-size: 12px;
+}
+
+.strategyVersionFacts {
+  display: grid;
+  gap: 6px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: 0;
+}
+
+.strategyVersionFacts div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.strategyVersionFacts dt {
+  color: #607080;
+  font-size: 11px;
+}
+
+.strategyVersionFacts dd {
+  color: #1f2933;
+  font-size: 12px;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
 .strategyActions {
   display: flex;
   flex-wrap: wrap;
@@ -1145,8 +2417,10 @@ h2 {
   align-content: start;
   border-left: 1px solid #eef2f4;
   grid-auto-rows: max-content;
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
   padding-left: 14px;
+  scrollbar-gutter: stable;
 }
 
 .strategyDescriptionHead {
@@ -1190,6 +2464,15 @@ h2 {
 
 .strategyDescriptionFacts div {
   min-width: 0;
+}
+
+.strategyDescriptionFacts .wideFact {
+  grid-column: 1 / -1;
+}
+
+.strategyDescriptionTestFacts {
+  background: #f6fbf9;
+  border-color: #cfe7dc;
 }
 
 .strategyDescriptionFacts dt {
@@ -1309,6 +2592,10 @@ h2 {
   margin: 0;
 }
 
+.compactFacts.lossReviewSummaryRow {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
 .compactFacts div {
   min-width: 0;
 }
@@ -1383,6 +2670,38 @@ h2 {
 
 .tradeLedgerPanel {
   margin-bottom: 16px;
+}
+
+.tradeLedgerToolbar {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.inlineCheckbox {
+  align-items: center;
+  color: #344658;
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 13px;
+  font-weight: 800;
+  gap: 8px;
+}
+
+.inlineCheckbox input {
+  accent-color: #1f6f67;
+  height: 16px;
+  margin: 0;
+  width: 16px;
+}
+
+.toolbarMeta {
+  color: #607080;
+  font-size: 12px;
+  font-weight: 800;
 }
 
 .evidenceGrid {
@@ -1564,7 +2883,10 @@ h2 {
 }
 
 .bbLine,
-.strategyVwapLine {
+.strategyVwapLine,
+.trendEmaLine,
+.exitEmaLine,
+.replayEma20Line {
   fill: none;
   stroke-linecap: round;
   stroke-linejoin: round;
@@ -1587,6 +2909,22 @@ h2 {
   stroke: #d48806;
   stroke-dasharray: 8 5;
   stroke-width: 1.35;
+}
+
+.trendEmaLine {
+  stroke: #008f7a;
+  stroke-width: 1.45;
+}
+
+.exitEmaLine {
+  stroke: #005f99;
+  stroke-dasharray: 5 4;
+  stroke-width: 1.15;
+}
+
+.replayEma20Line {
+  stroke: #8a5a00;
+  stroke-width: 1.45;
 }
 
 .candle .wick {
@@ -1940,6 +3278,10 @@ h2 {
   background: linear-gradient(135deg, #7b61ff 0 45%, #d48806 45% 100%);
 }
 
+.legendItem.replayEma::before {
+  background: #8a5a00;
+}
+
 .legendItem.strategySignal::before {
   background: #0958d9;
   clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
@@ -2189,7 +3531,8 @@ th:nth-child(8) {
 }
 
 .traceCell .smallButton,
-.traceCell .fallbackPill {
+.traceCell .fallbackPill,
+.traceCell .linkButton {
   margin-top: 2px;
 }
 
@@ -2198,6 +3541,15 @@ th:nth-child(8) {
   display: block;
   margin-top: 4px;
   overflow-wrap: anywhere;
+}
+
+.tradeReviewSummary {
+  color: #607080;
+}
+
+.tradeReviewSummary.pending {
+  color: #ad6800;
+  font-weight: 800;
 }
 
 .pnlCell.ok {
@@ -2359,14 +3711,126 @@ th:nth-child(8) {
 }
 
 .replayModal {
+  display: flex;
+  flex-direction: column;
   max-width: 1180px;
+  overflow: hidden;
+  padding: 0;
   width: min(1180px, 100%);
 }
 
+.replayModal > .modalHeader {
+  background: #ffffff;
+  border-bottom: 1px solid #eef2f4;
+  flex: 0 0 auto;
+  margin-bottom: 0;
+  padding: 16px 16px 12px;
+  position: relative;
+  z-index: 2;
+}
+
+.replayModalBody {
+  flex: 1 1 auto;
+  max-height: calc(100vh - 150px);
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 14px 16px 16px;
+  scrollbar-gutter: stable;
+}
+
+.lossReviewPanel {
+  background: #fbfcfd;
+  border: 1px solid #dce3e8;
+  border-radius: 8px;
+  display: grid;
+  gap: 12px;
+  margin-top: 12px;
+  padding: 12px;
+}
+
+.lossReviewForm {
+  display: grid;
+  gap: 14px;
+}
+
+.lossReviewFacts {
+  background: #fbfcfd;
+  border: 1px solid #e6ecf1;
+  border-radius: 8px;
+  padding: 10px;
+}
+
+.lossReviewFacts dd.bad {
+  color: #a8071a;
+}
+
+.lossReviewFields {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.lossReviewFields label,
+.lossReviewNote {
+  color: #344658;
+  display: grid;
+  font-size: 13px;
+  font-weight: 800;
+  gap: 6px;
+  min-width: 0;
+}
+
+.lossReviewFields select,
+.lossReviewNote textarea {
+  background: #ffffff;
+  border: 1px solid #c8d1d9;
+  border-radius: 8px;
+  color: #1f2933;
+  min-width: 0;
+  padding: 8px 10px;
+  width: 100%;
+}
+
+.lossReviewFields select {
+  min-height: 38px;
+}
+
+.lossReviewNote textarea {
+  min-height: 96px;
+  resize: vertical;
+}
+
+.modalActions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
 .strategyModal {
+  display: flex;
+  flex-direction: column;
   max-width: 1220px;
   overflow: hidden;
   width: min(1220px, 100%);
+}
+
+.strategyModal > .modalHeader {
+  flex: 0 0 auto;
+}
+
+.strategyModalBody {
+  flex: 1 1 auto;
+  max-height: calc(100vh - 132px);
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: scroll;
+  overscroll-behavior: contain;
+  padding-right: 4px;
+  scrollbar-gutter: stable;
 }
 
 .strategySignalModal {
@@ -2537,6 +4001,10 @@ th:nth-child(8) {
   color: #237804;
 }
 
+.compactFacts dd.neutral {
+  color: #344658;
+}
+
 .drawdownEvidenceBox dl {
   display: grid;
   gap: 8px 10px;
@@ -2654,6 +4122,9 @@ th:nth-child(8) {
   border: 1px solid #dce3e8;
   border-radius: 8px;
   display: grid;
+}
+
+.signalDetailCard {
   overflow: hidden;
 }
 
@@ -2662,14 +4133,16 @@ th:nth-child(8) {
   padding: 12px;
 }
 
-.signalGroupCard > summary,
-.signalOrderDetails > summary {
+.signalGroupCard {
+  overflow: visible;
+}
+
+.signalGroupCard > summary {
   cursor: pointer;
   list-style: none;
 }
 
-.signalGroupCard > summary::-webkit-details-marker,
-.signalOrderDetails > summary::-webkit-details-marker {
+.signalGroupCard > summary::-webkit-details-marker {
   display: none;
 }
 
@@ -2699,13 +4172,40 @@ th:nth-child(8) {
   white-space: nowrap;
 }
 
+.signalGroupPnl {
+  border: 1px solid #dce3e8;
+  border-radius: 999px;
+  flex: 0 0 auto;
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1;
+  padding: 5px 8px;
+  white-space: nowrap;
+}
+
+.signalGroupPnl.statPositive {
+  background: #ecfdf3;
+  border-color: #bbf7d0;
+  color: #047857;
+}
+
+.signalGroupPnl.statNegative {
+  background: #fff3f3;
+  border-color: #ffcaca;
+  color: #b42318;
+}
+
+.signalGroupPnl.statNeutral {
+  background: #f4f6f8;
+  color: #344658;
+}
+
 .signalGroupChevron {
   flex: 0 0 auto;
   transition: transform 140ms ease;
 }
 
-.signalGroupCard[open] > .signalGroupSummary .signalGroupChevron,
-.signalOrderDetails[open] > summary .signalGroupChevron {
+.signalGroupCard[open] > .signalGroupSummary .signalGroupChevron {
   transform: rotate(180deg);
 }
 
@@ -2717,16 +4217,66 @@ th:nth-child(8) {
 }
 
 .signalGroupFacts {
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
+.signalGroupIntervalChart {
+  background: #ffffff;
+  border: 1px solid #dce3e8;
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  padding: 10px;
+}
+
+.signalGroupIntervalHeader {
+  align-items: flex-start;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: space-between;
+  min-width: 0;
+}
+
+.signalGroupIntervalHeader div {
+  min-width: 0;
+}
+
+.signalGroupIntervalHeader strong {
+  color: #1f2933;
+  display: block;
+  font-size: 13px;
+  font-weight: 900;
+  line-height: 1.25;
+}
+
+.signalGroupIntervalHeader small {
+  color: #607080;
+  display: block;
+  font-size: 12px;
+  line-height: 1.35;
+  margin-top: 3px;
+  overflow-wrap: anywhere;
+}
+
+.signalGroupIntervalChart .chartShell {
+  background: #fbfcfd;
+}
+
+.signalGroupIntervalChart .candleChart.compact {
+  height: 250px;
+  min-height: 250px;
 }
 
 .signalOrderDetails {
   border: 1px solid #dce3e8;
   border-radius: 8px;
-  overflow: hidden;
+  display: grid;
+  overflow: visible;
 }
 
-.signalOrderDetails > summary {
+.signalOrderDetailsHeader {
   align-items: center;
   background: #fbfcfd;
   display: flex;
@@ -2735,7 +4285,7 @@ th:nth-child(8) {
   padding: 10px 12px;
 }
 
-.signalOrderDetails > summary span {
+.signalOrderDetailsHeader span {
   align-items: center;
   color: #1f2933;
   display: inline-flex;
@@ -2744,65 +4294,175 @@ th:nth-child(8) {
   gap: 6px;
 }
 
-.signalOrderDetails > summary small {
+.signalOrderDetailsHeader small {
   color: #607080;
   font-size: 12px;
   font-weight: 700;
 }
 
-.strategyOrderTable {
-  font-size: 12px;
-  min-width: 0;
-  width: 100%;
-}
-
-.strategyOrderTable th,
-.strategyOrderTable td {
-  padding: 9px 8px;
-}
-
-.strategyOrderTable thead th {
+.strategyOrderActionStrip {
+  align-items: center;
   background: #ffffff;
-  position: sticky;
-  top: 0;
-  z-index: 1;
+  border-top: 1px solid #eef2f4;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px 12px;
 }
 
-.strategyOrderTable th:nth-child(1) {
-  width: 64px;
+.strategyOrderActionChip {
+  align-items: center;
+  background: #f8fafc;
+  border: 1px solid #e5edf3;
+  border-radius: 8px;
+  display: inline-flex;
+  gap: 7px;
+  min-height: 30px;
+  padding: 4px 8px;
 }
 
-.strategyOrderTable th:nth-child(2) {
-  width: 132px;
+.strategyOrderActionChip span:not(.orderPhasePill) {
+  color: #344658;
+  font-size: 12px;
+  font-weight: 800;
 }
 
-.strategyOrderTable th:nth-child(3),
-.strategyOrderTable th:nth-child(4),
-.strategyOrderTable th:nth-child(5),
-.strategyOrderTable th:nth-child(6) {
-  width: 76px;
+.strategyOrderActionChip strong {
+  color: #0f2535;
+  font-size: 12px;
 }
 
-.strategyOrderTable th:nth-child(7) {
-  width: 96px;
+.strategyOrderList {
+  border-top: 1px solid #eef2f4;
+  display: grid;
+  grid-auto-rows: max-content;
+  overflow: visible;
 }
 
-.strategyOrderTable th:nth-child(8) {
-  width: auto;
+.strategyOrderItem {
+  display: grid;
+  gap: 0;
+  min-height: max-content;
+  padding: 0;
+}
+
+.strategyOrderMain {
+  align-items: start;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(88px, 0.36fr) minmax(360px, 1fr) minmax(280px, 0.84fr);
+  padding: 12px;
+}
+
+.strategyOrderItem + .strategyOrderItem {
+  border-top: 1px solid #eef2f4;
+}
+
+.strategyOrderItem.entry {
+  background: #fbfdff;
+}
+
+.strategyOrderItem.exit {
+  background: #fffdfa;
+}
+
+.strategyOrderLead {
+  align-items: flex-start;
+  display: grid;
+  gap: 6px;
+}
+
+.strategyOrderLead strong {
+  color: #1f2933;
+  font-size: 12px;
+  line-height: 1.3;
+}
+
+.strategyOrderFacts {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(3, minmax(92px, 1fr));
+  margin: 0;
+}
+
+.strategyOrderFacts div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.strategyOrderFacts dt {
+  color: #607080;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.strategyOrderFacts dd {
+  color: #1f2933;
+  font-size: 12px;
+  font-weight: 800;
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .signalOrderEvidence {
   display: grid;
-  gap: 8px;
+  gap: 6px;
+}
+
+.strategyMetricDetails {
+  border-top: 1px solid #eef2f4;
+  margin: 0 12px 12px;
+}
+
+.strategyMetricDetails > summary {
+  align-items: center;
+  color: #344658;
+  cursor: pointer;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  list-style: none;
+  min-height: 32px;
+  padding: 7px 0;
+}
+
+.strategyMetricDetails > summary::-webkit-details-marker {
+  display: none;
+}
+
+.strategyMetricDetails > summary span {
+  align-items: center;
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 900;
+  gap: 6px;
+}
+
+.strategyMetricDetails > summary small {
+  color: #607080;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.strategyMetricChevron {
+  flex: 0 0 auto;
+  transition: transform 140ms ease;
+}
+
+.strategyMetricDetails[open] .strategyMetricChevron {
+  transform: rotate(180deg);
 }
 
 .compactSignalMetrics {
-  gap: 4px;
-  grid-template-columns: repeat(auto-fit, minmax(68px, 1fr));
+  gap: 6px;
+  grid-template-columns: repeat(auto-fit, minmax(118px, 1fr));
+  padding: 4px 0 10px;
 }
 
 .compactSignalMetrics div {
-  padding: 4px 5px;
+  padding: 5px 6px;
 }
 
 .compactSignalMetrics dt {
@@ -2904,6 +4564,7 @@ th:nth-child(8) {
 
   .reviewWorkspace,
   .reviewDrillLayout,
+  .lossReviewDrillLayout,
   .evidenceGrid {
     grid-template-columns: 1fr;
   }
@@ -2942,6 +4603,7 @@ th:nth-child(8) {
     padding-left: 0;
     padding-top: 12px;
   }
+
 }
 
 @media (max-width: 900px) {
@@ -2953,6 +4615,9 @@ th:nth-child(8) {
   .reviewWorkspace,
   .reviewRail,
   .reviewDrillLayout,
+  .lossReviewDrillLayout,
+  .liveControlGrid,
+  .liveTradingGrid,
   .strategyWorkflowSteps,
   .evidenceGrid,
   .importEvidenceLayout {
@@ -2977,9 +4642,19 @@ th:nth-child(8) {
   .strategyResearchMetrics,
   .candidateMetricGrid,
   .paramGrid,
+  .lossReviewFields,
+  .lossReviewSummaryGrid,
+  .lossReviewPieWrap,
+  .lossReviewTradeFacts,
+  .lossReviewTradeItem,
   .strategyNameRow,
-  .strategyDescriptionFacts {
+  .strategyDescriptionFacts,
+  .strategyOrderMain {
     grid-template-columns: 1fr;
+  }
+
+  .strategyOrderFacts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .strategyGrid {
@@ -2988,7 +4663,7 @@ th:nth-child(8) {
   }
 
   .strategyModal {
-    overflow: auto;
+    overflow: hidden;
   }
 
   .strategyList {
@@ -3079,6 +4754,15 @@ th:nth-child(8) {
   .workspaceTab {
     justify-content: center;
     width: 100%;
+  }
+
+  .liveSignalIntent {
+    align-items: stretch;
+    grid-template-columns: 1fr;
+  }
+
+  .liveIntentPill {
+    width: fit-content;
   }
 
   .panel {

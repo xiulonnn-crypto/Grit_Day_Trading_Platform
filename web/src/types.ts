@@ -14,6 +14,7 @@ export interface ImportBatch {
   accepted_rows: number;
   quarantined_rows: number;
   duplicate?: boolean;
+  market_archive?: YahooMinuteArchiveResult;
 }
 
 export interface QuarantineRow {
@@ -104,6 +105,40 @@ export interface TradeGroupPositionDrawdown {
   window_low: number | null;
   worst_price: number | null;
   price_basis: "minute_high_low" | null;
+  entry_atr_period: number;
+  entry_atr: number | null;
+  entry_bar_range: number | null;
+  entry_atr_multiple: number | null;
+  entry_atr_regime: "extreme" | "high" | "normal" | "low" | "missing";
+  entry_atr_source_archive_id: string | null;
+  entry_atr_bars_hash: string | null;
+  entry_atr_bar_timestamp: string | null;
+  entry_atr_failure_reason: string | null;
+}
+
+export type TradeReviewReasonCategory = "opening_signal" | "closing_signal" | "misoperation";
+
+export interface TradeReview {
+  id: string;
+  trade_group_id: string;
+  account_canonical: string;
+  symbol: string;
+  trade_date: string;
+  pnl: number | null;
+  reason_category: TradeReviewReasonCategory;
+  reason_category_label: string;
+  reason_code: string;
+  reason_label: string;
+  note: string;
+  parser_versions: string[];
+  field_mapper_versions: string[];
+  source_batch_ids: string[];
+  raw_line_numbers: number[];
+  source: "review_journal";
+  artifact_source: "trade_group_read_model";
+  idempotency_key: string;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface TradeGroup {
@@ -132,6 +167,8 @@ export interface TradeGroup {
   fills: TradeGroupFill[];
   position_drawdown: TradeGroupPositionDrawdown;
   evaluation: TradeEvaluation;
+  details_loaded: boolean;
+  review: TradeReview | null;
 }
 
 export interface DailySummary {
@@ -236,6 +273,7 @@ export interface YahooMinuteArchiveResult {
   status: "no_targets" | "completed";
   provider: "yahoo";
   archive_version: string;
+  batch_id?: string;
   trade_date: string | null;
   symbol?: string;
   window_trading_days?: number;
@@ -290,7 +328,12 @@ export interface StrategyTemplateParam {
 }
 
 export interface StrategyTemplate {
-  template_key: "bb_squeeze_breakout_v1" | "institutional_liquidity_sweep_v1" | "momentum_mean_reversion_v1";
+  template_key:
+    | "bb_squeeze_breakout_v1"
+    | "institutional_liquidity_sweep_v1"
+    | "momentum_mean_reversion_v1"
+    | "one_minute_trend_rider_v1"
+    | "one_minute_range_fader_v1";
   template_version: string;
   name: string;
   description: string;
@@ -304,12 +347,41 @@ export interface StrategyConfig {
   name: string;
   template_key: string;
   template_version: string;
+  latest_template_version: string;
+  is_latest_template_version: boolean;
   enabled: boolean;
   params_json: string;
   params_hash: string;
   params: Record<string, number | string>;
   created_at: string;
   updated_at: string;
+}
+
+export type StrategyConfigHistorySource =
+  | "template_backfill"
+  | "optimization_candidate_apply"
+  | "manual_edit"
+  | "history_rollback";
+
+export interface StrategyConfigHistory {
+  id: string;
+  history_id: string;
+  strategy_id: string;
+  change_source: StrategyConfigHistorySource;
+  previous_template_version: string;
+  next_template_version: string;
+  previous_params_hash: string;
+  next_params_hash: string;
+  previous_params_json: string | null;
+  next_params_json: string | null;
+  previous_params: Record<string, number | string> | null;
+  next_params: Record<string, number | string> | null;
+  change_reason: string;
+  optimization_run_id: string | null;
+  candidate_id: string | null;
+  source_history_id: string | null;
+  can_rollback: boolean;
+  created_at: string;
 }
 
 export type StrategyRunStatus =
@@ -335,6 +407,11 @@ export interface StrategyIndicatorPoint {
   rsi: number | null;
   avg_volume: number | null;
   relative_volume: number | null;
+  trend_ema?: number | null;
+  ema_slope?: number | null;
+  opening_range_high?: number | null;
+  opening_range_low?: number | null;
+  always_in_trend?: number | null;
   local_low?: number | null;
   local_high?: number | null;
   first_five_high?: number | null;
@@ -352,6 +429,18 @@ export interface StrategyIndicatorPoint {
   qqq_vwap?: number | null;
   smh_close?: number | null;
   smh_vwap?: number | null;
+  range_upper?: number | null;
+  range_lower?: number | null;
+  range_midpoint?: number | null;
+  range_edge_upper?: number | null;
+  range_edge_lower?: number | null;
+  range_height?: number | null;
+  range_touch_tolerance?: number | null;
+  range_upper_touch_count?: number | null;
+  range_lower_touch_count?: number | null;
+  range_ema?: number | null;
+  ema_thread_count?: number | null;
+  no_trade_zone?: number | null;
 }
 
 export interface StrategySignal {
@@ -372,8 +461,77 @@ export interface StrategySignal {
   metrics: Record<string, number>;
 }
 
+export type LiveStrategySignalStatus =
+  | "completed"
+  | "no_signal"
+  | "provider_failed"
+  | "missing_market_data"
+  | "non_available_market_data"
+  | "insufficient_bars"
+  | "strategy_disabled"
+  | "failed";
+
+export interface LiveStrategySignal {
+  id: string;
+  signal_id: string;
+  timestamp: string;
+  bar_index: number;
+  side: "LONG" | "SHORT";
+  action: StrategySignalAction;
+  price: number;
+  stop_loss_price: number | null;
+  take_profit_price: number | null;
+  linked_entry_signal_id: string | null;
+  reason_codes_json: string;
+  reason_codes: string[];
+  metrics_json: string;
+  metrics: Record<string, number>;
+  position_notional: number | null;
+  position_quantity: number | null;
+  order_quantity: number | null;
+}
+
+export interface LiveStrategySignalResult {
+  status: LiveStrategySignalStatus;
+  strategy_id: string;
+  strategy: {
+    strategy_id: string;
+    name: string;
+    template_key: string;
+    template_version: string;
+    latest_template_version: string;
+    is_latest_template_version: boolean;
+    enabled: boolean;
+    params: Record<string, number | string>;
+  };
+  symbol: string;
+  provider: "fake" | "futu" | "yahoo" | string;
+  provider_attempt_status: "not_requested" | MarketDataStatus | string;
+  requested_start: string;
+  requested_end: string;
+  provider_timezone: string | null;
+  lookback_minutes: number;
+  bar_count: number;
+  bars_hash: string;
+  params_hash: string;
+  indicator_engine_version: string;
+  indicator_hash: string;
+  artifact_source: "live_provider_minute_bars";
+  idempotency_key: string;
+  latest_bar: MarketBar | null;
+  latest_indicator: StrategyIndicatorPoint | null;
+  signals: LiveStrategySignal[];
+  signal: LiveStrategySignal | null;
+  order_intent: "BUY" | "SELL" | "HOLD";
+  order_action: StrategySignalAction | null;
+  reason_codes: string[];
+  failure_reason: string | null;
+  parser_version: null;
+  field_mapper_version: null;
+}
+
 export interface StrategySignalPerformance {
-  unit: "price_delta_weighted_by_exit_fraction";
+  unit: "capital_weighted_position_pnl" | "price_delta_weighted_by_exit_fraction";
   total_pnl: number;
   gross_profit: number;
   gross_loss: number;
@@ -382,6 +540,25 @@ export interface StrategySignalPerformance {
   losing_group_count: number;
   win_rate: number;
   profit_factor: number | null;
+  initial_capital?: number;
+  entry_capital_ratio?: number;
+}
+
+export interface StrategySignalGroupPerformance {
+  entry_signal_id: string;
+  side: "LONG" | "SHORT";
+  status: "closed" | "open";
+  opened_at: string;
+  closed_at: string | null;
+  signal_count: number;
+  exit_count: number;
+  pnl: number | null;
+  pnl_per_share?: number | null;
+  position_notional?: number;
+  position_quantity?: number;
+  initial_capital?: number;
+  entry_capital_ratio?: number;
+  unit: "capital_weighted_position_pnl" | "price_delta_weighted_by_exit_fraction";
 }
 
 export interface StrategySignalRun {
@@ -399,10 +576,13 @@ export interface StrategySignalRun {
   failure_reason: string | null;
   indicator_series_json: string;
   indicator_series: StrategyIndicatorPoint[];
+  indicator_point_count: number;
   indicator_hash: string;
   signal_count: number;
   idempotency_key: string;
   created_at: string;
+  details_loaded?: boolean;
+  params: Record<string, number | string>;
   strategy: {
     strategy_id: string;
     name: string;
@@ -411,6 +591,7 @@ export interface StrategySignalRun {
     params: Record<string, number | string>;
   };
   signals: StrategySignal[];
+  signal_groups?: StrategySignalGroupPerformance[] | null;
   signal_performance?: StrategySignalPerformance;
 }
 
@@ -420,6 +601,7 @@ export interface StrategyTestDayResult {
   id: string;
   day_result_id: string;
   batch_id: string;
+  symbol?: string;
   trade_date: string;
   source_archive_id: string | null;
   bars_hash: string;
@@ -505,6 +687,8 @@ export interface StrategyOptimizationRun {
   strategy_id: string;
   provider: "yahoo" | string;
   symbol: string;
+  symbols: string[];
+  is_multi_symbol: boolean;
   end_date: string;
   window_trading_days: number;
   archive_scope_hash: string;

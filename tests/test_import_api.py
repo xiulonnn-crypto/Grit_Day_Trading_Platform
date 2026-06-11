@@ -4,7 +4,9 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
+from grit_day_trading import market_archive
 from grit_day_trading.api import create_app
+from grit_day_trading.market_provider import FakeMarketDataProvider
 from grit_day_trading.parser import FIELD_MAPPER_VERSION, PARSER_VERSION
 from grit_day_trading.storage import connect, initialize_database
 
@@ -59,6 +61,34 @@ def test_import_is_idempotent_and_fills_are_traceable(tmp_path):
         assert fills[0]["uses_fallback_idempotency_key"] is False
 
 
+def test_upload_stp_txt_archives_missing_minutes_for_import_batch_without_mutating_fills(tmp_path, monkeypatch):
+    db_path = tmp_path / "trading.db"
+    sample = SAMPLE_PATH.read_bytes()
+    monkeypatch.setattr(market_archive, "resolve_provider", lambda provider_name: FakeMarketDataProvider())
+
+    with TestClient(create_app(db_path)) as client:
+        first = client.post("/api/imports/stp-txt", files={"file": ("sample.tsv", sample, "text/plain")}).json()
+        second = client.post("/api/imports/stp-txt", files={"file": ("sample.tsv", sample, "text/plain")}).json()
+        archives = client.get("/api/market-data/minute-archives?date=2026-06-01&provider=yahoo").json()["items"]
+        fills = client.get("/api/fills?date=2026-06-01").json()["items"]
+
+    counts = _table_counts(db_path, ("market_minute_archives", "market_data_provider_attempts", "fills"))
+    first_archive = first["market_archive"]
+    second_archive = second["market_archive"]
+    assert first_archive["batch_id"] == first["batch_id"]
+    assert first_archive["status"] == "completed"
+    assert first_archive["target_count"] == 1
+    assert first_archive["available_count"] == 1
+    assert first_archive["items"][0]["symbol"] == "AAPL"
+    assert first_archive["items"][0]["trade_date"] == "2026-06-01"
+    assert first_archive["items"][0]["source_fill_count"] == 2
+    assert second["duplicate"] is True
+    assert second_archive["items"][0]["archive_id"] == first_archive["items"][0]["archive_id"]
+    assert archives[0]["archive_id"] == first_archive["items"][0]["archive_id"]
+    assert counts == {"market_minute_archives": 1, "market_data_provider_attempts": 1, "fills": 2}
+    assert [fill["price"] for fill in fills] == [10.0, 11.5]
+
+
 def test_quarantine_rows_include_reason_and_raw_text(tmp_path):
     sample = SAMPLE_PATH.read_bytes()
 
@@ -86,6 +116,7 @@ def test_empty_file_returns_visible_failure(tmp_path):
         assert payload["row_count"] == 0
         assert payload["accepted_rows"] == 0
         assert payload["quarantined_rows"] == 0
+        assert "market_archive" not in payload
 
 
 def test_daily_summary_uses_committed_fills_only(tmp_path):

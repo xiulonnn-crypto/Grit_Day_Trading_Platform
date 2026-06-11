@@ -44,6 +44,20 @@
 - 至少一个负向验收路径。
 - 文档和 changelog 是否已同步。
 
+## 耗时复盘与加速规则
+
+当一次实现或 review 超过 30 分钟，或用户明确要求复盘耗时时，必须先判断耗时属于必要验收还是可压缩流程成本。优先把 repo-local 规则写回本文档或 [TECHNICAL.md](./TECHNICAL.md)，只有跨项目通用时才建议修改 shared skill。
+
+针对事实源、窗口口径、单个 tab 或单个弹层的小切片，实施前先冻结：
+
+- 当前 lane：`Functional`、`UI` 或 `Functional then UI`。
+- 当前阶段：P0、P1、P2 或 P3。
+- owner files：后端合同、前端 read model、测试和文档的最小文件集合。
+- source matrix：canonical source、read model、artifact source 和幂等 key。
+- focused test owner slice：先跑直接覆盖的后端/API/frontend contract 测试；通过后再决定是否跑 full suite。
+
+如果工作树已有大量未提交改动，先用 `git status --short --branch` 和针对性 `rg` 定位本次 owner files，不做全仓 diff 复盘；不得回退不属于本次请求的改动。文档同步要在测试前后各检查一次，避免最后才发现 README、ARCHITECTURE、TECHNICAL、CHANGELOG 或 AGENTS 口径冲突。
+
 ## P0 Agent 要求
 
 P0 改动必须覆盖：
@@ -81,7 +95,7 @@ Market Context Replay 改动必须支持：
 - 盘前 watchlist run。
 - 每个 watchlist symbol 的入选原因和指标。
 - watchlist provider failure 和零结果状态。
-- 手工指定标的和交易日窗口的分钟线归档，只能写行情归档和 provider attempt，不能改成交事实。
+- 手工指定标的和自然日窗口的分钟线归档，只能写行情归档和 provider attempt，不能改成交事实。
 
 禁止行为：
 
@@ -101,10 +115,10 @@ Strategy Replay 改动必须支持：
 - 策略优化 run 和候选保存到 `strategy_optimization_runs` 和 `strategy_optimization_candidates`。
 - 策略输入只读取已归档 `market_minute_archives`。
 - 每次 run 保存 `source_archive_id`、`bars_hash`、`params_hash`、`indicator_engine_version` 和 `indicator_hash`。
-- 单日 run、30 日测试和优化候选必须保存运行时 `params_json` 或 candidate 参数证据。
+- 单日 run、30 天测试和优化候选必须保存运行时 `params_json` 或 candidate 参数证据。
 - 缺归档、非 available 归档、分钟线不足、策略未开启和引擎失败状态。
-- 最近 30 个交易日归档覆盖不足时保存 `insufficient_archive_coverage`，不得自动拉行情或补假日期。
-- UI 可以提供显式“拉取最近 30 个交易日数据”作为数据准备动作，但策略 run、test batch 和 optimization 仍只能读取已保存归档。
+- 截止日前最近 30 天自然日窗口内没有本地归档时保存 `insufficient_archive_coverage`，不得自动拉行情、补假日期或向更早交易日补足。
+- UI 可以提供显式“拉取最近 30 天数据”作为数据准备动作，但策略 run、test batch 和 optimization 仍只能读取已保存归档。
 - 优化 candidate 默认上限为 120；最佳候选只能展示，必须由用户显式套用后才更新策略配置。
 - BB Squeeze 指标序列和信号由后端计算，UI 只读 API read model。
 - 9 EMA 出场缓冲、绝对带宽过滤和被动止盈触达只能由后端策略 run 计算。

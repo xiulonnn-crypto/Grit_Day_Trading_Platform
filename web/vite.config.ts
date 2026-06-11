@@ -10,7 +10,8 @@ export default defineConfig(({ mode }) => {
     server: {
       port: 5173,
       proxy: {
-        "/api": apiProxy
+        "/api": apiProxy,
+        "/openapi.json": apiProxy
       }
     }
   };

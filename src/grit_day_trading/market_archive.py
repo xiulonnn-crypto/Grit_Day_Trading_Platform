@@ -53,6 +53,41 @@ def archive_yahoo_minutes_for_committed_fills(
     }
 
 
+def archive_yahoo_minutes_for_import_batch(
+    conn: sqlite3.Connection,
+    *,
+    batch_id: str,
+    force: bool = False,
+    provider: MarketDataProvider | None = None,
+) -> dict[str, Any]:
+    targets = _archive_targets(conn, trade_date=None, source_batch_id=batch_id, include_momentum_context=False)
+    items = [
+        archive_market_minutes(
+            conn,
+            symbol=target["symbol"],
+            trade_date=target["trade_date"],
+            source_fill_count=target["source_fill_count"],
+            provider_name=YAHOO_ARCHIVE_PROVIDER,
+            force=force,
+            provider=provider,
+        )
+        for target in targets
+    ]
+    return {
+        "status": "no_targets" if not targets else "completed",
+        "provider": YAHOO_ARCHIVE_PROVIDER,
+        "archive_version": MARKET_MINUTE_ARCHIVE_VERSION,
+        "batch_id": batch_id,
+        "trade_date": None,
+        "target_count": len(targets),
+        "stored_count": len(items),
+        "available_count": sum(1 for item in items if item["data_status"] == "available"),
+        "non_available_count": sum(1 for item in items if item["data_status"] != "available"),
+        "provider_failed_count": sum(1 for item in items if item["data_status"] == "provider_failed"),
+        "items": items,
+    }
+
+
 def archive_yahoo_minutes_for_symbol_window(
     conn: sqlite3.Connection,
     *,
@@ -69,7 +104,7 @@ def archive_yahoo_minutes_for_symbol_window(
     if window < 1 or window > 30:
         raise ValueError("archive_window_trading_days_out_of_range")
 
-    trade_dates = _recent_weekday_dates(end_date, window)
+    trade_dates = _recent_calendar_dates(end_date, window)
     target_symbols = [canonical_symbol]
     if _has_enabled_momentum_mean_reversion_strategy(conn):
         for context_symbol in MOMENTUM_CONTEXT_SYMBOLS:
@@ -112,6 +147,81 @@ def archive_yahoo_minutes_for_symbol_window(
         "non_available_count": sum(1 for item in items if item["data_status"] != "available"),
         "provider_failed_count": sum(1 for item in items if item["data_status"] == "provider_failed"),
         "selected_symbol_available_count": sum(1 for item in selected_items if item["data_status"] == "available"),
+        "items": items,
+    }
+
+
+def archive_yahoo_minutes_for_symbol_group_window(
+    conn: sqlite3.Connection,
+    *,
+    symbols: list[str] | tuple[str, ...],
+    end_date: str,
+    window_trading_days: int = 1,
+    force: bool = False,
+    provider: MarketDataProvider | None = None,
+) -> dict[str, Any]:
+    target_symbols = _canonical_symbols(symbols)
+    if not target_symbols:
+        raise ValueError("archive_symbol_required")
+    window = int(window_trading_days)
+    if window < 1 or window > 30:
+        raise ValueError("archive_window_trading_days_out_of_range")
+
+    trade_dates = _recent_calendar_dates(end_date, window)
+    all_symbols = list(target_symbols)
+    if _has_enabled_momentum_mean_reversion_strategy(conn):
+        for context_symbol in MOMENTUM_CONTEXT_SYMBOLS:
+            if context_symbol not in all_symbols:
+                all_symbols.append(context_symbol)
+
+    targets = [
+        {
+            "trade_date": target_date,
+            "symbol": target_symbol,
+            "source_fill_count": _source_fill_count(conn, trade_date=target_date, symbol=target_symbol),
+        }
+        for target_date in trade_dates
+        for target_symbol in all_symbols
+    ]
+    items = [
+        archive_market_minutes(
+            conn,
+            symbol=target["symbol"],
+            trade_date=target["trade_date"],
+            source_fill_count=target["source_fill_count"],
+            provider_name=YAHOO_ARCHIVE_PROVIDER,
+            force=force,
+            provider=provider,
+        )
+        for target in targets
+    ]
+    selected_items = [item for item in items if item["symbol"] in target_symbols]
+    return {
+        "status": "completed",
+        "provider": YAHOO_ARCHIVE_PROVIDER,
+        "archive_version": MARKET_MINUTE_ARCHIVE_VERSION,
+        "trade_date": end_date,
+        "symbols": target_symbols,
+        "window_trading_days": window,
+        "requested_trade_dates": trade_dates,
+        "target_count": len(targets),
+        "stored_count": len(items),
+        "available_count": sum(1 for item in items if item["data_status"] == "available"),
+        "non_available_count": sum(1 for item in items if item["data_status"] != "available"),
+        "provider_failed_count": sum(1 for item in items if item["data_status"] == "provider_failed"),
+        "selected_symbol_available_count": sum(1 for item in selected_items if item["data_status"] == "available"),
+        "per_symbol": {
+            symbol: {
+                "target_count": sum(1 for item in selected_items if item["symbol"] == symbol),
+                "available_count": sum(
+                    1 for item in selected_items if item["symbol"] == symbol and item["data_status"] == "available"
+                ),
+                "non_available_count": sum(
+                    1 for item in selected_items if item["symbol"] == symbol and item["data_status"] != "available"
+                ),
+            }
+            for symbol in target_symbols
+        },
         "items": items,
     }
 
@@ -275,13 +385,21 @@ def resolve_provider(provider_name: str) -> MarketDataProvider:
     raise ValueError("unsupported_archive_provider")
 
 
-def _archive_targets(conn: sqlite3.Connection, *, trade_date: str | None) -> list[dict[str, Any]]:
+def _archive_targets(
+    conn: sqlite3.Connection,
+    *,
+    trade_date: str | None,
+    source_batch_id: str | None = None,
+    include_momentum_context: bool = True,
+) -> list[dict[str, Any]]:
     fills = list_fills(conn, date=trade_date)
     counts: dict[tuple[str, str], int] = {}
     for fill in fills:
+        if source_batch_id and fill["source_batch_id"] != source_batch_id:
+            continue
         key = (str(fill["filled_at"])[:10], str(fill["symbol"]).strip().upper())
         counts[key] = counts.get(key, 0) + 1
-    if _has_enabled_momentum_mean_reversion_strategy(conn):
+    if include_momentum_context and _has_enabled_momentum_mean_reversion_strategy(conn):
         target_dates = {trade_date} if trade_date else {target_trade_date for target_trade_date, _ in counts}
         for target_trade_date in sorted(date for date in target_dates if date):
             for symbol in MOMENTUM_CONTEXT_SYMBOLS:
@@ -297,18 +415,26 @@ def _source_fill_count(conn: sqlite3.Connection, *, trade_date: str, symbol: str
     return sum(1 for fill in list_fills(conn, date=trade_date) if str(fill["symbol"]).strip().upper() == canonical_symbol)
 
 
-def _recent_weekday_dates(end_date: str, window_trading_days: int) -> list[str]:
+def _canonical_symbols(symbols: list[str] | tuple[str, ...]) -> list[str]:
+    canonical: list[str] = []
+    seen: set[str] = set()
+    for symbol in symbols:
+        value = str(symbol).strip().upper()
+        if not value or value in seen:
+            continue
+        seen.add(value)
+        canonical.append(value)
+    return canonical
+
+
+def _recent_calendar_dates(end_date: str, window_days: int) -> list[str]:
     try:
-        current = date.fromisoformat(end_date)
+        end = date.fromisoformat(end_date)
     except ValueError as exc:
         raise ValueError("archive_end_date_invalid") from exc
 
-    dates: list[str] = []
-    while len(dates) < window_trading_days:
-        if current.weekday() < 5:
-            dates.append(current.isoformat())
-        current -= timedelta(days=1)
-    return list(reversed(dates))
+    start = end - timedelta(days=window_days - 1)
+    return [(start + timedelta(days=offset)).isoformat() for offset in range(window_days)]
 
 
 def _has_enabled_momentum_mean_reversion_strategy(conn: sqlite3.Connection) -> bool:

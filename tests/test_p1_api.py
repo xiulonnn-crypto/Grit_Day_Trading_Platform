@@ -18,11 +18,14 @@ def test_healthz_advertises_p1_runtime_routes(tmp_path):
     assert health.status_code == 200
     payload = health.json()
     assert payload["status"] == "ok"
+    assert payload["live_signal_contract"] == "live_order_quantity_reason_tags_v1"
     assert "/api/market-data/minute-archives" in payload["required_routes"]
     assert "/api/market-data/yahoo-minute-archive" in payload["required_routes"]
+    assert "/api/trade-groups/{trade_group_id}/review" in payload["required_routes"]
     routes = openapi.json()["paths"]
     assert "/api/market-data/minute-archives" in routes
     assert "/api/market-data/yahoo-minute-archive" in routes
+    assert "/api/trade-groups/{trade_group_id}/review" in routes
 
 
 def test_market_context_api_replays_and_reads_snapshot(tmp_path):

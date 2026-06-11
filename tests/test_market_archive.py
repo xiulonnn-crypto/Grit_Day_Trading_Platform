@@ -2,6 +2,8 @@ from pathlib import Path
 
 from grit_day_trading.market_archive import (
     archive_yahoo_minutes_for_committed_fills,
+    archive_yahoo_minutes_for_import_batch,
+    archive_yahoo_minutes_for_symbol_group_window,
     archive_yahoo_minutes_for_symbol_window,
     list_market_minute_archives,
 )
@@ -95,6 +97,39 @@ def test_archive_yahoo_minutes_includes_enabled_momentum_context_symbols(tmp_pat
         conn.close()
 
 
+def test_archive_yahoo_minutes_for_import_batch_scopes_to_batch_fill_symbols(tmp_path):
+    db_path = tmp_path / "archive-batch.db"
+    conn = connect(db_path)
+    provider = FakeMarketDataProvider()
+    try:
+        initialize_database(conn)
+        first = import_stp_txt(conn, "sample.tsv", SAMPLE_PATH.read_bytes())
+        second = import_stp_txt(
+            conn,
+            "second.tsv",
+            (
+                "Account\tSymbol\tSide\tOrderID\tExecID\tQty\tPrice\tTime\tStatus\n"
+                "acct-rt\tMSFT\tBOT\tO-200\tE-200\t10\t20.00\t2026-06-02T09:30:00\tFILLED\n"
+            ).encode(),
+        )
+
+        summary = archive_yahoo_minutes_for_import_batch(conn, batch_id=second["batch_id"], provider=provider)
+        repeated = archive_yahoo_minutes_for_import_batch(conn, batch_id=second["batch_id"], provider=provider)
+
+        assert first["batch_id"] != second["batch_id"]
+        assert summary["batch_id"] == second["batch_id"]
+        assert summary["target_count"] == 1
+        assert [(item["trade_date"], item["symbol"], item["source_fill_count"]) for item in summary["items"]] == [
+            ("2026-06-02", "MSFT", 1)
+        ]
+        assert {item["archive_id"] for item in repeated["items"]} == {item["archive_id"] for item in summary["items"]}
+        assert conn.execute("SELECT COUNT(*) FROM market_minute_archives").fetchone()[0] == 1
+        assert conn.execute("SELECT COUNT(*) FROM market_data_provider_attempts").fetchone()[0] == 1
+        assert [fill["symbol"] for fill in list_fills(conn, date="2026-06-01")] == ["AAPL", "AAPL"]
+    finally:
+        conn.close()
+
+
 def test_archive_yahoo_minutes_is_idempotent_without_force(tmp_path):
     conn = _seed_db(tmp_path)
     try:
@@ -169,6 +204,25 @@ def test_archive_yahoo_minutes_for_symbol_window_does_not_require_committed_fill
         conn.close()
 
 
+def test_archive_yahoo_minutes_for_symbol_window_uses_calendar_days(tmp_path):
+    conn = _seed_db(tmp_path)
+    provider = FakeMarketDataProvider()
+    try:
+        summary = archive_yahoo_minutes_for_symbol_window(
+            conn,
+            symbol="msft",
+            end_date="2026-06-08",
+            window_trading_days=3,
+            provider=provider,
+        )
+
+        assert summary["requested_trade_dates"] == ["2026-06-06", "2026-06-07", "2026-06-08"]
+        assert summary["target_count"] == 3
+        assert [item["trade_date"] for item in summary["items"]] == ["2026-06-06", "2026-06-07", "2026-06-08"]
+    finally:
+        conn.close()
+
+
 def test_archive_yahoo_minutes_for_symbol_window_includes_momentum_context_when_enabled(tmp_path):
     conn = _seed_db(tmp_path)
     provider = FakeMarketDataProvider()
@@ -193,6 +247,48 @@ def test_archive_yahoo_minutes_for_symbol_window_includes_momentum_context_when_
             ("2026-06-02", "QQQ"),
             ("2026-06-02", "SMH"),
         }
+    finally:
+        conn.close()
+
+
+def test_archive_yahoo_minutes_for_symbol_group_window_persists_research_symbols(tmp_path):
+    conn = _seed_db(tmp_path)
+    provider = FakeMarketDataProvider()
+    try:
+        summary = archive_yahoo_minutes_for_symbol_group_window(
+            conn,
+            symbols=["mu", "NVDA", "SPY", "mu"],
+            end_date="2026-06-05",
+            window_trading_days=2,
+            provider=provider,
+        )
+        repeated = archive_yahoo_minutes_for_symbol_group_window(
+            conn,
+            symbols=["MU", "NVDA", "SPY"],
+            end_date="2026-06-05",
+            window_trading_days=2,
+            provider=provider,
+        )
+
+        assert summary["status"] == "completed"
+        assert summary["symbols"] == ["MU", "NVDA", "SPY"]
+        assert summary["requested_trade_dates"] == ["2026-06-04", "2026-06-05"]
+        assert summary["target_count"] == 6
+        assert summary["selected_symbol_available_count"] == 6
+        assert summary["per_symbol"]["MU"]["available_count"] == 2
+        assert summary["per_symbol"]["NVDA"]["available_count"] == 2
+        assert summary["per_symbol"]["SPY"]["available_count"] == 2
+        assert {(item["trade_date"], item["symbol"]) for item in summary["items"]} == {
+            ("2026-06-04", "MU"),
+            ("2026-06-04", "NVDA"),
+            ("2026-06-04", "SPY"),
+            ("2026-06-05", "MU"),
+            ("2026-06-05", "NVDA"),
+            ("2026-06-05", "SPY"),
+        }
+        assert {item["archive_id"] for item in repeated["items"]} == {item["archive_id"] for item in summary["items"]}
+        assert conn.execute("SELECT COUNT(*) FROM market_minute_archives").fetchone()[0] == 6
+        assert [fill["symbol"] for fill in list_fills(conn, date="2026-06-01")] == ["AAPL", "AAPL"]
     finally:
         conn.close()
 

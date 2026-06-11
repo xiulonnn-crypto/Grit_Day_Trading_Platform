@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 
-STORAGE_SCHEMA_VERSION = 5
+STORAGE_SCHEMA_VERSION = 8
 ACCOUNT_STRIP_CHARS_SQL = "char(9) || char(10) || char(11) || char(12) || char(13) || char(32)"
 
 
@@ -347,6 +347,50 @@ CREATE TABLE IF NOT EXISTS strategy_optimization_candidates (
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     UNIQUE(optimization_run_id, params_hash)
 );
+
+CREATE TABLE IF NOT EXISTS strategy_config_history (
+    id TEXT PRIMARY KEY,
+    strategy_id TEXT NOT NULL REFERENCES strategy_configs(id) ON DELETE CASCADE,
+    change_source TEXT NOT NULL CHECK (
+        change_source IN ('template_backfill', 'optimization_candidate_apply', 'manual_edit', 'history_rollback')
+    ),
+    previous_template_version TEXT NOT NULL,
+    next_template_version TEXT NOT NULL,
+    previous_params_hash TEXT NOT NULL,
+    next_params_hash TEXT NOT NULL,
+    previous_params_json TEXT,
+    next_params_json TEXT,
+    change_reason TEXT NOT NULL,
+    optimization_run_id TEXT REFERENCES strategy_optimization_runs(id) ON DELETE SET NULL,
+    candidate_id TEXT REFERENCES strategy_optimization_candidates(id) ON DELETE SET NULL,
+    source_history_id TEXT REFERENCES strategy_config_history(id) ON DELETE SET NULL,
+    idempotency_key TEXT NOT NULL UNIQUE,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS trade_reviews (
+    id TEXT PRIMARY KEY,
+    trade_group_id TEXT NOT NULL,
+    account_canonical TEXT NOT NULL,
+    symbol TEXT NOT NULL,
+    trade_date TEXT NOT NULL,
+    pnl REAL,
+    reason_category TEXT NOT NULL CHECK (
+        reason_category IN ('opening_signal', 'closing_signal', 'misoperation')
+    ),
+    reason_code TEXT NOT NULL,
+    reason_label TEXT NOT NULL,
+    note TEXT NOT NULL DEFAULT '',
+    parser_versions_json TEXT NOT NULL DEFAULT '[]',
+    field_mapper_versions_json TEXT NOT NULL DEFAULT '[]',
+    source_batch_ids_json TEXT NOT NULL DEFAULT '[]',
+    raw_line_numbers_json TEXT NOT NULL DEFAULT '[]',
+    source TEXT NOT NULL DEFAULT 'review_journal',
+    artifact_source TEXT NOT NULL DEFAULT 'trade_group_read_model',
+    idempotency_key TEXT NOT NULL UNIQUE,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
 """
 
 STORAGE_CONTRACT_SQL = f"""
@@ -506,6 +550,21 @@ ON strategy_optimization_candidates(optimization_run_id, params_hash);
 
 CREATE INDEX IF NOT EXISTS ix_strategy_optimization_candidate_rank
 ON strategy_optimization_candidates(optimization_run_id, rank);
+
+CREATE UNIQUE INDEX IF NOT EXISTS ux_strategy_config_history_idempotency
+ON strategy_config_history(idempotency_key);
+
+CREATE INDEX IF NOT EXISTS ix_strategy_config_history_strategy_created
+ON strategy_config_history(strategy_id, created_at);
+
+CREATE UNIQUE INDEX IF NOT EXISTS ux_trade_reviews_group
+ON trade_reviews(trade_group_id);
+
+CREATE UNIQUE INDEX IF NOT EXISTS ux_trade_reviews_idempotency
+ON trade_reviews(idempotency_key);
+
+CREATE INDEX IF NOT EXISTS ix_trade_reviews_symbol_date
+ON trade_reviews(symbol, trade_date, updated_at);
 """
 
 
@@ -558,6 +617,27 @@ def initialize_database(conn: sqlite3.Connection) -> None:
         """,
         (5, "p2_strategy_testing_optimization_contract_v5"),
     )
+    conn.execute(
+        """
+        INSERT OR IGNORE INTO storage_migrations (version, description)
+        VALUES (?, ?)
+        """,
+        (6, "p2_strategy_config_history_contract_v6"),
+    )
+    conn.execute(
+        """
+        INSERT OR IGNORE INTO storage_migrations (version, description)
+        VALUES (?, ?)
+        """,
+        (7, "p2_strategy_config_history_rollback_contract_v7"),
+    )
+    conn.execute(
+        """
+        INSERT OR IGNORE INTO storage_migrations (version, description)
+        VALUES (?, ?)
+        """,
+        (8, "p3_trade_review_journal_contract_v8"),
+    )
     conn.execute(f"PRAGMA user_version = {STORAGE_SCHEMA_VERSION}")
     conn.commit()
 
@@ -566,6 +646,84 @@ def _ensure_compatible_columns(conn: sqlite3.Connection) -> None:
     strategy_run_columns = _table_columns(conn, "strategy_signal_runs")
     if "params_json" not in strategy_run_columns:
         conn.execute("ALTER TABLE strategy_signal_runs ADD COLUMN params_json TEXT NOT NULL DEFAULT '{}'")
+    _ensure_strategy_config_history_contract(conn)
+
+
+def _ensure_strategy_config_history_contract(conn: sqlite3.Connection) -> None:
+    row = conn.execute(
+        "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'strategy_config_history'"
+    ).fetchone()
+    if not row:
+        return
+    table_sql = row["sql"] or ""
+    columns = _table_columns(conn, "strategy_config_history")
+    if (
+        "history_rollback" in table_sql
+        and "manual_edit" in table_sql
+        and "previous_params_json" in columns
+        and "next_params_json" in columns
+        and "source_history_id" in columns
+    ):
+        return
+
+    rows = [dict(item) for item in conn.execute("SELECT * FROM strategy_config_history").fetchall()]
+    conn.execute("DROP INDEX IF EXISTS ux_strategy_config_history_idempotency")
+    conn.execute("DROP INDEX IF EXISTS ix_strategy_config_history_strategy_created")
+    conn.execute("DROP TABLE IF EXISTS strategy_config_history_legacy")
+    conn.execute("ALTER TABLE strategy_config_history RENAME TO strategy_config_history_legacy")
+    conn.execute(
+        """
+        CREATE TABLE strategy_config_history (
+            id TEXT PRIMARY KEY,
+            strategy_id TEXT NOT NULL REFERENCES strategy_configs(id) ON DELETE CASCADE,
+            change_source TEXT NOT NULL CHECK (
+                change_source IN ('template_backfill', 'optimization_candidate_apply', 'manual_edit', 'history_rollback')
+            ),
+            previous_template_version TEXT NOT NULL,
+            next_template_version TEXT NOT NULL,
+            previous_params_hash TEXT NOT NULL,
+            next_params_hash TEXT NOT NULL,
+            previous_params_json TEXT,
+            next_params_json TEXT,
+            change_reason TEXT NOT NULL,
+            optimization_run_id TEXT REFERENCES strategy_optimization_runs(id) ON DELETE SET NULL,
+            candidate_id TEXT REFERENCES strategy_optimization_candidates(id) ON DELETE SET NULL,
+            source_history_id TEXT REFERENCES strategy_config_history(id) ON DELETE SET NULL,
+            idempotency_key TEXT NOT NULL UNIQUE,
+            created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+        """
+    )
+    for item in rows:
+        conn.execute(
+            """
+            INSERT INTO strategy_config_history (
+                id, strategy_id, change_source, previous_template_version,
+                next_template_version, previous_params_hash, next_params_hash,
+                previous_params_json, next_params_json, change_reason,
+                optimization_run_id, candidate_id, source_history_id,
+                idempotency_key, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                item["id"],
+                item["strategy_id"],
+                item["change_source"],
+                item["previous_template_version"],
+                item["next_template_version"],
+                item["previous_params_hash"],
+                item["next_params_hash"],
+                item.get("previous_params_json"),
+                item.get("next_params_json"),
+                item["change_reason"],
+                item.get("optimization_run_id"),
+                item.get("candidate_id"),
+                item.get("source_history_id"),
+                item["idempotency_key"],
+                item["created_at"],
+            ),
+        )
+    conn.execute("DROP TABLE strategy_config_history_legacy")
 
 
 def _table_columns(conn: sqlite3.Connection, table_name: str) -> set[str]:

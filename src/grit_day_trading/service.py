@@ -12,6 +12,33 @@ from .storage import dumps_json, new_id, row_to_dict, rows_to_dicts
 
 TRADE_GROUP_VERSION = "trade_group_v1"
 TRADE_EVALUATION_MODEL_VERSION = "trade_eval_intraday_v1"
+TRADE_REVIEW_VERSION = "trade_review_v1"
+TRADE_GROUP_ENTRY_ATR_PERIOD = 20
+TRADE_REVIEW_CATEGORY_LABELS = {
+    "opening_signal": "开仓信号",
+    "closing_signal": "平仓信号",
+    "misoperation": "误操作",
+}
+TRADE_REVIEW_REASON_OPTIONS = {
+    "opening_signal": [
+        {"code": "chased_breakout", "label": "追突破过急"},
+        {"code": "weak_confirmation", "label": "确认不足"},
+        {"code": "against_context", "label": "逆势入场"},
+        {"code": "poor_location", "label": "入场位置差"},
+    ],
+    "closing_signal": [
+        {"code": "stop_too_late", "label": "止损过慢"},
+        {"code": "profit_reversed", "label": "盈利回吐"},
+        {"code": "exit_signal_ignored", "label": "平仓信号未执行"},
+        {"code": "exit_plan_unclear", "label": "平仓计划不清"},
+    ],
+    "misoperation": [
+        {"code": "wrong_side_or_symbol", "label": "方向或标的点错"},
+        {"code": "oversized_position", "label": "仓位过大"},
+        {"code": "duplicate_order", "label": "重复下单"},
+        {"code": "plan_not_followed", "label": "未按计划执行"},
+    ],
+}
 
 
 def import_stp_txt(conn: sqlite3.Connection, file_name: str, raw_bytes: bytes) -> dict[str, Any]:
@@ -200,8 +227,24 @@ def review_summary(
     symbol: str | None = None,
 ) -> dict[str, Any]:
     canonical_symbol = symbol.strip().upper() if symbol else None
-    fills = list_fills(conn, date=date, symbol=canonical_symbol)
-    groups = list_trade_groups(conn, date=date, symbol=canonical_symbol)
+    all_fills = list_fills(conn, symbol=canonical_symbol)
+    fills = _filter_summary_fills(all_fills, date=date, symbol=canonical_symbol)
+    groups = _filter_summary_groups(
+        _light_trade_groups_from_fills(all_fills),
+        date=date,
+        symbol=canonical_symbol,
+    )
+    return _review_summary_from_models(conn, fills, groups, date=date, symbol=canonical_symbol)
+
+
+def _review_summary_from_models(
+    conn: sqlite3.Connection,
+    fills: list[dict[str, Any]],
+    groups: list[dict[str, Any]],
+    *,
+    date: str | None,
+    symbol: str | None,
+) -> dict[str, Any]:
     closed_groups = [group for group in groups if group["status"] == "closed"]
     open_groups = [group for group in groups if group["status"] == "open"]
     realized = [float(group["pnl"]) for group in closed_groups if group["pnl"] is not None]
@@ -218,7 +261,7 @@ def review_summary(
     expected_value = None if not realized else win_rate * average_profit - loss_rate * average_loss
     pnl = sum(realized)
     net_profit_per_share = None if traded_quantity <= 0 else pnl / traded_quantity
-    max_single_day_drawdown = _max_position_drawdown(closed_groups)
+    max_single_day_drawdown = _max_position_drawdown(conn, closed_groups)
     batch_ids = sorted({fill["source_batch_id"] for fill in fills})
     quarantine_count = 0
     if batch_ids:
@@ -227,11 +270,11 @@ def review_summary(
             f"SELECT COUNT(*) AS count FROM quarantine_rows WHERE batch_id IN ({placeholders})",
             batch_ids,
         ).fetchone()["count"]
-    elif date is None and canonical_symbol is None:
+    elif date is None and symbol is None:
         quarantine_count = conn.execute("SELECT COUNT(*) AS count FROM quarantine_rows").fetchone()["count"]
     return {
         "date": date,
-        "symbol": canonical_symbol,
+        "symbol": symbol,
         "fill_count": len(fills),
         "trade_group_count": len(closed_groups),
         "open_trade_group_count": len(open_groups),
@@ -255,15 +298,43 @@ def review_summary_groups(
     symbol: str | None = None,
 ) -> list[dict[str, Any]]:
     canonical_symbol = symbol.strip().upper() if symbol else None
+    all_fills = list_fills(conn, symbol=canonical_symbol)
+    all_groups = _light_trade_groups_from_fills(all_fills)
     if group_by == "date":
         group_keys = sorted(
-            {str(fill["filled_at"])[:10] for fill in list_fills(conn, symbol=canonical_symbol)},
+            {str(fill["filled_at"])[:10] for fill in all_fills},
             reverse=True,
         )
-        return [_summary_group_payload("date", key, review_summary(conn, date=key, symbol=canonical_symbol)) for key in group_keys]
+        return [
+            _summary_group_payload(
+                "date",
+                key,
+                _review_summary_from_models(
+                    conn,
+                    _filter_summary_fills(all_fills, date=key, symbol=canonical_symbol),
+                    _filter_summary_groups(all_groups, date=key, symbol=canonical_symbol),
+                    date=key,
+                    symbol=canonical_symbol,
+                ),
+            )
+            for key in group_keys
+        ]
     if group_by == "symbol":
-        group_keys = sorted({fill["symbol"] for fill in list_fills(conn, date=date, symbol=canonical_symbol)})
-        return [_summary_group_payload("symbol", key, review_summary(conn, date=date, symbol=key)) for key in group_keys]
+        group_keys = sorted({fill["symbol"] for fill in _filter_summary_fills(all_fills, date=date, symbol=canonical_symbol)})
+        return [
+            _summary_group_payload(
+                "symbol",
+                key,
+                _review_summary_from_models(
+                    conn,
+                    _filter_summary_fills(all_fills, date=date, symbol=key),
+                    _filter_summary_groups(all_groups, date=date, symbol=key),
+                    date=date,
+                    symbol=key,
+                ),
+            )
+            for key in group_keys
+        ]
     raise ValueError("unsupported_summary_group")
 
 
@@ -273,12 +344,157 @@ def list_trade_groups(
     date: str | None = None,
     account: str | None = None,
     symbol: str | None = None,
+    include_details: bool = True,
 ) -> list[dict[str, Any]]:
-    fills = _fills_with_internal_signatures(conn, account=account, symbol=symbol)
-    groups = [_public_trade_group(conn, group) for group in _build_trade_groups(fills)]
+    groups = _light_trade_groups(conn, account=account, symbol=symbol)
     if date:
         groups = [group for group in groups if _group_belongs_to_date(group, date)]
-    return groups
+    return [_public_trade_group(conn, group, include_details=include_details) for group in groups]
+
+
+def save_trade_group_review(
+    conn: sqlite3.Connection,
+    trade_group_id: str,
+    *,
+    reason_category: str,
+    reason_code: str,
+    note: str = "",
+) -> dict[str, Any]:
+    group = _find_trade_group(conn, trade_group_id)
+    if group["status"] != "closed" or group["pnl"] is None:
+        raise ValueError("trade_review_requires_closed_loss")
+    if float(group["pnl"]) >= 0:
+        raise ValueError("trade_review_requires_loss")
+    reason_label = _trade_review_reason_label(reason_category, reason_code)
+    now = _now()
+    idempotency_key = _trade_review_idempotency_key(trade_group_id)
+    cleaned_note = note.strip()
+    existing = conn.execute("SELECT id, created_at FROM trade_reviews WHERE trade_group_id = ?", (trade_group_id,)).fetchone()
+    review_id = existing["id"] if existing else new_id("review")
+    created_at = existing["created_at"] if existing else now
+    payload = (
+        review_id,
+        trade_group_id,
+        group["account_canonical"],
+        group["symbol"],
+        str(group["closed_at"])[:10],
+        float(group["pnl"]),
+        reason_category,
+        reason_code,
+        reason_label,
+        cleaned_note,
+        json.dumps(group["parser_versions"], ensure_ascii=False, sort_keys=True),
+        json.dumps(group["field_mapper_versions"], ensure_ascii=False, sort_keys=True),
+        json.dumps(group["source_batch_ids"], ensure_ascii=False, sort_keys=True),
+        json.dumps(group["raw_line_numbers"], ensure_ascii=False, sort_keys=True),
+        idempotency_key,
+        created_at,
+        now,
+    )
+    with conn:
+        if existing:
+            conn.execute(
+                """
+                UPDATE trade_reviews
+                SET account_canonical = ?, symbol = ?, trade_date = ?, pnl = ?,
+                    reason_category = ?, reason_code = ?, reason_label = ?, note = ?,
+                    parser_versions_json = ?, field_mapper_versions_json = ?,
+                    source_batch_ids_json = ?, raw_line_numbers_json = ?,
+                    idempotency_key = ?, updated_at = ?
+                WHERE trade_group_id = ?
+                """,
+                (
+                    payload[2],
+                    payload[3],
+                    payload[4],
+                    payload[5],
+                    payload[6],
+                    payload[7],
+                    payload[8],
+                    payload[9],
+                    payload[10],
+                    payload[11],
+                    payload[12],
+                    payload[13],
+                    payload[14],
+                    payload[16],
+                    trade_group_id,
+                ),
+            )
+        else:
+            conn.execute(
+                """
+                INSERT INTO trade_reviews (
+                    id, trade_group_id, account_canonical, symbol, trade_date, pnl,
+                    reason_category, reason_code, reason_label, note,
+                    parser_versions_json, field_mapper_versions_json,
+                    source_batch_ids_json, raw_line_numbers_json,
+                    idempotency_key, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                payload,
+            )
+    review = _trade_group_review(conn, trade_group_id)
+    if review is None:
+        raise KeyError(trade_group_id)
+    return review
+
+
+def _light_trade_groups(
+    conn: sqlite3.Connection,
+    *,
+    account: str | None = None,
+    symbol: str | None = None,
+) -> list[dict[str, Any]]:
+    return _light_trade_groups_from_fills(_fills_with_internal_signatures(conn, account=account, symbol=symbol))
+
+
+def _find_trade_group(conn: sqlite3.Connection, trade_group_id: str) -> dict[str, Any]:
+    for group in _light_trade_groups(conn):
+        if group["trade_group_id"] == trade_group_id:
+            return group
+    raise KeyError(trade_group_id)
+
+
+def _light_trade_groups_from_fills(fills: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    signed_fills = [
+        {
+            **fill,
+            "_idempotency_signature": hashlib.sha256(str(fill["idempotency_key"]).encode("utf-8")).hexdigest(),
+        }
+        for fill in fills
+    ]
+    return _build_trade_groups(signed_fills)
+
+
+def _filter_summary_fills(
+    fills: list[dict[str, Any]],
+    *,
+    date: str | None = None,
+    symbol: str | None = None,
+) -> list[dict[str, Any]]:
+    canonical_symbol = symbol.strip().upper() if symbol else None
+    return [
+        fill
+        for fill in fills
+        if (date is None or str(fill["filled_at"])[:10] == date)
+        and (canonical_symbol is None or fill["symbol"] == canonical_symbol)
+    ]
+
+
+def _filter_summary_groups(
+    groups: list[dict[str, Any]],
+    *,
+    date: str | None = None,
+    symbol: str | None = None,
+) -> list[dict[str, Any]]:
+    canonical_symbol = symbol.strip().upper() if symbol else None
+    return [
+        group
+        for group in groups
+        if (date is None or _group_belongs_to_date(group, date))
+        and (canonical_symbol is None or group["symbol"] == canonical_symbol)
+    ]
 
 
 def _should_reparse_existing_batch(existing: sqlite3.Row) -> bool:
@@ -303,10 +519,11 @@ def _summary_group_payload(group_by: str, group_key: str, summary: dict[str, Any
     }
 
 
-def _max_position_drawdown(closed_groups: list[dict[str, Any]]) -> float:
+def _max_position_drawdown(conn: sqlite3.Connection, closed_groups: list[dict[str, Any]]) -> float:
     drawdowns: list[float] = []
+    archive_cache: dict[tuple[str, str], dict[str, Any] | None] = {}
     for group in closed_groups:
-        position_drawdown = group.get("position_drawdown") or {}
+        position_drawdown = group.get("position_drawdown") or _trade_group_position_drawdown(conn, group, archive_cache=archive_cache)
         if position_drawdown.get("status") != "available":
             continue
         max_drawdown = position_drawdown.get("max_drawdown")
@@ -452,10 +669,20 @@ def _finalize_trade_group(state: dict[str, Any], *, status: str) -> dict[str, An
     return group
 
 
-def _public_trade_group(conn: sqlite3.Connection, group: dict[str, Any]) -> dict[str, Any]:
+def _public_trade_group(conn: sqlite3.Connection, group: dict[str, Any], *, include_details: bool = True) -> dict[str, Any]:
     public_group = {**group, "fills": [_public_trade_group_fill(fill) for fill in group["fills"]]}
     public_group["position_drawdown"] = _trade_group_position_drawdown(conn, public_group)
     public_group["evaluation"] = _evaluate_trade_group(conn, public_group)
+    public_group["details_loaded"] = include_details
+    public_group["review"] = _trade_group_review(conn, public_group["trade_group_id"])
+    if not include_details:
+        public_group["fills"] = []
+        public_group["evaluation"] = {
+            **public_group["evaluation"],
+            "factors": [],
+            "strengths": [],
+            "risks": [],
+        }
     return public_group
 
 
@@ -480,6 +707,53 @@ def _trade_group_id(group: dict[str, Any]) -> str:
         ]
     )
     return f"tg_{hashlib.sha256(source.encode('utf-8')).hexdigest()}"
+
+
+def _trade_group_review(conn: sqlite3.Connection, trade_group_id: str) -> dict[str, Any] | None:
+    row = conn.execute("SELECT * FROM trade_reviews WHERE trade_group_id = ?", (trade_group_id,)).fetchone()
+    return _public_trade_review(row_to_dict(row)) if row else None
+
+
+def _public_trade_review(review: dict[str, Any] | None) -> dict[str, Any] | None:
+    if not review:
+        return None
+    category = review["reason_category"]
+    return {
+        "id": review["id"],
+        "trade_group_id": review["trade_group_id"],
+        "account_canonical": review["account_canonical"],
+        "symbol": review["symbol"],
+        "trade_date": review["trade_date"],
+        "pnl": None if review["pnl"] is None else float(review["pnl"]),
+        "reason_category": category,
+        "reason_category_label": TRADE_REVIEW_CATEGORY_LABELS[category],
+        "reason_code": review["reason_code"],
+        "reason_label": review["reason_label"],
+        "note": review["note"],
+        "parser_versions": json.loads(review["parser_versions_json"]),
+        "field_mapper_versions": json.loads(review["field_mapper_versions_json"]),
+        "source_batch_ids": json.loads(review["source_batch_ids_json"]),
+        "raw_line_numbers": json.loads(review["raw_line_numbers_json"]),
+        "source": review["source"],
+        "artifact_source": review["artifact_source"],
+        "idempotency_key": review["idempotency_key"],
+        "created_at": review["created_at"],
+        "updated_at": review["updated_at"],
+    }
+
+
+def _trade_review_reason_label(reason_category: str, reason_code: str) -> str:
+    if reason_category not in TRADE_REVIEW_REASON_OPTIONS:
+        raise ValueError("unsupported_trade_review_category")
+    for option in TRADE_REVIEW_REASON_OPTIONS[reason_category]:
+        if option["code"] == reason_code:
+            return option["label"]
+    raise ValueError("unsupported_trade_review_reason")
+
+
+def _trade_review_idempotency_key(trade_group_id: str) -> str:
+    source = f"{TRADE_REVIEW_VERSION}:{trade_group_id}"
+    return hashlib.sha256(source.encode("utf-8")).hexdigest()
 
 
 def _weighted_average_price(fills: list[dict[str, Any]]) -> float | None:
@@ -546,8 +820,15 @@ def _evaluate_trade_group(conn: sqlite3.Connection, group: dict[str, Any]) -> di
     }
 
 
-def _find_trade_group_archive(conn: sqlite3.Connection, group: dict[str, Any]) -> dict[str, Any] | None:
+def _find_trade_group_archive(
+    conn: sqlite3.Connection,
+    group: dict[str, Any],
+    archive_cache: dict[tuple[str, str], dict[str, Any] | None] | None = None,
+) -> dict[str, Any] | None:
     trade_date = str(group["opened_at"])[:10]
+    cache_key = (group["symbol"], trade_date)
+    if archive_cache is not None and cache_key in archive_cache:
+        return archive_cache[cache_key]
     row = conn.execute(
         """
         SELECT * FROM market_minute_archives
@@ -557,10 +838,18 @@ def _find_trade_group_archive(conn: sqlite3.Connection, group: dict[str, Any]) -
         """,
         (group["symbol"], trade_date),
     ).fetchone()
-    return row_to_dict(row)
+    archive = row_to_dict(row)
+    if archive_cache is not None:
+        archive_cache[cache_key] = archive
+    return archive
 
 
-def _trade_group_position_drawdown(conn: sqlite3.Connection, group: dict[str, Any]) -> dict[str, Any]:
+def _trade_group_position_drawdown(
+    conn: sqlite3.Connection,
+    group: dict[str, Any],
+    *,
+    archive_cache: dict[tuple[str, str], dict[str, Any] | None] | None = None,
+) -> dict[str, Any]:
     base = {
         "status": "not_applicable_open_trade" if group["status"] != "closed" else "insufficient_market_data",
         "max_drawdown": None,
@@ -575,15 +864,26 @@ def _trade_group_position_drawdown(conn: sqlite3.Connection, group: dict[str, An
         "window_low": None,
         "worst_price": None,
         "price_basis": None,
+        "entry_atr_period": TRADE_GROUP_ENTRY_ATR_PERIOD,
+        "entry_atr": None,
+        "entry_bar_range": None,
+        "entry_atr_multiple": None,
+        "entry_atr_regime": "missing",
+        "entry_atr_source_archive_id": None,
+        "entry_atr_bars_hash": None,
+        "entry_atr_bar_timestamp": None,
+        "entry_atr_failure_reason": None,
     }
-    if group["status"] != "closed":
-        return base
 
-    archive = _find_trade_group_archive(conn, group)
+    archive = _find_trade_group_archive(conn, group, archive_cache)
     if not archive or archive["data_status"] in {"provider_failed", "missing", "timezone_conflict"}:
-        return base
+        return {**base, "entry_atr_failure_reason": "missing_market_data"}
     bars = json.loads(archive["bars_json"])
     if not bars:
+        return {**base, "entry_atr_failure_reason": "missing_market_data"}
+
+    base = {**base, **_trade_group_entry_atr_payload(bars, str(group["opened_at"]), archive)}
+    if group["status"] != "closed":
         return base
 
     scoped = _bars_for_trade_window(bars, str(group["opened_at"]), str(group["closed_at"]))
@@ -618,6 +918,98 @@ def _trade_group_position_drawdown(conn: sqlite3.Connection, group: dict[str, An
         "worst_price": round(worst_price, 6),
         "price_basis": "minute_high_low",
     }
+
+
+def _trade_group_entry_atr_payload(
+    bars: list[dict[str, Any]],
+    opened_at: str,
+    archive: dict[str, Any],
+) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "entry_atr_source_archive_id": archive["id"],
+        "entry_atr_bars_hash": archive["bars_hash"],
+        "entry_atr_failure_reason": None,
+    }
+    opened_minute = _clock_minute(opened_at)
+    ordered_bars = sorted(
+        [(minute, bar) for bar in bars if (minute := _clock_minute(str(bar.get("timestamp", "")))) is not None],
+        key=lambda item: item[0],
+    )
+    if opened_minute is None or not ordered_bars:
+        return {**payload, "entry_atr_failure_reason": "entry_bar_not_found"}
+
+    entry_index = next((index for index, (minute, _bar) in enumerate(ordered_bars) if minute >= opened_minute), None)
+    if entry_index is None:
+        return {**payload, "entry_atr_failure_reason": "entry_bar_not_found"}
+    if entry_index < TRADE_GROUP_ENTRY_ATR_PERIOD:
+        return {**payload, "entry_atr_failure_reason": "insufficient_atr_history"}
+
+    history = ordered_bars[entry_index - TRADE_GROUP_ENTRY_ATR_PERIOD : entry_index]
+    true_ranges: list[float] = []
+    previous_bar: dict[str, Any] | None = None
+    if entry_index - TRADE_GROUP_ENTRY_ATR_PERIOD > 0:
+        previous_bar = ordered_bars[entry_index - TRADE_GROUP_ENTRY_ATR_PERIOD - 1][1]
+    for _minute, bar in history:
+        true_range = _bar_true_range(bar, previous_bar)
+        if true_range is None:
+            return {**payload, "entry_atr_failure_reason": "invalid_atr"}
+        true_ranges.append(true_range)
+        previous_bar = bar
+
+    entry_bar = ordered_bars[entry_index][1]
+    entry_bar_range = _bar_range(entry_bar)
+    if entry_bar_range is None:
+        return {**payload, "entry_atr_failure_reason": "invalid_atr"}
+    entry_atr = sum(true_ranges) / len(true_ranges)
+    if entry_atr <= 0:
+        return {**payload, "entry_atr_failure_reason": "invalid_atr"}
+
+    entry_atr_multiple = entry_bar_range / entry_atr
+    return {
+        **payload,
+        "entry_atr": round(entry_atr, 6),
+        "entry_bar_range": round(entry_bar_range, 6),
+        "entry_atr_multiple": round(entry_atr_multiple, 6),
+        "entry_atr_regime": _entry_atr_regime(entry_atr_multiple),
+        "entry_atr_bar_timestamp": entry_bar.get("timestamp"),
+    }
+
+
+def _entry_atr_regime(entry_atr_multiple: float) -> str:
+    if entry_atr_multiple > 3.0:
+        return "extreme"
+    if entry_atr_multiple >= 1.5:
+        return "high"
+    if entry_atr_multiple >= 0.5:
+        return "normal"
+    return "low"
+
+
+def _bar_true_range(bar: dict[str, Any], previous_bar: dict[str, Any] | None) -> float | None:
+    high = _bar_number(bar, "high")
+    low = _bar_number(bar, "low")
+    if high is None or low is None:
+        return None
+    ranges = [max(high - low, 0.0)]
+    previous_close = None if previous_bar is None else _bar_number(previous_bar, "close")
+    if previous_close is not None:
+        ranges.extend([abs(high - previous_close), abs(low - previous_close)])
+    return max(ranges)
+
+
+def _bar_range(bar: dict[str, Any]) -> float | None:
+    high = _bar_number(bar, "high")
+    low = _bar_number(bar, "low")
+    if high is None or low is None:
+        return None
+    return max(high - low, 0.0)
+
+
+def _bar_number(bar: dict[str, Any], key: str) -> float | None:
+    try:
+        return float(bar[key])
+    except (KeyError, TypeError, ValueError):
+        return None
 
 
 def _trade_evaluation_factors(
