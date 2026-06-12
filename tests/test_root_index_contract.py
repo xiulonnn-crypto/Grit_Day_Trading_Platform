@@ -14,8 +14,16 @@ def test_root_index_static_review_tabs_are_switchable() -> None:
     assert 'class="workspaceTabs"' in html
     assert "\u7b56\u7565\u6d4b\u8bd5" in html
     assert "\u5b9e\u65f6\u4ea4\u6613" in html
+    assert "\u76c8\u4e8f\u590d\u76d8" in html
+    assert "\u4ec5\u770b\u76c8\u5229\u5355" in html
+    assert "\u4ec5\u770b\u4e8f\u635f\u5355" in html
     assert "\u70ed\u529b\u65f6\u95f4\u77e9\u9635" in html
     assert 'document.querySelectorAll("[data-review-tab]")' in html
+    assert 'class="reviewDrillSurfaceTabs"' in html
+    assert 'class="reviewDrillSurfaceTab active"' in html
+    assert 'document.querySelectorAll(\'input[name="static-profit-loss-filter"]\')' in html
+    assert 'lossReviewPanel.setAttribute("data-profit-loss-view", input.value)' in html
+    assert 'candidate.closest(".profitLossReviewModeOption")' in html
     assert "function selectReviewTab(target)" in html
     assert 'panel.hidden = key !== target' in html
     assert 'reviewViewParam === "data"' in html
@@ -41,10 +49,20 @@ def test_root_index_defaults_to_loss_review_panel() -> None:
     ) in html
     assert (
         'id="loss-review-panel" role="tabpanel" '
-        'aria-labelledby="loss-review-tab">'
+        'aria-labelledby="loss-review-tab" data-profit-loss-view="loss">'
     ) in html
-    assert "\u4e8f\u635f\u590d\u76d8" in html
-    assert "\u4e8f\u635f\u70ed\u529b\u65f6\u95f4\u77e9\u9635" in html
+    assert "\u76c8\u4e8f\u590d\u76d8" in html
+    assert "\u4e8f\u635f\u5355\u70ed\u529b\u65f6\u95f4\u77e9\u9635" in html
+    assert "\u76c8\u5229\u5355\u70ed\u529b\u65f6\u95f4\u77e9\u9635" in html
     assert "\u539f\u56e0\u5206\u7c7b\u6c47\u603b" in html
+    assert "\u4e00\u7ea7\u539f\u56e0" in html
+    assert "\u4e8c\u7ea7\u539f\u56e0" in html
+    assert "\u6682\u65e0\u539f\u56e0\u5206\u7c7b" in html
+    assert "\u4ec5\u4e8f\u635f\u5355\u7ef4\u62a4 Review Journal \u5f52\u56e0\uff1b\u76c8\u5229\u5355\u4e0d\u4f1a\u5199\u5165\u4e8f\u635f\u539f\u56e0\u3002" in html
     assert "\u4e8f\u635f\u5355\u5217\u8868" in html
+    assert "\u76c8\u5229\u5355\u5217\u8868" in html
+    assert 'class="profitOnlyContent emptyState"' in html
+    assert 'class="lossOnlyContent"' in html
+    assert 'class="lossTradeList profitVisible"' in html
     assert "\u6700\u5927\u4e8f\u635f\u533a\uff1a\u65e9\u76d8\u9ad8\u52a8\u80fd \u00d7 \u9ad8\u6ce2\u52a8" in html
+    assert "\u6700\u5927\u76c8\u5229\u533a\uff1a\u5c3e\u76d8\u84c4\u52bf\u671f \u00d7 \u9ad8\u6ce2\u52a8" in html

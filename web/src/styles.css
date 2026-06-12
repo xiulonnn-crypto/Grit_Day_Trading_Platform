@@ -448,6 +448,41 @@ h2 {
   gap: 6px;
 }
 
+.profitLossReviewModeSwitch {
+  align-items: center;
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.profitLossReviewModeOption {
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid #c8d1d9;
+  border-radius: 8px;
+  color: #344658;
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 13px;
+  font-weight: 800;
+  gap: 7px;
+  min-height: 34px;
+  padding: 7px 11px;
+}
+
+.profitLossReviewModeOption.active {
+  background: #eef8f6;
+  border-color: #1f6f67;
+  color: #0f5f58;
+}
+
+.profitLossReviewModeOption input {
+  accent-color: #1f6f67;
+  height: 15px;
+  margin: 0;
+  width: 15px;
+}
+
 .lossReviewCustomRange {
   align-items: center;
   display: inline-flex;

@@ -138,7 +138,8 @@
       }
 
       .workspaceTabs,
-      .surfaceTabs {
+      .surfaceTabs,
+      .reviewDrillSurfaceTabs {
         align-items: center;
         background: #edf3f6;
         border: 1px solid #d5e1e7;
@@ -154,7 +155,8 @@
       }
 
       .workspaceTab,
-      .surfaceTab {
+      .surfaceTab,
+      .reviewDrillSurfaceTab {
         border-color: transparent;
         color: #344658;
         font-weight: 800;
@@ -162,6 +164,7 @@
 
       .workspaceTab.active,
       .surfaceTab.active,
+      .reviewDrillSurfaceTab.active,
       .smallButton.active {
         background: #1f6f67;
         border-color: #1f6f67;
@@ -182,6 +185,13 @@
         display: none;
       }
 
+      #loss-review-panel[data-profit-loss-view="loss"] .profitVisible,
+      #loss-review-panel[data-profit-loss-view="loss"] .profitOnlyContent,
+      #loss-review-panel[data-profit-loss-view="profit"] .lossVisible,
+      #loss-review-panel[data-profit-loss-view="profit"] .lossOnlyContent {
+        display: none;
+      }
+
       .timeFilter {
         align-items: center;
         background: #fbfcfd;
@@ -195,11 +205,39 @@
       }
 
       .timeFilterButtons,
+      .profitLossReviewModeSwitch,
       .sortControls {
         align-items: center;
         display: inline-flex;
         flex-wrap: wrap;
         gap: 6px;
+      }
+
+      .profitLossReviewModeOption {
+        align-items: center;
+        background: #ffffff;
+        border: 1px solid #c8d1d9;
+        border-radius: 8px;
+        color: #344658;
+        display: inline-flex;
+        font-size: 13px;
+        font-weight: 800;
+        gap: 7px;
+        min-height: 34px;
+        padding: 7px 11px;
+      }
+
+      .profitLossReviewModeOption.active {
+        background: #eef8f6;
+        border-color: #1f6f67;
+        color: #0f5f58;
+      }
+
+      .profitLossReviewModeOption input {
+        accent-color: #1f6f67;
+        height: 15px;
+        margin: 0;
+        width: 15px;
       }
 
       .smallButton {
@@ -469,6 +507,131 @@
         padding: 12px;
       }
 
+      .lossReviewPieWrap {
+        align-items: center;
+        display: grid;
+        gap: 12px;
+        grid-template-columns: 118px minmax(0, 1fr);
+      }
+
+      .lossReviewPie {
+        aspect-ratio: 1;
+        border: 1px solid #d8e2e6;
+        border-radius: 50%;
+        display: grid;
+        padding: 18px;
+        place-items: center;
+        position: relative;
+      }
+
+      .lossReviewPie::after {
+        background: #ffffff;
+        border: 1px solid #e3e9ed;
+        border-radius: 50%;
+        content: "";
+        inset: 23%;
+        position: absolute;
+      }
+
+      .lossReviewPie span,
+      .lossReviewPie small {
+        position: relative;
+        z-index: 1;
+      }
+
+      .lossReviewPie span {
+        color: #17212b;
+        font-size: 22px;
+        font-weight: 900;
+        line-height: 1;
+      }
+
+      .lossReviewPie small {
+        color: #607080;
+        font-size: 11px;
+        font-weight: 800;
+      }
+
+      .lossReviewPieLegend {
+        display: grid;
+        gap: 7px;
+        min-width: 0;
+      }
+
+      .lossReviewFilterOption {
+        align-items: center;
+        background: #ffffff;
+        border: 1px solid #e3e9ed;
+        border-radius: 8px;
+        display: grid;
+        gap: 8px;
+        grid-template-columns: auto auto minmax(0, 1fr);
+        min-width: 0;
+        padding: 8px;
+      }
+
+      .lossReviewFilterOption.active {
+        background: #eef8f6;
+        border-color: #2d8b7f;
+      }
+
+      .lossReviewFilterOption input {
+        accent-color: #1f6f67;
+        margin: 0;
+      }
+
+      .lossReviewLegendSwatch {
+        border-radius: 4px;
+        height: 16px;
+        width: 16px;
+      }
+
+      .lossReviewLegendText {
+        display: grid;
+        gap: 3px;
+        min-width: 0;
+      }
+
+      .lossReviewLegendText strong,
+      .lossReviewLegendText small {
+        overflow-wrap: anywhere;
+      }
+
+      .lossReviewLegendText strong {
+        color: #1f2933;
+        font-size: 13px;
+      }
+
+      .lossReviewLegendText small {
+        color: #607080;
+        font-size: 12px;
+        line-height: 1.35;
+      }
+
+      .emptyState {
+        align-items: center;
+        background: #fbfcfd;
+        border: 1px dashed #c8d1d9;
+        border-radius: 8px;
+        color: #405160;
+        display: flex;
+        gap: 10px;
+        min-height: 118px;
+        padding: 14px;
+      }
+
+      .emptyState strong {
+        color: #1f2933;
+        display: block;
+      }
+
+      .emptyState p {
+        color: #607080;
+        font-size: 12px;
+        line-height: 1.45;
+        margin-top: 4px;
+      }
+
       .reasonRows,
       .lossTradeList {
         display: grid;
@@ -544,6 +707,7 @@
 
         .workspaceTabs,
         .surfaceTabs,
+        .reviewDrillSurfaceTabs,
         .uploadButton {
           width: 100%;
         }
@@ -583,9 +747,9 @@
       </nav>
 
       <section class="reviewDrillPanel" aria-label="交易复盘下钻">
-        <div class="surfaceTabs" role="tablist" aria-label="下钻复盘模块">
-          <button class="surfaceTab" id="data-review-tab" data-review-tab="data" role="tab" aria-controls="data-review-panel" aria-selected="false" type="button"><span class="buttonIcon">▦</span>数据下钻</button>
-          <button class="surfaceTab active" id="loss-review-tab" data-review-tab="loss" role="tab" aria-controls="loss-review-panel" aria-selected="true" type="button"><span class="buttonIcon">!</span>亏损复盘</button>
+        <div class="reviewDrillSurfaceTabs" role="tablist" aria-label="下钻复盘模块">
+          <button class="reviewDrillSurfaceTab" id="data-review-tab" data-review-tab="data" role="tab" aria-controls="data-review-panel" aria-selected="false" type="button"><span class="buttonIcon">▦</span>数据下钻</button>
+          <button class="reviewDrillSurfaceTab active" id="loss-review-tab" data-review-tab="loss" role="tab" aria-controls="loss-review-panel" aria-selected="true" type="button"><span class="buttonIcon">!</span>盈亏复盘</button>
         </div>
 
         <section class="surfacePanel" id="data-review-panel" role="tabpanel" aria-labelledby="data-review-tab" hidden>
@@ -596,11 +760,11 @@
               <button class="smallButton" type="button">本周</button>
               <button class="smallButton" type="button">特定时间段</button>
             </div>
-            <span class="toolbarMeta">全部亏损单</span>
+            <span class="toolbarMeta">全部订单</span>
           </div>
 
           <section class="kpis" aria-label="数据下钻指标">
-            <article class="metric"><span>成交股数</span><strong>9,585</strong><small>仅来自 committed fills · 全部亏损单</small></article>
+            <article class="metric"><span>成交股数</span><strong>9,585</strong><small>仅来自 committed fills · 全部订单</small></article>
             <article class="metric ok"><span>PnL</span><strong>+1,781.27</strong></article>
             <article class="metric"><span>胜率</span><strong>91.34%</strong></article>
             <article class="metric"><span>盈亏比</span><strong>1.19</strong></article>
@@ -658,81 +822,134 @@
           </section>
         </section>
 
-        <section class="surfacePanel" id="loss-review-panel" role="tabpanel" aria-labelledby="loss-review-tab">
+        <section class="surfacePanel" id="loss-review-panel" role="tabpanel" aria-labelledby="loss-review-tab" data-profit-loss-view="loss">
           <header class="lossReviewHeader">
             <div>
-              <h2><span class="buttonIcon">!</span>亏损复盘</h2>
-              <p class="panelNote">按全局时间范围查看亏损交易组的原因分类汇总和明细入口</p>
+              <h2><span class="buttonIcon">!</span>盈亏复盘</h2>
+              <p class="panelNote">默认查看亏损交易组；切到盈利单时只展示热力矩阵和订单明细</p>
             </div>
             <span class="sourcePill">Review Journal</span>
           </header>
 
-          <div class="timeFilter" aria-label="亏损复盘全局时间筛选">
-            <div class="timeFilterButtons" role="group" aria-label="亏损复盘时间筛选">
+          <div class="timeFilter" aria-label="盈亏复盘全局时间筛选">
+            <div class="timeFilterButtons" role="group" aria-label="盈亏复盘时间筛选">
               <button class="smallButton active" type="button">全部</button>
               <button class="smallButton" type="button">本月</button>
               <button class="smallButton" type="button">本周</button>
               <button class="smallButton" type="button">特定时间段</button>
             </div>
-            <span class="toolbarMeta">全部亏损单</span>
+            <div class="profitLossReviewModeSwitch" role="radiogroup" aria-label="盈亏单筛选">
+              <label class="profitLossReviewModeOption">
+                <input name="static-profit-loss-filter" type="radio" value="profit" />
+                <span>仅看盈利单</span>
+              </label>
+              <label class="profitLossReviewModeOption active">
+                <input checked name="static-profit-loss-filter" type="radio" value="loss" />
+                <span>仅看亏损单</span>
+              </label>
+            </div>
           </div>
 
           <dl class="compactFacts lossSummaryGrid">
-            <div><dt>亏损单</dt><dd>18</dd></div>
-            <div><dt>已复盘</dt><dd>12</dd></div>
-            <div><dt>待复盘</dt><dd>6</dd></div>
-            <div><dt>亏损合计</dt><dd class="bad">-842.70</dd></div>
+            <div><dt><span class="lossVisible">亏损单</span><span class="profitVisible">盈利单</span></dt><dd><span class="lossVisible">18</span><span class="profitVisible">14</span></dd></div>
+            <div><dt><span class="lossVisible">已复盘</span><span class="profitVisible">原因记录</span></dt><dd><span class="lossVisible">12</span><span class="profitVisible">不适用</span></dd></div>
+            <div><dt><span class="lossVisible">待复盘</span><span class="profitVisible">原因筛选</span></dt><dd><span class="lossVisible">6</span><span class="profitVisible">空</span></dd></div>
+            <div><dt><span class="lossVisible">亏损合计</span><span class="profitVisible">盈利合计</span></dt><dd><span class="bad lossVisible">-842.70</span><span class="ok profitVisible">+1,209.00</span></dd></div>
           </dl>
 
-          <section class="matrixPanel" aria-label="亏损复盘热力时间矩阵">
+          <section class="matrixPanel" aria-label="盈亏复盘热力时间矩阵">
             <header class="matrixHeader">
               <div>
-                <h3>亏损热力时间矩阵</h3>
-                <p class="panelNote">只读定位最大亏损区；矩阵格不筛选订单明细</p>
+                <h3><span class="lossVisible">亏损单热力时间矩阵</span><span class="profitVisible">盈利单热力时间矩阵</span></h3>
+                <p class="panelNote"><span class="lossVisible">按美股常规盘五大微观结构窗口 × 开仓 ATR Multiple 查看亏损单分布</span><span class="profitVisible">按美股常规盘五大微观结构窗口 × 开仓 ATR Multiple 查看盈利单分布</span></p>
               </div>
               <div class="matrixSummary">
-                <strong class="bad">最大亏损区：早盘高动能 × 高波动 · -1,424.77</strong>
+                <span class="sourcePill"><span class="lossVisible">亏损单</span><span class="profitVisible">盈利单</span></span>
+                <strong class="bad lossVisible">最大亏损区：早盘高动能 × 高波动 · -1,424.77</strong>
+                <strong class="ok profitVisible">最大盈利区：尾盘蓄势期 × 高波动 · +1,209.00</strong>
               </div>
             </header>
             <div class="matrixScroll">
               <div class="matrixGrid lossMatrixGrid">
                 <div class="matrixCorner"></div>
-                <div class="matrixAxis matrixColumnHead"><strong>09:30-10:30</strong><small>早盘高动能</small></div>
-                <div class="matrixAxis matrixColumnHead"><strong>10:30-11:30</strong><small>早盘至中盘过渡</small></div>
-                <div class="matrixAxis matrixColumnHead"><strong>11:30-13:30</strong><small>中盘死寂垃圾时间</small></div>
-                <div class="matrixAxis matrixColumnHead"><strong>13:30-15:00</strong><small>尾盘蓄势期</small></div>
-                <div class="matrixAxis matrixColumnHead"><strong>15:00-16:00</strong><small>尾盘生死时速</small></div>
+                <div class="matrixAxis matrixColumnHead"><strong>早盘高动能</strong><small>09:30-10:30</small></div>
+                <div class="matrixAxis matrixColumnHead"><strong>早盘至中盘过渡</strong><small>10:30-11:30</small></div>
+                <div class="matrixAxis matrixColumnHead"><strong>中盘死寂垃圾时间</strong><small>11:30-13:30</small></div>
+                <div class="matrixAxis matrixColumnHead"><strong>尾盘蓄势期</strong><small>13:30-15:00</small></div>
+                <div class="matrixAxis matrixColumnHead"><strong>尾盘生死时速</strong><small>15:00-16:00</small></div>
                 <div class="matrixAxis matrixRowHead"><strong>极端冲击</strong><small>&gt; 3.0 x ATR</small></div>
-                <div class="matrixCell intensity2"><strong>2</strong><span class="bad">-187.20</span><small>最大 -239.20</small></div>
-                <div class="matrixCell empty"><strong>0</strong><span>0.00</span><small>最大 N/A</small></div>
-                <div class="matrixCell empty"><strong>0</strong><span>0.00</span><small>最大 N/A</small></div>
-                <div class="matrixCell empty"><strong>0</strong><span>0.00</span><small>最大 N/A</small></div>
-                <div class="matrixCell empty"><strong>0</strong><span>0.00</span><small>最大 N/A</small></div>
+                <div class="matrixCell intensity2"><strong>2</strong><span class="bad">-187.20</span><small>1.43% · 最大 -239.20</small></div>
+                <div class="matrixCell empty"><strong>0</strong><span>0.00</span><small>0.00% · 最大 N/A</small></div>
+                <div class="matrixCell empty"><strong>0</strong><span>0.00</span><small>0.00% · 最大 N/A</small></div>
+                <div class="matrixCell empty"><strong>0</strong><span>0.00</span><small>0.00% · 最大 N/A</small></div>
+                <div class="matrixCell empty"><strong>0</strong><span>0.00</span><small>0.00% · 最大 N/A</small></div>
                 <div class="matrixAxis matrixRowHead"><strong>高波动</strong><small>1.5-3.0 x ATR</small></div>
-                <div class="matrixCell intensity4"><strong>10</strong><span class="bad">-1,424.77</span><small>最大 -1,767.60</small></div>
-                <div class="matrixCell intensity1"><strong>2</strong><span class="ok">+71.20</span><small>最大 +23.20</small></div>
-                <div class="matrixCell intensity1"><strong>3</strong><span class="ok">+180.10</span><small>最大 +24.40</small></div>
-                <div class="matrixCell intensity2"><strong>8</strong><span class="ok">+1,209.00</span><small>最大 -82.00</small></div>
-                <div class="matrixCell intensity1"><strong>3</strong><span class="ok">+112.30</span><small>最大 -9.10</small></div>
+                <div class="matrixCell intensity4"><strong>10</strong><span class="bad">-1,424.77</span><small>10.33% · 最大 -1,767.60</small></div>
+                <div class="matrixCell intensity1"><strong>2</strong><span class="ok">+71.20</span><small>0.35% · 最大 +23.20</small></div>
+                <div class="matrixCell intensity1"><strong>3</strong><span class="ok">+180.10</span><small>0.88% · 最大 +24.40</small></div>
+                <div class="matrixCell intensity2"><strong>8</strong><span class="ok">+1,209.00</span><small>6.72% · 最大 -82.00</small></div>
+                <div class="matrixCell intensity1"><strong>3</strong><span class="ok">+112.30</span><small>0.64% · 最大 -9.10</small></div>
               </div>
             </div>
           </section>
 
           <div class="lossReviewLayout">
-            <section class="reasonPanel" aria-label="亏损原因分类汇总">
+            <section class="reasonPanel" aria-label="原因分类汇总">
               <div class="detailHead">
                 <div>
                   <h3>原因分类汇总</h3>
-                  <p class="panelNote">一级原因与二级原因联动多选筛选</p>
+                  <p class="panelNote"><span class="lossVisible">一级原因与二级原因联动多选筛选</span><span class="profitVisible">盈利单不写入亏损原因，原因模块保持为空</span></p>
                 </div>
-                <span class="sourcePill">0 个筛选</span>
+                <span class="sourcePill"><span class="lossVisible">0 个筛选</span><span class="profitVisible">空</span></span>
               </div>
-              <div class="reasonChart">
-                <div class="reasonChartHead"><div><strong>一级原因</strong><small>按一级原因统计；未选择时显示全部</small></div></div>
-                <div class="reasonRows">
-                  <div class="reasonOption active"><strong>开仓信号 · 45%</strong><div class="reasonBar"><span style="width: 45%;"></span></div></div>
-                  <div class="reasonOption"><strong>平仓信号 · 33%</strong><div class="reasonBar"><span style="width: 33%;"></span></div></div>
-                  <div class="reasonOption"><strong>误操作 · 22%</strong><div class="reasonBar"><span style="width: 22%;"></span></div></div>
+              <div class="lossOnlyContent">
+                <div class="reasonChart">
+                  <div class="reasonChartHead">
+                    <div>
+                      <strong>一级原因</strong>
+                      <small>按一级原因统计；未选择时显示全部</small>
+                    </div>
+                    <span class="sourcePill">18 笔</span>
+                  </div>
+                  <div class="lossReviewPieWrap">
+                    <div class="lossReviewPie" style="background: conic-gradient(#1f6f67 0 45%, #4f63a8 45% 78%, #ad6800 78% 100%);">
+                      <span>18</span>
+                      <small>亏损单</small>
+                    </div>
+                    <div class="lossReviewPieLegend" aria-label="一级原因多选筛选">
+                      <label class="lossReviewFilterOption active"><input checked type="checkbox" /><span class="lossReviewLegendSwatch" style="background-color:#1f6f67"></span><span class="lossReviewLegendText"><strong>开仓信号</strong><small>8 笔 · 45% · -411.80</small></span></label>
+                      <label class="lossReviewFilterOption"><input type="checkbox" /><span class="lossReviewLegendSwatch" style="background-color:#4f63a8"></span><span class="lossReviewLegendText"><strong>平仓信号</strong><small>6 笔 · 33% · -276.20</small></span></label>
+                      <label class="lossReviewFilterOption"><input type="checkbox" /><span class="lossReviewLegendSwatch" style="background-color:#ad6800"></span><span class="lossReviewLegendText"><strong>误操作</strong><small>4 笔 · 22% · -154.70</small></span></label>
+                    </div>
+                  </div>
+                </div>
+                <div class="reasonChart">
+                  <div class="reasonChartHead">
+                    <div>
+                      <strong>二级原因</strong>
+                      <small>随一级原因筛选联动；未选择时显示全部</small>
+                    </div>
+                    <span class="sourcePill">18 笔</span>
+                  </div>
+                  <div class="lossReviewPieWrap">
+                    <div class="lossReviewPie" style="background: conic-gradient(#1f6f67 0 39%, #4f63a8 39% 67%, #ad6800 67% 83%, #2d8b7f 83% 100%);">
+                      <span>18</span>
+                      <small>亏损单</small>
+                    </div>
+                    <div class="lossReviewPieLegend" aria-label="二级原因多选筛选">
+                      <label class="lossReviewFilterOption active"><input checked type="checkbox" /><span class="lossReviewLegendSwatch" style="background-color:#1f6f67"></span><span class="lossReviewLegendText"><strong>追高突破失败</strong><small>7 笔 · 39% · -322.10</small></span></label>
+                      <label class="lossReviewFilterOption"><input type="checkbox" /><span class="lossReviewLegendSwatch" style="background-color:#4f63a8"></span><span class="lossReviewLegendText"><strong>止损迟疑</strong><small>5 笔 · 28% · -238.40</small></span></label>
+                      <label class="lossReviewFilterOption"><input type="checkbox" /><span class="lossReviewLegendSwatch" style="background-color:#ad6800"></span><span class="lossReviewLegendText"><strong>仓位过大</strong><small>3 笔 · 16% · -152.90</small></span></label>
+                      <label class="lossReviewFilterOption"><input type="checkbox" /><span class="lossReviewLegendSwatch" style="background-color:#2d8b7f"></span><span class="lossReviewLegendText"><strong>计划未执行</strong><small>3 笔 · 17% · -129.30</small></span></label>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="profitOnlyContent emptyState">
+                <span class="buttonIcon">○</span>
+                <div>
+                  <strong>暂无原因分类</strong>
+                  <p>仅亏损单维护 Review Journal 归因；盈利单不会写入亏损原因。</p>
                 </div>
               </div>
             </section>
@@ -740,19 +957,19 @@
             <section class="lossListPanel" aria-label="亏损单列表明细">
               <div class="detailHead">
                 <div>
-                  <h3>亏损单列表</h3>
-                  <p class="panelNote">默认按时间倒序，每页 20 笔；可叠加原因筛选</p>
+                  <h3><span class="lossVisible">亏损单列表</span><span class="profitVisible">盈利单列表</span></h3>
+                  <p class="panelNote"><span class="lossVisible">默认按时间倒序，每页 20 笔；可叠加原因筛选</span><span class="profitVisible">默认按时间倒序，每页 20 笔；盈利视图不叠加原因筛选</span></p>
                 </div>
-                <span class="sourcePill">1-3 / 18 笔</span>
+                <span class="sourcePill"><span class="lossVisible">1-3 / 18 笔</span><span class="profitVisible">1-3 / 14 笔</span></span>
               </div>
               <div class="listToolbar">
                 <div class="sortControls" role="group" aria-label="亏损单排序">
                   <button class="smallButton active" type="button">按时间倒序</button>
-                  <button class="smallButton" type="button">按亏损金额倒序</button>
+                  <button class="smallButton" type="button"><span class="lossVisible">按亏损金额倒序</span><span class="profitVisible">按盈利金额倒序</span></button>
                 </div>
                 <span class="toolbarMeta">20 笔/页</span>
               </div>
-              <div class="lossTradeList">
+              <div class="lossTradeList lossVisible">
                 <article class="lossTradeItem">
                   <div class="lossTradeMain"><strong>2026-06-04 · MU</strong><small>多头 · 320 股 · 18 分钟</small></div>
                   <dl class="compactFacts lossTradeFacts"><div><dt>PnL</dt><dd class="bad">-188.40</dd></div><div><dt>复盘</dt><dd>开仓信号</dd></div><div><dt>原因</dt><dd>追高突破失败</dd></div></dl>
@@ -766,6 +983,23 @@
                 <article class="lossTradeItem">
                   <div class="lossTradeMain"><strong>2026-06-02 · AMD</strong><small>多头 · 180 股 · 9 分钟</small></div>
                   <dl class="compactFacts lossTradeFacts"><div><dt>PnL</dt><dd class="bad">-96.70</dd></div><div><dt>复盘</dt><dd>误操作</dd></div><div><dt>原因</dt><dd>仓位过大</dd></div></dl>
+                  <button class="linkButton" type="button">下钻复盘</button>
+                </article>
+              </div>
+              <div class="lossTradeList profitVisible">
+                <article class="lossTradeItem">
+                  <div class="lossTradeMain"><strong>2026-06-04 · TSLA</strong><small>多头 · 260 股 · 16 分钟</small></div>
+                  <dl class="compactFacts lossTradeFacts"><div><dt>PnL</dt><dd class="ok">+316.40</dd></div><div><dt>结果</dt><dd>盈利</dd></div><div><dt>复盘原因</dt><dd>不适用</dd></div></dl>
+                  <button class="linkButton" type="button">下钻复盘</button>
+                </article>
+                <article class="lossTradeItem">
+                  <div class="lossTradeMain"><strong>2026-06-03 · NVDA</strong><small>空头 · 180 股 · 13 分钟</small></div>
+                  <dl class="compactFacts lossTradeFacts"><div><dt>PnL</dt><dd class="ok">+244.20</dd></div><div><dt>结果</dt><dd>盈利</dd></div><div><dt>复盘原因</dt><dd>不适用</dd></div></dl>
+                  <button class="linkButton" type="button">下钻复盘</button>
+                </article>
+                <article class="lossTradeItem">
+                  <div class="lossTradeMain"><strong>2026-06-02 · AMD</strong><small>多头 · 200 股 · 8 分钟</small></div>
+                  <dl class="compactFacts lossTradeFacts"><div><dt>PnL</dt><dd class="ok">+128.80</dd></div><div><dt>结果</dt><dd>盈利</dd></div><div><dt>复盘原因</dt><dd>不适用</dd></div></dl>
                   <button class="linkButton" type="button">下钻复盘</button>
                 </article>
               </div>
@@ -802,6 +1036,19 @@
             selectReviewTab(target);
             history.replaceState(null, "", target === "loss" ? "#loss-review" : "#data-review");
           }
+        });
+      });
+
+      const profitLossInputs = document.querySelectorAll('input[name="static-profit-loss-filter"]');
+      const lossReviewPanel = document.getElementById("loss-review-panel");
+      profitLossInputs.forEach((input) => {
+        input.addEventListener("change", () => {
+          if (!(input instanceof HTMLInputElement) || !lossReviewPanel) return;
+          lossReviewPanel.setAttribute("data-profit-loss-view", input.value);
+          profitLossInputs.forEach((candidate) => {
+            const label = candidate.closest(".profitLossReviewModeOption");
+            label?.classList.toggle("active", candidate === input);
+          });
         });
       });
 

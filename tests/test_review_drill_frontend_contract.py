@@ -255,23 +255,30 @@ def test_loss_trade_review_action_and_reason_catalog_are_visible():
     assert "{ code: \"plan_not_followed\", label: \"未按计划执行\" }" in APP_SOURCE
 
 
-def test_loss_review_drill_tab_reads_all_loss_trade_groups():
+def test_profit_loss_review_drill_tab_reads_profit_and_loss_trade_groups():
     assert 'type ReviewDrillSurfaceTab = "data" | "loss";' in APP_SOURCE
     assert 'const [activeReviewDrillSurfaceTab, setActiveReviewDrillSurfaceTab] = useState<ReviewDrillSurfaceTab>("data")' in APP_SOURCE
     assert "const [allTradeGroups, setAllTradeGroups] = useState<TradeGroup[]>([])" in APP_SOURCE
     assert "fetchTradeGroups(undefined, undefined, { ...requestOptions, includeDetails: false })" in APP_SOURCE
     assert "setAllTradeGroups(nextAllTradeGroups)" in APP_SOURCE
-    assert "const lossReviewTradeGroups = useMemo" in APP_SOURCE
-    assert "allTradeGroups.filter(isClosedLossTradeGroup)" in APP_SOURCE
-    assert "buildLossReviewPrimaryReasonSummaries(timeFilteredTradeGroups)" in APP_SOURCE
-    assert "buildLossReviewSecondaryReasonSummaries(primaryFilteredTradeGroups)" in APP_SOURCE
+    assert "type ProfitLossReviewMode = \"profit\" | \"loss\";" in APP_SOURCE
+    assert "profit: \"仅看盈利单\"" in APP_SOURCE
+    assert "loss: \"仅看亏损单\"" in APP_SOURCE
+    assert "function isClosedProfitTradeGroup" in APP_SOURCE
+    assert "function isClosedProfitLossTradeGroup" in APP_SOURCE
+    assert "const profitLossReviewTradeGroups = useMemo" in APP_SOURCE
+    assert "allTradeGroups.filter(isClosedProfitLossTradeGroup)" in APP_SOURCE
+    assert 'const [profitLossReviewMode, setProfitLossReviewMode] = useState<ProfitLossReviewMode>("loss")' in APP_SOURCE
+    assert "profitLossReviewMode === \"profit\" ? isClosedProfitTradeGroup(group) : isClosedLossTradeGroup(group)" in APP_SOURCE
+    assert "showReasonModules ? buildLossReviewPrimaryReasonSummaries(timeFilteredTradeGroups) : []" in APP_SOURCE
+    assert "showReasonModules ? buildLossReviewSecondaryReasonSummaries(primaryFilteredTradeGroups) : []" in APP_SOURCE
     assert "数据下钻" in APP_SOURCE
-    assert "亏损复盘" in APP_SOURCE
+    assert "盈亏复盘" in APP_SOURCE
     assert "function LossReviewDrilldown" in APP_SOURCE
     assert "原因分类汇总" in APP_SOURCE
     assert "一级原因" in APP_SOURCE
     assert "二级原因" in APP_SOURCE
-    assert "亏损单列表" in APP_SOURCE
+    assert "{reviewGroupLabel}列表" in APP_SOURCE
     assert "待复盘" in APP_SOURCE
     assert "Review Journal" in APP_SOURCE
     assert "onClick={() => void props.onReplayTradeGroup(group)}" in APP_SOURCE
@@ -285,8 +292,8 @@ def test_loss_review_drill_tab_reads_all_loss_trade_groups():
     assert 'custom: "特定时间段"' in APP_SOURCE
     assert "const timeFilteredTradeGroups = useMemo" in APP_SOURCE
     assert "lossReviewDateRangeIncludesGroup(group, lossReviewTimeRange.startDate, lossReviewTimeRange.endDate)" in APP_SOURCE
-    assert "const timeReviewedLossTradeGroupCount = timeFilteredTradeGroups.filter" in APP_SOURCE
-    assert "const timeTotalLossReviewPnl = timeFilteredTradeGroups.reduce" in APP_SOURCE
+    assert "const timeReviewedTradeGroupCount = showReasonModules ? timeFilteredTradeGroups.filter" in APP_SOURCE
+    assert "const timeTotalReviewPnl = timeFilteredTradeGroups.reduce" in APP_SOURCE
     assert "const LOSS_REVIEW_PAGE_SIZE = 20;" in APP_SOURCE
     assert 'useState<LossReviewSortMode>("time_desc")' in APP_SOURCE
     assert 'setLossReviewSortMode("loss_desc")' in APP_SOURCE
@@ -294,6 +301,8 @@ def test_loss_review_drill_tab_reads_all_loss_trade_groups():
     assert "selectedSecondaryReasonKeys" in APP_SOURCE
     assert "lossReviewSecondaryReasonKey(group)" in APP_SOURCE
     assert "safePage * LOSS_REVIEW_PAGE_SIZE" in APP_SOURCE
+    assert ".profitLossReviewModeSwitch" in STYLES_SOURCE
+    assert ".profitLossReviewModeOption" in STYLES_SOURCE
     assert ".reviewDrillSurfaceTabs" in STYLES_SOURCE
     assert ".lossReviewDrillLayout" in STYLES_SOURCE
     assert ".lossReviewTimeFilter" in STYLES_SOURCE
@@ -307,6 +316,25 @@ def test_loss_review_drill_tab_reads_all_loss_trade_groups():
     assert ".lossReviewTradeItem" in STYLES_SOURCE
     assert "date?: string" in API_SOURCE
     assert 'if (date) params.set("date", date);' in API_SOURCE
+
+
+def test_profit_review_view_keeps_reason_module_empty():
+    loss_body_start = APP_SOURCE.index('function LossReviewDrilldown(props: {')
+    loss_body_end = APP_SOURCE.index('function EmptyState', loss_body_start)
+    loss_body = APP_SOURCE[loss_body_start:loss_body_end]
+
+    assert 'const [profitLossReviewMode, setProfitLossReviewMode] = useState<ProfitLossReviewMode>("loss")' in loss_body
+    assert 'role="radiogroup" aria-label="盈亏单筛选"' in loss_body
+    assert 'name="profitLossReviewMode"' in loss_body
+    assert "setProfitLossReviewMode(mode)" in loss_body
+    assert 'profitLossReviewMode === "profit" ? "max_profit" : "max_loss"' in loss_body
+    assert 'buildLossReviewMarketRegimeMatrix(timeFilteredTradeGroups, profitLossReviewMode === "profit" ? "all" : "loss")' in loss_body
+    assert 'showReasonModules ? (' in loss_body
+    assert 'title="暂无原因分类"' in loss_body
+    assert "盈利单不写入亏损原因，原因模块保持为空" in loss_body
+    assert 'profitLossReviewMode === "profit" ? "按盈利金额倒序" : "按亏损金额倒序"' in loss_body
+    assert "<dt>结果</dt>" in loss_body
+    assert "<dd>盈利</dd>" in loss_body
 
 
 def test_loss_review_market_regime_matrix_uses_us_session_windows():
@@ -341,11 +369,11 @@ def test_loss_review_market_regime_matrix_uses_us_session_windows():
     assert "$1,500" not in APP_SOURCE
     assert "开仓 ATR Multiple" in APP_SOURCE
     assert "缺 ATR 证据" in APP_SOURCE
-    assert "buildLossReviewMarketRegimeMatrix(timeFilteredTradeGroups)" in APP_SOURCE
+    assert 'buildLossReviewMarketRegimeMatrix(timeFilteredTradeGroups, profitLossReviewMode === "profit" ? "all" : "loss")' in APP_SOURCE
     assert "lossReviewMatchesSelectedRegimeCell(group, selectedMarketRegimeCell)" not in APP_SOURCE
     assert "selectedMarketRegimeCell" not in APP_SOURCE
     assert "toggleMarketRegimeCell" not in APP_SOURCE
-    assert "summaryMode?: \"concentration\" | \"max_loss\" | \"pnl_extremes\"" in APP_SOURCE
+    assert "summaryMode?: \"concentration\" | \"max_loss\" | \"max_profit\" | \"pnl_extremes\"" in APP_SOURCE
     assert "maxProfitCell" in APP_SOURCE
     assert "maxLossCell" in APP_SOURCE
     assert "lossReviewMarketRegimeZoneLabel" in APP_SOURCE
@@ -360,7 +388,7 @@ def test_loss_review_market_regime_matrix_uses_us_session_windows():
     loss_body_start = APP_SOURCE.index('function LossReviewDrilldown(props: {')
     loss_body_end = APP_SOURCE.index('function EmptyState', loss_body_start)
     loss_body = APP_SOURCE[loss_body_start:loss_body_end]
-    assert 'summaryMode="max_loss"' in loss_body
+    assert 'summaryMode={profitLossReviewMode === "profit" ? "max_profit" : "max_loss"}' in loss_body
     assert "readOnly" in loss_body
     assert "最大亏损区" in APP_SOURCE
     assert "最大盈利区" in APP_SOURCE

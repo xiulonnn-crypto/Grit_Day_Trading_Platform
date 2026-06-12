@@ -455,6 +455,7 @@ type LossReviewCategorySummary = {
 };
 type LossReviewSortMode = "time_desc" | "loss_desc";
 type LossReviewTimeFilterMode = "all" | "month" | "week" | "custom";
+type ProfitLossReviewMode = "profit" | "loss";
 type LossReviewTimeWindowKey =
   | "early_session"
   | "late_morning_transition"
@@ -504,6 +505,10 @@ const lossReviewTimeFilterLabels: Record<LossReviewTimeFilterMode, string> = {
   month: "本月",
   week: "本周",
   custom: "特定时间段"
+};
+const profitLossReviewModeLabels: Record<ProfitLossReviewMode, string> = {
+  profit: "仅看盈利单",
+  loss: "仅看亏损单"
 };
 const lossReviewRegularTimeWindows: LossReviewTimeWindowDefinition[] = [
   { detail: "09:30-10:30", endMinute: 10 * 60 + 30, key: "early_session", label: "早盘高动能", startMinute: 9 * 60 + 30 },
@@ -848,6 +853,18 @@ function isClosedLossTradeGroup(group: TradeGroup) {
   return group.status === "closed" && group.pnl !== null && group.pnl < 0;
 }
 
+function isClosedProfitTradeGroup(group: TradeGroup) {
+  return group.status === "closed" && group.pnl !== null && group.pnl > 0;
+}
+
+function isClosedProfitLossTradeGroup(group: TradeGroup) {
+  return isClosedProfitTradeGroup(group) || isClosedLossTradeGroup(group);
+}
+
+function profitLossReviewGroupLabel(mode: ProfitLossReviewMode) {
+  return mode === "profit" ? "盈利单" : "亏损单";
+}
+
 function tradeGroupReviewDate(group: TradeGroup) {
   return (group.closed_at ?? group.opened_at).slice(0, 10);
 }
@@ -919,11 +936,11 @@ function lossReviewTimeFilterRange(
   return { endDate: null, startDate: null };
 }
 
-function lossReviewTimeRangeLabel(startDate: string | null, endDate: string | null) {
+function lossReviewTimeRangeLabel(startDate: string | null, endDate: string | null, allLabel = "全部亏损单") {
   if (startDate && endDate) return `${startDate} 至 ${endDate}`;
   if (startDate) return `${startDate} 之后`;
   if (endDate) return `${endDate} 之前`;
-  return "全部亏损单";
+  return allLabel;
 }
 
 function lossReviewDateRangeIncludesGroup(group: TradeGroup, startDate: string | null, endDate: string | null) {
@@ -2560,7 +2577,8 @@ export default function App() {
   );
   const dataReviewTimeRangeLabel = lossReviewTimeRangeLabel(
     dataReviewTimeRange.startDate,
-    dataReviewTimeRange.endDate
+    dataReviewTimeRange.endDate,
+    "全部订单"
   );
   const dataReviewSummaryNote = `${sourceLabel[dataReviewSummary.source]} · ${dataReviewTimeRangeLabel}`;
   const activeDrillSummary = activeReviewDrillTab === "date" ? selectedDateSummary : selectedSymbolSummary;
@@ -2575,8 +2593,8 @@ export default function App() {
     () => symbolDateBreakdown.filter((group) => group.symbol === selectedSymbol),
     [selectedSymbol, symbolDateBreakdown]
   );
-  const lossReviewTradeGroups = useMemo(
-    () => allTradeGroups.filter(isClosedLossTradeGroup),
+  const profitLossReviewTradeGroups = useMemo(
+    () => allTradeGroups.filter(isClosedProfitLossTradeGroup),
     [allTradeGroups]
   );
   const scopedCurrentReviewSummary =
@@ -2684,7 +2702,7 @@ export default function App() {
             type="button"
           >
             <AlertTriangle size={15} />
-            亏损复盘
+            盈亏复盘
           </button>
         </div>
         {activeReviewDrillSurfaceTab === "data" ? (
@@ -2907,7 +2925,7 @@ export default function App() {
           <LossReviewDrilldown
             onReplayTradeGroup={onReplayTradeGroup}
             replayBusy={replayBusy}
-            tradeGroups={lossReviewTradeGroups}
+            tradeGroups={profitLossReviewTradeGroups}
           />
         )}
       </section>
@@ -7093,7 +7111,7 @@ function LossReviewMarketRegimeMatrix(props: {
   readOnly?: boolean;
   sourceLabel?: string;
   subtitle?: string;
-  summaryMode?: "concentration" | "max_loss" | "pnl_extremes";
+  summaryMode?: "concentration" | "max_loss" | "max_profit" | "pnl_extremes";
   title?: string;
 }) {
   const topCell = props.matrix.topCell;
@@ -7117,6 +7135,10 @@ function LossReviewMarketRegimeMatrix(props: {
           {summaryMode === "max_loss" ? (
             <strong className={props.matrix.maxLossCell ? "bad" : "neutral"}>
               最大亏损区：{lossReviewMarketRegimeZoneLabel(props.matrix.maxLossCell)}
+            </strong>
+          ) : summaryMode === "max_profit" ? (
+            <strong className={props.matrix.maxProfitCell ? "ok" : "neutral"}>
+              最大盈利区：{lossReviewMarketRegimeZoneLabel(props.matrix.maxProfitCell)}
             </strong>
           ) : summaryMode === "pnl_extremes" ? (
             <>
@@ -7209,8 +7231,11 @@ function LossReviewDrilldown(props: {
   const [customLossReviewEndDate, setCustomLossReviewEndDate] = useState(todayDateKey);
   const [lossReviewPage, setLossReviewPage] = useState(1);
   const [lossReviewSortMode, setLossReviewSortMode] = useState<LossReviewSortMode>("time_desc");
+  const [profitLossReviewMode, setProfitLossReviewMode] = useState<ProfitLossReviewMode>("loss");
   const [selectedPrimaryReasonKeys, setSelectedPrimaryReasonKeys] = useState<string[]>([]);
   const [selectedSecondaryReasonKeys, setSelectedSecondaryReasonKeys] = useState<string[]>([]);
+  const reviewGroupLabel = profitLossReviewGroupLabel(profitLossReviewMode);
+  const showReasonModules = profitLossReviewMode === "loss";
   const lossReviewTimeRange = useMemo(
     () =>
       lossReviewTimeFilterRange(
@@ -7221,31 +7246,38 @@ function LossReviewDrilldown(props: {
       ),
     [customLossReviewEndDate, customLossReviewStartDate, lossReviewTimeFilterMode, todayDateKey]
   );
-  const timeFilteredTradeGroups = useMemo(
+  const modeTradeGroups = useMemo(
     () =>
       props.tradeGroups.filter((group) =>
+        profitLossReviewMode === "profit" ? isClosedProfitTradeGroup(group) : isClosedLossTradeGroup(group)
+      ),
+    [profitLossReviewMode, props.tradeGroups]
+  );
+  const timeFilteredTradeGroups = useMemo(
+    () =>
+      modeTradeGroups.filter((group) =>
         lossReviewDateRangeIncludesGroup(group, lossReviewTimeRange.startDate, lossReviewTimeRange.endDate)
       ),
-    [lossReviewTimeRange.endDate, lossReviewTimeRange.startDate, props.tradeGroups]
+    [lossReviewTimeRange.endDate, lossReviewTimeRange.startDate, modeTradeGroups]
   );
   const primaryReasonSummaries = useMemo(
-    () => buildLossReviewPrimaryReasonSummaries(timeFilteredTradeGroups),
-    [timeFilteredTradeGroups]
+    () => (showReasonModules ? buildLossReviewPrimaryReasonSummaries(timeFilteredTradeGroups) : []),
+    [showReasonModules, timeFilteredTradeGroups]
   );
   const marketRegimeMatrix = useMemo(
-    () => buildLossReviewMarketRegimeMatrix(timeFilteredTradeGroups),
-    [timeFilteredTradeGroups]
+    () => buildLossReviewMarketRegimeMatrix(timeFilteredTradeGroups, profitLossReviewMode === "profit" ? "all" : "loss"),
+    [profitLossReviewMode, timeFilteredTradeGroups]
   );
   const primaryFilteredTradeGroups = useMemo(
     () =>
-      selectedPrimaryReasonKeys.length > 0
+      showReasonModules && selectedPrimaryReasonKeys.length > 0
         ? timeFilteredTradeGroups.filter((group) => selectedPrimaryReasonKeys.includes(lossReviewPrimaryReasonKey(group)))
         : timeFilteredTradeGroups,
-    [selectedPrimaryReasonKeys, timeFilteredTradeGroups]
+    [selectedPrimaryReasonKeys, showReasonModules, timeFilteredTradeGroups]
   );
   const secondaryReasonSummaries = useMemo(
-    () => buildLossReviewSecondaryReasonSummaries(primaryFilteredTradeGroups),
-    [primaryFilteredTradeGroups]
+    () => (showReasonModules ? buildLossReviewSecondaryReasonSummaries(primaryFilteredTradeGroups) : []),
+    [primaryFilteredTradeGroups, showReasonModules]
   );
   const availableSecondaryKeys = useMemo(
     () => new Set(secondaryReasonSummaries.map((summary) => summary.key)),
@@ -7254,10 +7286,10 @@ function LossReviewDrilldown(props: {
   const availableSecondaryKeySignature = secondaryReasonSummaries.map((summary) => summary.key).join("|");
   const filteredTradeGroups = useMemo(
     () =>
-      selectedSecondaryReasonKeys.length > 0
+      showReasonModules && selectedSecondaryReasonKeys.length > 0
         ? primaryFilteredTradeGroups.filter((group) => selectedSecondaryReasonKeys.includes(lossReviewSecondaryReasonKey(group)))
         : primaryFilteredTradeGroups,
-    [primaryFilteredTradeGroups, selectedSecondaryReasonKeys]
+    [primaryFilteredTradeGroups, selectedSecondaryReasonKeys, showReasonModules]
   );
   const sortedTradeGroups = useMemo(
     () => [...filteredTradeGroups].sort((left, right) => sortLossReviewTradeGroups(left, right, lossReviewSortMode)),
@@ -7275,19 +7307,29 @@ function LossReviewDrilldown(props: {
     lossReviewTimeFilterMode,
     lossReviewTimeRange.startDate ?? "",
     lossReviewTimeRange.endDate ?? "",
+    profitLossReviewMode,
     selectedPrimaryReasonKeys.join("|"),
     selectedSecondaryReasonKeys.join("|"),
     lossReviewSortMode,
-    props.tradeGroups.length
+    modeTradeGroups.length
   ].join("::");
-  const timeReviewedLossTradeGroupCount = timeFilteredTradeGroups.filter((group) => group.review).length;
-  const timePendingLossTradeGroupCount = timeFilteredTradeGroups.length - timeReviewedLossTradeGroupCount;
-  const timeTotalLossReviewPnl = timeFilteredTradeGroups.reduce((total, group) => total + (group.pnl ?? 0), 0);
-  const timeRangeLabel = lossReviewTimeRangeLabel(lossReviewTimeRange.startDate, lossReviewTimeRange.endDate);
+  const timeReviewedTradeGroupCount = showReasonModules ? timeFilteredTradeGroups.filter((group) => group.review).length : 0;
+  const timePendingTradeGroupCount = showReasonModules ? timeFilteredTradeGroups.length - timeReviewedTradeGroupCount : 0;
+  const timeTotalReviewPnl = timeFilteredTradeGroups.reduce((total, group) => total + (group.pnl ?? 0), 0);
+  const timeRangeLabel = lossReviewTimeRangeLabel(
+    lossReviewTimeRange.startDate,
+    lossReviewTimeRange.endDate,
+    `全部${reviewGroupLabel}`
+  );
 
   useEffect(() => {
     setSelectedSecondaryReasonKeys((current) => current.filter((key) => availableSecondaryKeys.has(key)));
   }, [availableSecondaryKeySignature, availableSecondaryKeys]);
+
+  useEffect(() => {
+    setSelectedPrimaryReasonKeys([]);
+    setSelectedSecondaryReasonKeys([]);
+  }, [profitLossReviewMode]);
 
   useEffect(() => {
     setLossReviewPage(1);
@@ -7317,14 +7359,14 @@ function LossReviewDrilldown(props: {
         <div>
           <h2>
             <AlertTriangle size={18} />
-            亏损复盘
+            盈亏复盘
           </h2>
-          <p className="panelNote">按全局时间范围查看亏损交易组的原因分类汇总和明细入口</p>
+          <p className="panelNote">默认查看亏损交易组；切到盈利单时只展示热力矩阵和订单明细</p>
         </div>
         <span className="sourcePill">Review Journal</span>
       </header>
 
-      <div className="lossReviewTimeFilter" aria-label="亏损复盘全局时间筛选">
+      <div className="lossReviewTimeFilter" aria-label="盈亏复盘全局时间筛选">
         <div className="lossReviewTimeFilterButtons" role="group" aria-label="全局时间筛选">
           {(["all", "month", "week", "custom"] as LossReviewTimeFilterMode[]).map((mode) => (
             <button
@@ -7358,67 +7400,101 @@ function LossReviewDrilldown(props: {
             </label>
           </div>
         ) : null}
-        <span className="toolbarMeta">{timeRangeLabel}</span>
+        <div className="profitLossReviewModeSwitch" role="radiogroup" aria-label="盈亏单筛选">
+          {(["profit", "loss"] as ProfitLossReviewMode[]).map((mode) => (
+            <label
+              className={profitLossReviewMode === mode ? "profitLossReviewModeOption active" : "profitLossReviewModeOption"}
+              key={mode}
+            >
+              <input
+                checked={profitLossReviewMode === mode}
+                name="profitLossReviewMode"
+                onChange={() => setProfitLossReviewMode(mode)}
+                type="radio"
+                value={mode}
+              />
+              <span>{profitLossReviewModeLabels[mode]}</span>
+            </label>
+          ))}
+        </div>
       </div>
 
       <dl className="compactFacts lossReviewSummaryGrid lossReviewSummaryRow">
         <div>
-          <dt>亏损单</dt>
+          <dt>{reviewGroupLabel}</dt>
           <dd>{formatInteger(timeFilteredTradeGroups.length)}</dd>
         </div>
         <div>
-          <dt>已复盘</dt>
-          <dd>{formatInteger(timeReviewedLossTradeGroupCount)}</dd>
+          <dt>{showReasonModules ? "已复盘" : "原因记录"}</dt>
+          <dd>{showReasonModules ? formatInteger(timeReviewedTradeGroupCount) : "不适用"}</dd>
         </div>
         <div>
-          <dt>待复盘</dt>
-          <dd>{formatInteger(timePendingLossTradeGroupCount)}</dd>
+          <dt>{showReasonModules ? "待复盘" : "原因筛选"}</dt>
+          <dd>{showReasonModules ? formatInteger(timePendingTradeGroupCount) : "空"}</dd>
         </div>
         <div>
-          <dt>亏损合计</dt>
-          <dd className="bad">{formatPnl(timeTotalLossReviewPnl)}</dd>
+          <dt>{profitLossReviewMode === "profit" ? "盈利合计" : "亏损合计"}</dt>
+          <dd className={summaryTone(timeTotalReviewPnl)}>{formatPnl(timeTotalReviewPnl)}</dd>
         </div>
       </dl>
 
-      {props.tradeGroups.length > 0 ? (
+      {modeTradeGroups.length > 0 ? (
         <>
           <LossReviewMarketRegimeMatrix
             matrix={marketRegimeMatrix}
             readOnly
-            summaryMode="max_loss"
+            sourceLabel={reviewGroupLabel}
+            subtitle={`按美股常规盘五大微观结构窗口 × 开仓 ATR Multiple 查看${reviewGroupLabel}分布`}
+            summaryMode={profitLossReviewMode === "profit" ? "max_profit" : "max_loss"}
+            title={`${reviewGroupLabel}热力时间矩阵`}
           />
           <div className="lossReviewDrillLayout">
-            <div className="lossReviewCategoryPanel" aria-label="亏损原因分类汇总">
+            <div className="lossReviewCategoryPanel" aria-label="原因分类汇总">
             <div className="drillDetailHead">
               <div>
                 <strong>原因分类汇总</strong>
-                <small>一级原因与二级原因联动多选筛选</small>
+                <small>{showReasonModules ? "一级原因与二级原因联动多选筛选" : "盈利单不写入亏损原因，原因模块保持为空"}</small>
               </div>
               <span className="sourcePill">
-                {formatInteger(selectedPrimaryReasonKeys.length + selectedSecondaryReasonKeys.length)} 个筛选
+                {showReasonModules
+                  ? `${formatInteger(selectedPrimaryReasonKeys.length + selectedSecondaryReasonKeys.length)} 个筛选`
+                  : "空"}
               </span>
             </div>
-            <LossReviewReasonChart
-              onToggleKey={togglePrimaryReasonKey}
-              selectedKeys={selectedPrimaryReasonKeys}
-              subtitle="按一级原因统计；未选择时显示全部"
-              summaries={primaryReasonSummaries}
-              title="一级原因"
-            />
-            <LossReviewReasonChart
-              onToggleKey={toggleSecondaryReasonKey}
-              selectedKeys={selectedSecondaryReasonKeys}
-              subtitle="随一级原因筛选联动；未选择时显示全部"
-              summaries={secondaryReasonSummaries}
-              title="二级原因"
-            />
+            {showReasonModules ? (
+              <>
+                <LossReviewReasonChart
+                  onToggleKey={togglePrimaryReasonKey}
+                  selectedKeys={selectedPrimaryReasonKeys}
+                  subtitle="按一级原因统计；未选择时显示全部"
+                  summaries={primaryReasonSummaries}
+                  title="一级原因"
+                />
+                <LossReviewReasonChart
+                  onToggleKey={toggleSecondaryReasonKey}
+                  selectedKeys={selectedSecondaryReasonKeys}
+                  subtitle="随一级原因筛选联动；未选择时显示全部"
+                  summaries={secondaryReasonSummaries}
+                  title="二级原因"
+                />
+              </>
+            ) : (
+              <EmptyState
+                icon={<CircleSlash size={18} />}
+                title="暂无原因分类"
+                detail="仅亏损单维护 Review Journal 归因；盈利单不会写入亏损原因。"
+              />
+            )}
             </div>
 
-            <div className="lossReviewListPanel" aria-label="亏损单列表明细">
+            <div className="lossReviewListPanel" aria-label={`${reviewGroupLabel}列表明细`}>
             <div className="drillDetailHead">
               <div>
-                <strong>亏损单列表</strong>
-                <small>默认按时间倒序，每页 20 笔；可叠加矩阵格子筛选</small>
+                <strong>{reviewGroupLabel}列表</strong>
+                <small>
+                  默认按时间倒序，每页 20 笔
+                  {showReasonModules ? "；可叠加原因筛选" : "；盈利视图不叠加原因筛选"}
+                </small>
               </div>
               <span className="sourcePill">
                 {formatInteger(pageStart)}-{formatInteger(pageEnd)} / {formatInteger(sortedTradeGroups.length)} 笔
@@ -7440,7 +7516,7 @@ function LossReviewDrilldown(props: {
                   onClick={() => setLossReviewSortMode("loss_desc")}
                   type="button"
                 >
-                  按亏损金额倒序
+                  {profitLossReviewMode === "profit" ? "按盈利金额倒序" : "按亏损金额倒序"}
                 </button>
               </div>
               <span className="toolbarMeta">20 笔/页</span>
@@ -7461,16 +7537,31 @@ function LossReviewDrilldown(props: {
                   <dl className="compactFacts lossReviewTradeFacts">
                     <div>
                       <dt>PnL</dt>
-                      <dd className="bad">{group.pnl === null ? "N/A" : formatPnl(group.pnl)}</dd>
+                      <dd className={group.pnl === null ? undefined : summaryTone(group.pnl)}>{group.pnl === null ? "N/A" : formatPnl(group.pnl)}</dd>
                     </div>
-                    <div>
-                      <dt>复盘</dt>
-                      <dd>{group.review?.reason_category_label ?? "待复盘"}</dd>
-                    </div>
-                    <div>
-                      <dt>原因</dt>
-                      <dd>{group.review?.reason_label ?? "未分类"}</dd>
-                    </div>
+                    {showReasonModules ? (
+                      <>
+                        <div>
+                          <dt>复盘</dt>
+                          <dd>{group.review?.reason_category_label ?? "待复盘"}</dd>
+                        </div>
+                        <div>
+                          <dt>原因</dt>
+                          <dd>{group.review?.reason_label ?? "未分类"}</dd>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div>
+                          <dt>结果</dt>
+                          <dd>盈利</dd>
+                        </div>
+                        <div>
+                          <dt>复盘原因</dt>
+                          <dd>不适用</dd>
+                        </div>
+                      </>
+                    )}
                   </dl>
                   <button
                     className="linkButton"
@@ -7487,8 +7578,8 @@ function LossReviewDrilldown(props: {
             ) : (
               <EmptyState
                 icon={<CircleSlash size={18} />}
-                title="没有符合筛选的亏损单"
-                detail="调整时间范围、一级原因或二级原因筛选后再查看列表"
+                title={`没有符合筛选的${reviewGroupLabel}`}
+                detail={showReasonModules ? "调整时间范围、一级原因或二级原因筛选后再查看列表" : "调整时间范围或切回亏损单后再查看列表"}
               />
             )}
             <div className="lossReviewPagination" aria-label="亏损单分页">
@@ -7516,7 +7607,7 @@ function LossReviewDrilldown(props: {
           </div>
         </>
       ) : (
-        <EmptyState icon={<CheckCircle2 size={18} />} title="暂无亏损单" detail="当前 committed 交易组中没有已闭合亏损单" />
+        <EmptyState icon={<CheckCircle2 size={18} />} title={`暂无${reviewGroupLabel}`} detail={`当前 committed 交易组中没有已闭合${reviewGroupLabel}`} />
       )}
     </div>
   );
