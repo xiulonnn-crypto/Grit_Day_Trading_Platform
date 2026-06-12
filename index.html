@@ -58,6 +58,20 @@
         font-size: 15px;
       }
 
+      .release-note {
+        display: inline-flex;
+        align-items: center;
+        min-height: 30px;
+        margin-top: 12px;
+        padding: 0 12px;
+        border: 1px solid #b8dfbe;
+        border-radius: 999px;
+        color: #0d6b2f;
+        background: #eaf8ee;
+        font-size: 13px;
+        font-weight: 800;
+      }
+
       .upload {
         min-height: 44px;
         padding: 0 16px;
@@ -645,6 +659,7 @@
           <p class="stage">P2 REVIEW DESK</p>
           <h1>日内复盘台</h1>
           <p class="subtitle">STP 成交证据、行情上下文、盘前 watchlist 与策略复盘信号</p>
+          <span class="release-note">P3 亏损复盘静态快照已更新 · 支持双 tab 切换</span>
         </section>
         <button class="upload" type="button">上传 STP TXT</button>
       </header>
@@ -900,21 +915,31 @@
         loss: document.getElementById("loss-review-panel"),
       };
 
+      function selectReviewTab(target) {
+        reviewTabs.forEach((button) => {
+          const selected = button.getAttribute("data-review-tab") === target;
+          button.classList.toggle("active", selected);
+          button.setAttribute("aria-selected", selected ? "true" : "false");
+        });
+        Object.entries(reviewPanels).forEach(([key, panel]) => {
+          if (panel) {
+            panel.hidden = key !== target;
+          }
+        });
+      }
+
       reviewTabs.forEach((tab) => {
         tab.addEventListener("click", () => {
           const target = tab.getAttribute("data-review-tab");
-          reviewTabs.forEach((button) => {
-            const selected = button === tab;
-            button.classList.toggle("active", selected);
-            button.setAttribute("aria-selected", selected ? "true" : "false");
-          });
-          Object.entries(reviewPanels).forEach(([key, panel]) => {
-            if (panel) {
-              panel.hidden = key !== target;
-            }
-          });
+          if (target) {
+            selectReviewTab(target);
+            history.replaceState(null, "", target === "loss" ? "#loss-review" : "#data-review");
+          }
         });
       });
+
+      const requestedReviewTab = new URLSearchParams(window.location.search).get("view") === "loss" || window.location.hash === "#loss-review" ? "loss" : "data";
+      selectReviewTab(requestedReviewTab);
     </script>
   </body>
 </html>
