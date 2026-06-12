@@ -5,649 +5,562 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Grit Day Trading Platform</title>
     <style>
+      :root {
+        color: #1f2933;
+        background: #f4f6f8;
+        font-family: Inter, "Segoe UI", "Microsoft YaHei", sans-serif;
+      }
+
       * {
         box-sizing: border-box;
       }
 
       body {
         margin: 0;
-        min-height: 100vh;
-        font-family: "Segoe UI", "Microsoft YaHei", Arial, sans-serif;
-        color: #082035;
-        background: #f3f6f8;
       }
 
-      button,
-      input {
+      button {
+        color: inherit;
+        cursor: pointer;
         font: inherit;
       }
 
       .shell {
-        width: min(1440px, calc(100% - 72px));
-        margin: 0 auto;
-        padding: 14px 0 40px;
+        min-height: 100vh;
+        padding: 24px;
+      }
+
+      .topbar,
+      .workspaceTabs,
+      .reviewDrillPanel {
+        margin-left: auto;
+        margin-right: auto;
+        max-width: 1440px;
       }
 
       .topbar {
-        display: flex;
         align-items: flex-start;
+        display: flex;
+        gap: 20px;
         justify-content: space-between;
-        gap: 24px;
         margin-bottom: 18px;
       }
 
-      .stage {
-        margin: 0 0 6px;
-        color: #3540b4;
-        font-size: 13px;
-        font-weight: 800;
+      .eyebrow,
+      h1,
+      h2,
+      h3,
+      p {
+        margin: 0;
+      }
+
+      .eyebrow {
+        color: #4f63a8;
+        font-size: 12px;
+        font-weight: 700;
         letter-spacing: 0;
+        margin-bottom: 4px;
         text-transform: uppercase;
       }
 
       h1 {
-        margin: 0;
-        font-size: 34px;
+        color: #1f2933;
+        font-size: 28px;
+        font-weight: 700;
+        letter-spacing: 0;
         line-height: 1.1;
+      }
+
+      h2 {
+        align-items: center;
+        display: flex;
+        font-size: 16px;
+        gap: 8px;
         letter-spacing: 0;
       }
 
-      .subtitle {
-        margin: 8px 0 0;
-        color: #426076;
+      h3 {
+        color: #1f2933;
         font-size: 15px;
+        line-height: 1.25;
       }
 
-      .release-note {
-        display: inline-flex;
+      .topbar p:not(.eyebrow),
+      .panelNote {
+        color: #607080;
+        margin-top: 6px;
+      }
+
+      .panelNote,
+      .toolbarMeta,
+      .matrixNote,
+      .lossTradeMain small,
+      .reasonChartHead small {
+        color: #607080;
+        font-size: 12px;
+        line-height: 1.45;
+      }
+
+      .uploadButton,
+      .workspaceTab,
+      .surfaceTab,
+      .smallButton,
+      .linkButton {
         align-items: center;
-        min-height: 30px;
-        margin-top: 12px;
-        padding: 0 12px;
-        border: 1px solid #b8dfbe;
-        border-radius: 999px;
-        color: #0d6b2f;
-        background: #eaf8ee;
-        font-size: 13px;
-        font-weight: 800;
-      }
-
-      .upload {
-        min-height: 44px;
-        padding: 0 16px;
-        border: 1px solid #bdcbd8;
-        border-radius: 8px;
-        color: #082035;
         background: #ffffff;
-        font-weight: 700;
+        border: 1px solid #c8d1d9;
+        border-radius: 8px;
+        display: inline-flex;
+        gap: 8px;
+        justify-content: center;
+        min-height: 36px;
+        padding: 8px 12px;
       }
 
-      .tabs {
+      .uploadButton {
+        flex: 0 0 auto;
+        min-height: 42px;
+        padding: 10px 14px;
+      }
+
+      .uploadIcon,
+      .buttonIcon {
+        align-items: center;
+        border: 1px solid currentColor;
+        border-radius: 4px;
+        display: inline-flex;
+        font-size: 11px;
+        font-weight: 900;
+        height: 16px;
+        justify-content: center;
+        line-height: 1;
+        width: 16px;
+      }
+
+      .workspaceTabs,
+      .surfaceTabs {
+        align-items: center;
+        background: #edf3f6;
+        border: 1px solid #d5e1e7;
+        border-radius: 8px;
         display: flex;
-        width: max-content;
-        margin: 12px auto 16px;
+        gap: 4px;
         padding: 4px;
-        border: 1px solid #d0dce6;
-        border-radius: 9px;
-        background: #eaf1f4;
+        width: max-content;
       }
 
-      .tab {
-        min-height: 40px;
-        padding: 0 14px;
-        border: 0;
-        border-radius: 7px;
-        color: #23384d;
-        background: transparent;
+      .workspaceTabs {
+        margin-bottom: 16px;
+      }
+
+      .workspaceTab,
+      .surfaceTab {
+        border-color: transparent;
+        color: #344658;
         font-weight: 800;
       }
 
-      .tab.active {
+      .workspaceTab.active,
+      .surfaceTab.active,
+      .smallButton.active {
+        background: #1f6f67;
+        border-color: #1f6f67;
         color: #ffffff;
-        background: #197a73;
+      }
+
+      .reviewDrillPanel {
+        background: #ffffff;
+        border: 1px solid #dce3e8;
+        border-radius: 8px;
+        display: grid;
+        gap: 14px;
+        min-width: 0;
+        padding: 16px;
+      }
+
+      .surfacePanel[hidden] {
+        display: none;
+      }
+
+      .timeFilter {
+        align-items: center;
+        background: #fbfcfd;
+        border: 1px solid #e3e9ed;
+        border-radius: 8px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        justify-content: space-between;
+        padding: 10px;
+      }
+
+      .timeFilterButtons,
+      .sortControls {
+        align-items: center;
+        display: inline-flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+
+      .smallButton {
+        min-height: 34px;
+        padding: 7px 11px;
       }
 
       .kpis {
         display: grid;
-        grid-template-columns: repeat(7, minmax(0, 1fr));
         gap: 12px;
-        margin-bottom: 16px;
+        grid-template-columns: repeat(7, minmax(120px, 1fr));
       }
 
-      .card,
-      .panel,
-      .field,
-      .watch,
-      .chart {
-        border: 1px solid #d2dde7;
-        border-radius: 8px;
+      .metric {
         background: #ffffff;
+        border: 1px solid #dce3e8;
+        border-radius: 8px;
+        min-width: 0;
+        padding: 12px;
       }
 
-      .card {
-        min-height: 98px;
-        padding: 14px 12px;
-      }
-
-      .label {
+      .metric span {
+        color: #607080;
         display: block;
-        color: #436174;
         font-size: 13px;
       }
 
-      .value {
+      .metric strong {
+        color: #1f2933;
         display: block;
-        margin-top: 8px;
         font-size: 22px;
-        font-weight: 900;
-        letter-spacing: 0;
+        line-height: 1.1;
+        margin-top: 8px;
+        overflow-wrap: anywhere;
       }
 
-      .positive {
-        color: #008000;
-      }
-
-      .risk {
-        color: #ad6900;
-      }
-
-      .hint {
+      .metric small {
+        color: #607080;
         display: block;
-        margin-top: 6px;
-        color: #426076;
-        font-size: 12px;
+        font-size: 11px;
+        margin-top: 8px;
       }
 
-      .drilldown {
-        display: grid;
-        grid-template-columns: 30% 1fr;
-        gap: 18px;
-        padding: 16px;
-        margin-bottom: 16px;
+      .metric.ok strong,
+      .ok {
+        color: #237804;
       }
 
-      .panel-title {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 16px;
-        margin-bottom: 12px;
+      .metric.warn strong {
+        color: #ad6800;
       }
 
-      h2,
-      h3 {
-        margin: 0;
-        letter-spacing: 0;
+      .metric.bad strong,
+      .bad {
+        color: #a8071a;
       }
 
-      h2 {
-        font-size: 18px;
-      }
-
-      h3 {
-        font-size: 16px;
-      }
-
-      .muted {
-        margin: 4px 0 0;
-        color: #426076;
-        font-size: 12px;
-        line-height: 1.5;
-      }
-
-      .segmented {
-        display: flex;
-        gap: 4px;
-        padding: 4px;
-        border: 1px solid #d0dce6;
+      .matrixPanel,
+      .reasonPanel,
+      .lossListPanel {
+        background: #fbfcfd;
+        border: 1px solid #dce3e8;
         border-radius: 8px;
-        background: #eef4f7;
-      }
-
-      .segmented button {
-        min-height: 36px;
-        padding: 0 12px;
-        border: 1px solid #c1d3e0;
-        border-radius: 7px;
-        color: #0b2840;
-        background: #ffffff;
-        font-weight: 800;
-      }
-
-      .segmented .selected {
-        color: #ffffff;
-        border-color: #197a73;
-        background: #197a73;
-      }
-
-      .module-tabs {
-        display: inline-flex;
-        gap: 4px;
-        padding: 4px;
-        border: 1px solid #d0dce6;
-        border-radius: 8px;
-        background: #eef4f7;
-      }
-
-      .module-tab {
-        min-height: 36px;
-        padding: 0 12px;
-        border: 1px solid transparent;
-        border-radius: 7px;
-        color: #0b2840;
-        background: transparent;
-        font-weight: 800;
-      }
-
-      .module-tab.active {
-        color: #ffffff;
-        border-color: #197a73;
-        background: #197a73;
-      }
-
-      .module-panel[hidden] {
-        display: none;
-      }
-
-      .date-list {
         display: grid;
-        gap: 8px;
-      }
-
-      .date-item,
-      .symbol-card {
-        border: 1px solid #c8d6e2;
-        border-radius: 7px;
-        background: #ffffff;
-      }
-
-      .date-item {
+        gap: 12px;
+        min-width: 0;
         padding: 12px;
       }
 
-      .date-item.active {
-        border: 2px solid #197a73;
+      .matrixHeader,
+      .lossReviewHeader,
+      .detailHead,
+      .reasonChartHead,
+      .listToolbar {
+        align-items: flex-start;
+        display: flex;
+        gap: 12px;
+        justify-content: space-between;
       }
 
-      .date-main {
-        display: block;
-        margin-bottom: 5px;
+      .matrixSummary {
+        align-items: flex-end;
+        display: grid;
+        gap: 5px;
+        justify-items: end;
+        min-width: 240px;
+        text-align: right;
+      }
+
+      .matrixSummary strong {
+        font-size: 13px;
+        line-height: 1.35;
+      }
+
+      .matrixScroll {
+        min-width: 0;
+        overflow-x: auto;
+        padding-bottom: 2px;
+      }
+
+      .matrixGrid {
+        display: grid;
+        gap: 6px;
+        grid-template-columns: minmax(150px, 0.9fr) repeat(6, minmax(112px, 1fr));
+        min-width: 860px;
+      }
+
+      .lossMatrixGrid {
+        grid-template-columns: minmax(150px, 0.9fr) repeat(5, minmax(112px, 1fr));
+        min-width: 720px;
+      }
+
+      .matrixAxis,
+      .matrixCorner,
+      .matrixCell {
+        border-radius: 8px;
+        min-height: 66px;
+        min-width: 0;
+      }
+
+      .matrixAxis {
+        background: #ffffff;
+        border: 1px solid #e3e9ed;
+        display: grid;
+        gap: 4px;
+        padding: 9px 10px;
+      }
+
+      .matrixCorner {
+        background: #eef3f4;
+        border: 1px solid #d8e2e6;
+      }
+
+      .matrixColumnHead {
+        align-content: center;
+        justify-items: center;
+        text-align: center;
+      }
+
+      .matrixRowHead {
+        align-content: center;
+      }
+
+      .matrixAxis strong {
+        color: #1f2933;
+        font-size: 12px;
+        font-weight: 900;
+      }
+
+      .matrixAxis small {
+        color: #607080;
+        font-size: 11px;
+        font-weight: 800;
+        line-height: 1.3;
+      }
+
+      .matrixCell {
+        background: #f8fafb;
+        border: 1px solid #e3e9ed;
+        color: #344658;
+        display: grid;
+        gap: 3px;
+        justify-items: start;
+        padding: 8px;
+        text-align: left;
+      }
+
+      .matrixCell.empty {
+        background: #f5f7f8;
+        color: #95a1aa;
+      }
+
+      .matrixCell.intensity1 {
+        background: #fff7e6;
+        border-color: #ffe0a3;
+      }
+
+      .matrixCell.intensity2 {
+        background: #ffe7bf;
+        border-color: #ffc66f;
+      }
+
+      .matrixCell.intensity3 {
+        background: #ffd0a1;
+        border-color: #ff9f43;
+      }
+
+      .matrixCell.intensity4 {
+        background: #fff1f0;
+        border-color: #ff7875;
+      }
+
+      .matrixCell strong {
+        color: #17212b;
         font-size: 17px;
         font-weight: 900;
+        line-height: 1;
       }
 
-      .summary {
-        display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 16px;
-        padding: 14px;
-        margin: 28px 0 12px;
-        border: 1px solid #d2dde7;
-        border-radius: 8px;
-        background: #f8fafc;
-      }
-
-      .summary strong {
-        display: block;
-        margin-top: 4px;
-      }
-
-      .time-filter {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 8px;
-        margin: 12px 0;
-      }
-
-      .filter-chip {
-        display: inline-flex;
-        align-items: center;
-        min-height: 32px;
-        padding: 0 12px;
-        border: 1px solid #cbd8e3;
-        border-radius: 999px;
-        color: #15324a;
-        background: #ffffff;
+      .matrixCell span {
         font-size: 12px;
-        font-weight: 800;
+        font-weight: 900;
       }
 
-      .filter-chip.active {
-        color: #ffffff;
-        border-color: #197a73;
-        background: #197a73;
+      .matrixCell small {
+        color: #607080;
+        font-size: 11px;
+        line-height: 1.3;
       }
 
-      .matrix-panel {
-        margin: 12px 0;
-        padding: 12px;
-        border: 1px solid #d2dde7;
-        border-radius: 8px;
-        background: #f8fafc;
-      }
-
-      .matrix-head {
-        display: flex;
-        justify-content: space-between;
-        gap: 16px;
-        margin-bottom: 10px;
-      }
-
-      .matrix-grid {
+      .lossReviewLayout {
         display: grid;
-        grid-template-columns: 1.1fr repeat(5, minmax(0, 1fr));
-        gap: 6px;
-      }
-
-      .matrix-cell {
-        min-height: 42px;
-        padding: 8px;
-        border: 1px solid #d0dce6;
-        border-radius: 7px;
-        background: #ffffff;
-        color: #15324a;
-        font-size: 12px;
-      }
-
-      .matrix-cell.header,
-      .matrix-cell.axis {
-        color: #426076;
-        background: #eef4f7;
-        font-weight: 800;
-      }
-
-      .matrix-cell.good {
-        border-color: #b8dfbe;
-        background: #eaf8ee;
-      }
-
-      .matrix-cell.bad {
-        border-color: #f2c4bd;
-        background: #fff0ed;
-      }
-
-      .matrix-cell.hot {
-        color: #ffffff;
-        border-color: #b3372a;
-        background: #b3372a;
-      }
-
-      .loss-grid {
-        display: grid;
-        grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
         gap: 12px;
+        grid-template-columns: minmax(280px, 0.42fr) minmax(0, 1fr);
       }
 
-      .reason-panel,
-      .loss-list {
-        padding: 12px;
-        border: 1px solid #d2dde7;
-        border-radius: 8px;
-        background: #f8fafc;
-      }
-
-      .reason-chart {
+      .compactFacts {
         display: grid;
         gap: 10px;
-        margin-top: 10px;
+        margin: 0;
       }
 
-      .reason-row {
-        display: grid;
-        grid-template-columns: 92px 1fr 52px;
+      .lossSummaryGrid {
+        background: #f8fafb;
+        border: 1px solid #e3e9ed;
+        border-radius: 8px;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        padding: 10px;
+      }
+
+      .compactFacts div {
+        min-width: 0;
+      }
+
+      .compactFacts dt {
+        color: #607080;
+        font-size: 12px;
+      }
+
+      .compactFacts dd {
+        color: #1f2933;
+        font-size: 17px;
+        font-weight: 900;
+        margin: 4px 0 0;
+        overflow-wrap: anywhere;
+      }
+
+      .sourcePill {
         align-items: center;
-        gap: 8px;
-        color: #15324a;
+        background: #eef3f4;
+        border-radius: 999px;
+        color: #405160;
+        display: inline-flex;
+        flex: 0 0 auto;
         font-size: 12px;
         font-weight: 800;
+        min-height: 28px;
+        padding: 5px 10px;
       }
 
-      .reason-bar {
-        height: 10px;
-        overflow: hidden;
+      .reasonChart {
+        background: #ffffff;
+        border: 1px solid #e3e9ed;
+        border-radius: 8px;
+        display: grid;
+        gap: 12px;
+        padding: 12px;
+      }
+
+      .reasonRows,
+      .lossTradeList {
+        display: grid;
+        gap: 8px;
+      }
+
+      .reasonOption,
+      .lossTradeItem {
+        background: #ffffff;
+        border: 1px solid #e3e9ed;
+        border-radius: 8px;
+        display: grid;
+        gap: 8px;
+        min-width: 0;
+        padding: 10px;
+      }
+
+      .reasonOption.active {
+        border-color: #1f6f67;
+        box-shadow: inset 3px 0 0 #1f6f67;
+      }
+
+      .reasonBar {
+        background: #e7edf1;
         border-radius: 999px;
-        background: #dce7ee;
+        height: 8px;
+        overflow: hidden;
       }
 
-      .reason-bar span {
+      .reasonBar span {
+        background: #1f6f67;
+        border-radius: inherit;
         display: block;
         height: 100%;
-        border-radius: inherit;
-        background: #197a73;
       }
 
-      .reason-bar.warn span {
-        background: #ad6900;
-      }
-
-      .reason-bar.bad span {
-        background: #b3372a;
-      }
-
-      .loss-item {
-        display: grid;
-        grid-template-columns: 1fr auto;
-        gap: 10px;
-        padding: 10px 0;
-        border-top: 1px solid #dce7ee;
-      }
-
-      .loss-item:first-of-type {
-        border-top: 0;
-      }
-
-      .symbol-card {
-        display: flex;
+      .lossTradeItem {
         align-items: center;
-        justify-content: space-between;
-        gap: 18px;
-        padding: 16px 12px;
-        border-color: #197a73;
+        grid-template-columns: minmax(160px, 1fr) minmax(260px, 1.2fr) auto;
       }
 
-      .symbol-name {
-        display: block;
-        margin-bottom: 4px;
-        font-size: 18px;
-        font-weight: 900;
+      .lossTradeFacts {
+        grid-template-columns: repeat(3, minmax(70px, 1fr));
       }
 
-      .small-action {
-        min-height: 32px;
-        padding: 0 12px;
-        border: 1px solid #bfd0de;
-        border-radius: 7px;
-        color: #3540b4;
-        background: #ffffff;
+      .linkButton {
+        color: #1f6f67;
         font-weight: 800;
+        text-decoration: none;
       }
 
-      .filters {
-        display: grid;
-        grid-template-columns: 1.35fr 1.35fr repeat(5, 1fr);
-        gap: 12px;
-        margin-bottom: 16px;
-      }
-
-      .field {
-        min-height: 98px;
-        padding: 14px 12px;
-      }
-
-      .input-like {
-        margin-top: 8px;
-        min-height: 38px;
-        padding: 9px 10px;
-        border: 1px solid #cbd8e3;
-        border-radius: 7px;
-        background: #ffffff;
-      }
-
-      .lower {
-        display: grid;
-        grid-template-columns: 1fr 380px;
-        gap: 14px;
-      }
-
-      .chart,
-      .watch {
-        min-height: 220px;
-        padding: 16px;
-      }
-
-      .badges {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 8px;
-        margin: 12px 0;
-      }
-
-      .badge {
-        display: inline-flex;
-        align-items: center;
-        min-height: 26px;
-        padding: 0 10px;
-        border: 1px solid #cbd8e3;
-        border-radius: 999px;
-        color: #15324a;
-        background: #f5f8fb;
-        font-size: 12px;
-        font-weight: 800;
-      }
-
-      .badge.green {
-        color: #008000;
-        border-color: #cbe6c1;
-        background: #eff9ec;
-      }
-
-      .plot {
-        position: relative;
-        height: 210px;
-        overflow: hidden;
-        border: 1px solid #dbe4ed;
-        border-radius: 8px;
-        background:
-          repeating-linear-gradient(to bottom, #ffffff, #ffffff 39px, #edf2f6 40px),
-          #ffffff;
-      }
-
-      .line {
-        position: absolute;
-        left: 18px;
-        right: 18px;
-        height: 3px;
-        border-radius: 3px;
-        background: #197a73;
-      }
-
-      .line.one {
-        top: 118px;
-        transform: rotate(-8deg);
-      }
-
-      .line.two {
-        top: 78px;
-        background: #ad6900;
-        transform: rotate(5deg);
-      }
-
-      .marker {
-        position: absolute;
-        width: 68px;
-        min-height: 28px;
-        padding: 5px 8px;
-        border-radius: 6px;
-        color: #ffffff;
-        font-size: 12px;
-        font-weight: 900;
-        text-align: center;
-      }
-
-      .buy {
-        left: 11%;
-        top: 126px;
-        background: #008000;
-      }
-
-      .sell {
-        left: 72%;
-        top: 64px;
-        background: #b3372a;
-      }
-
-      .watch-empty {
-        display: grid;
-        place-items: center;
-        min-height: 136px;
-        margin-top: 12px;
-        border: 1px dashed #c8d6e2;
-        border-radius: 8px;
-        color: #426076;
-        background: #fbfdff;
-        text-align: center;
-      }
-
-      .right-actions {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-      }
-
-      .status {
-        color: #3540b4;
-        background: #eef0ff;
-      }
-
-      @media (max-width: 1100px) {
-        .shell {
-          width: min(100% - 32px, 920px);
-        }
-
+      @media (max-width: 1120px) {
         .kpis,
-        .filters {
-          grid-template-columns: repeat(2, minmax(0, 1fr));
-        }
-
-        .drilldown,
-        .lower {
-          grid-template-columns: 1fr;
+        .lossSummaryGrid,
+        .lossReviewLayout,
+        .lossTradeItem {
+          grid-template-columns: 1fr 1fr;
         }
       }
 
-      @media (max-width: 640px) {
+      @media (max-width: 720px) {
         .shell {
-          width: min(100% - 20px, 520px);
-          padding-top: 18px;
+          padding: 16px;
         }
 
         .topbar,
-        .panel-title,
-        .symbol-card {
+        .matrixHeader,
+        .lossReviewHeader,
+        .detailHead,
+        .listToolbar {
           display: grid;
         }
 
-        .kpis,
-        .filters,
-        .summary {
-          grid-template-columns: 1fr;
-        }
-
-        .tabs,
-        .segmented,
-        .module-tabs,
-        .upload,
-        .small-action {
+        .workspaceTabs,
+        .surfaceTabs,
+        .uploadButton {
           width: 100%;
         }
 
-        .loss-grid,
-        .matrix-grid {
+        .kpis,
+        .lossSummaryGrid,
+        .lossReviewLayout,
+        .lossTradeItem,
+        .lossTradeFacts {
           grid-template-columns: 1fr;
         }
 
-        .matrix-cell.header {
-          display: none;
+        .matrixSummary {
+          align-items: start;
+          justify-items: start;
+          min-width: 0;
+          text-align: left;
         }
       }
     </style>
@@ -656,258 +569,212 @@
     <main class="shell">
       <header class="topbar">
         <section>
-          <p class="stage">P2 REVIEW DESK</p>
+          <p class="eyebrow">P2 REVIEW DESK</p>
           <h1>日内复盘台</h1>
-          <p class="subtitle">STP 成交证据、行情上下文、盘前 watchlist 与策略复盘信号</p>
-          <span class="release-note">P3 亏损复盘静态快照已更新 · 支持双 tab 切换</span>
+          <p>STP 成交证据、行情上下文、盘前 watchlist 与策略复盘信号</p>
         </section>
-        <button class="upload" type="button">上传 STP TXT</button>
+        <button class="uploadButton" type="button"><span class="uploadIcon">↑</span>上传 STP TXT</button>
       </header>
 
-      <nav class="tabs" aria-label="工作区">
-        <button class="tab active" type="button">交易复盘</button>
-        <button class="tab" type="button">策略测试</button>
+      <nav class="workspaceTabs" aria-label="工作区切换">
+        <button class="workspaceTab active" type="button"><span class="buttonIcon">▦</span>交易复盘</button>
+        <button class="workspaceTab" type="button"><span class="buttonIcon">≡</span>策略测试</button>
+        <button class="workspaceTab" type="button"><span class="buttonIcon">○</span>实时交易</button>
       </nav>
 
-      <section class="kpis" aria-label="复盘总览">
-        <article class="card"><span class="label">成交股数</span><span class="value">4,525</span><span class="hint">仅来自 committed fills</span></article>
-        <article class="card"><span class="label">PnL</span><span class="value positive">+3,443.11</span></article>
-        <article class="card"><span class="label">胜率</span><span class="value">95.17%</span></article>
-        <article class="card"><span class="label">盈亏比</span><span class="value">3.05</span></article>
-        <article class="card"><span class="label">单笔期望值</span><span class="value positive">+23.75</span></article>
-        <article class="card"><span class="label">每股净收益</span><span class="value positive">+0.76</span></article>
-        <article class="card"><span class="label">持仓最大回撤</span><span class="value risk">1,106.00</span></article>
-      </section>
+      <section class="reviewDrillPanel" aria-label="交易复盘下钻">
+        <div class="surfaceTabs" role="tablist" aria-label="下钻复盘模块">
+          <button class="surfaceTab active" id="data-review-tab" data-review-tab="data" role="tab" aria-controls="data-review-panel" aria-selected="true" type="button"><span class="buttonIcon">▦</span>数据下钻</button>
+          <button class="surfaceTab" id="loss-review-tab" data-review-tab="loss" role="tab" aria-controls="loss-review-panel" aria-selected="false" type="button"><span class="buttonIcon">!</span>亏损复盘</button>
+        </div>
 
-      <section class="panel drilldown" aria-label="下钻复盘">
-        <aside>
-          <div class="panel-title">
-            <div>
-              <h2>下钻复盘</h2>
-              <p class="muted">先按交易日或标的查看次级汇总，再进入当前复盘模块</p>
+        <section class="surfacePanel" id="data-review-panel" role="tabpanel" aria-labelledby="data-review-tab">
+          <div class="timeFilter" aria-label="数据下钻全局时间筛选">
+            <div class="timeFilterButtons" role="group" aria-label="数据下钻时间筛选">
+              <button class="smallButton active" type="button">全部</button>
+              <button class="smallButton" type="button">本月</button>
+              <button class="smallButton" type="button">本周</button>
+              <button class="smallButton" type="button">特定时间段</button>
             </div>
-          </div>
-          <div class="date-list">
-            <article class="date-item active"><span class="date-main">2026-06-04</span><span class="muted">成交 123 · 平仓 35 · PnL +1,338.95</span></article>
-            <article class="date-item"><span class="date-main">2026-06-03</span><span class="muted">成交 129 · 平仓 39 · PnL +928.10</span></article>
-            <article class="date-item"><span class="date-main">2026-06-02</span><span class="muted">成交 166 · 平仓 44 · PnL +628.85</span></article>
-            <article class="date-item"><span class="date-main">2026-06-01</span><span class="muted">成交 88 · 平仓 27 · PnL +547.21</span></article>
-          </div>
-        </aside>
-
-        <section>
-          <div class="panel-title">
-            <div>
-              <h3>下钻模块</h3>
-              <p class="muted">根入口静态快照支持切换数据下钻和亏损复盘</p>
-            </div>
-            <div>
-              <div class="module-tabs" role="tablist" aria-label="下钻复盘模块">
-                <button class="module-tab active" id="data-review-tab" data-review-tab="data" role="tab" aria-controls="data-review-panel" aria-selected="true" type="button">数据下钻</button>
-                <button class="module-tab" id="loss-review-tab" data-review-tab="loss" role="tab" aria-controls="loss-review-panel" aria-selected="false" type="button">亏损复盘</button>
-              </div>
-            </div>
+            <span class="toolbarMeta">全部亏损单</span>
           </div>
 
-          <div class="module-panel" id="data-review-panel" role="tabpanel" aria-labelledby="data-review-tab">
-            <div class="time-filter" aria-label="数据下钻时间筛选">
-              <span class="filter-chip active">全部</span>
-              <span class="filter-chip">本月</span>
-              <span class="filter-chip">本周</span>
-              <span class="filter-chip">特定时间段</span>
-            </div>
+          <section class="kpis" aria-label="数据下钻指标">
+            <article class="metric"><span>成交股数</span><strong>9,585</strong><small>仅来自 committed fills · 全部亏损单</small></article>
+            <article class="metric ok"><span>PnL</span><strong>+1,781.27</strong></article>
+            <article class="metric"><span>胜率</span><strong>91.34%</strong></article>
+            <article class="metric"><span>盈亏比</span><strong>1.19</strong></article>
+            <article class="metric ok"><span>单笔期望值</span><strong>+7.01</strong></article>
+            <article class="metric ok"><span>每股净收益</span><strong>+0.19</strong></article>
+            <article class="metric warn"><span>持仓最大回撤</span><strong>2,273.98</strong></article>
+          </section>
 
-            <div class="summary">
-              <div><span class="label">订单数</span><strong>123</strong></div>
-              <div><span class="label">成交股数</span><strong>1,040</strong></div>
-              <div><span class="label">PNL</span><strong class="positive">+1,338.95</strong></div>
-              <div><span class="label">胜率</span><strong>100.00%</strong></div>
-              <div><span class="label">盈亏比</span><strong>∞</strong></div>
-              <div><span class="label">最大回撤</span><strong>1,106.00</strong></div>
-            </div>
-
-            <section class="matrix-panel" aria-label="数据下钻时间矩阵">
-              <div class="matrix-head">
-                <div>
-                  <h3>数据下钻热力矩阵</h3>
-                  <p class="muted">只读展示全部订单分布，不筛选下方日期/标的列表</p>
-                </div>
-                <span class="badge green">最大盈利区 09:30-10:30 · 常规波动</span>
-              </div>
-              <div class="matrix-grid">
-                <div class="matrix-cell axis">ATR 分层</div>
-                <div class="matrix-cell header">09:30</div>
-                <div class="matrix-cell header">10:30</div>
-                <div class="matrix-cell header">11:30</div>
-                <div class="matrix-cell header">13:30</div>
-                <div class="matrix-cell header">15:00</div>
-                <div class="matrix-cell axis">高波动</div>
-                <div class="matrix-cell">18 单<br />+210.55</div>
-                <div class="matrix-cell bad">11 单<br />-86.40</div>
-                <div class="matrix-cell">8 单<br />+44.20</div>
-                <div class="matrix-cell">9 单<br />+32.10</div>
-                <div class="matrix-cell">6 单<br />+15.80</div>
-                <div class="matrix-cell axis">常规波动</div>
-                <div class="matrix-cell good">27 单<br />+612.35</div>
-                <div class="matrix-cell">14 单<br />+91.20</div>
-                <div class="matrix-cell">12 单<br />+67.55</div>
-                <div class="matrix-cell bad">7 单<br />-42.30</div>
-                <div class="matrix-cell">11 单<br />+38.90</div>
-              </div>
-            </section>
-
-            <article class="symbol-card">
+          <section class="matrixPanel" aria-label="数据下钻热力时间矩阵">
+            <header class="matrixHeader">
               <div>
-                <span class="symbol-name">MU</span>
-                <span class="muted">成交 123 · 平仓 35 · PnL +1,338.95</span>
+                <h3>热力时间矩阵</h3>
+                <p class="panelNote">按美股常规盘五大微观结构窗口 × 开仓 ATR Multiple 查看全部订单分布</p>
               </div>
-              <button class="small-action" type="button">进入复盘</button>
-            </article>
+              <div class="matrixSummary">
+                <strong class="ok">最大盈利区：尾盘蓄势期 × 高波动 · +1,209.00</strong>
+                <strong class="bad">最大亏损区：早盘高动能 × 高波动 · -1,424.77</strong>
+              </div>
+            </header>
+            <div class="matrixScroll">
+              <div class="matrixGrid">
+                <div class="matrixCorner"></div>
+                <div class="matrixAxis matrixColumnHead"><strong>早盘高动能</strong><small>09:30-10:30</small></div>
+                <div class="matrixAxis matrixColumnHead"><strong>早盘至中盘过渡</strong><small>10:30-11:30</small></div>
+                <div class="matrixAxis matrixColumnHead"><strong>中盘死寂垃圾时间</strong><small>11:30-13:30</small></div>
+                <div class="matrixAxis matrixColumnHead"><strong>尾盘蓄势期</strong><small>13:30-15:00</small></div>
+                <div class="matrixAxis matrixColumnHead"><strong>尾盘生死时速</strong><small>15:00-16:00</small></div>
+                <div class="matrixAxis matrixColumnHead"><strong>非常规</strong><small>09:30前/16:00后</small></div>
+
+                <div class="matrixAxis matrixRowHead"><strong>极端冲击</strong><small>&gt; 3.0 x ATR</small></div>
+                <div class="matrixCell intensity1"><strong>2</strong><span class="bad">-187.20</span><small>1.43% · 最大 -239.20</small></div>
+                <div class="matrixCell empty"><strong>0</strong><span>0.00</span><small>0.00% · 最大 N/A</small></div>
+                <div class="matrixCell empty"><strong>0</strong><span>0.00</span><small>0.00% · 最大 N/A</small></div>
+                <div class="matrixCell empty"><strong>0</strong><span>0.00</span><small>0.00% · 最大 N/A</small></div>
+                <div class="matrixCell empty"><strong>0</strong><span>0.00</span><small>0.00% · 最大 N/A</small></div>
+                <div class="matrixCell empty"><strong>0</strong><span>0.00</span><small>0.00% · 最大 N/A</small></div>
+
+                <div class="matrixAxis matrixRowHead"><strong>高波动</strong><small>1.5-3.0 x ATR</small></div>
+                <div class="matrixCell intensity3"><strong>10</strong><span class="bad">-1,424.77</span><small>10.33% · 最大 -1,767.60</small></div>
+                <div class="matrixCell intensity1"><strong>2</strong><span class="ok">+71.20</span><small>0.35% · 最大 +23.20</small></div>
+                <div class="matrixCell intensity1"><strong>3</strong><span class="ok">+180.10</span><small>0.88% · 最大 +24.40</small></div>
+                <div class="matrixCell intensity2"><strong>8</strong><span class="ok">+1,209.00</span><small>6.72% · 最大 -82.00</small></div>
+                <div class="matrixCell intensity1"><strong>3</strong><span class="ok">+112.30</span><small>0.64% · 最大 -9.10</small></div>
+                <div class="matrixCell empty"><strong>0</strong><span>0.00</span><small>0.00% · 最大 N/A</small></div>
+
+                <div class="matrixAxis matrixRowHead"><strong>常规波动</strong><small>0.5-1.5 x ATR</small></div>
+                <div class="matrixCell intensity4"><strong>62</strong><span class="ok">+669.56</span><small>28.71% · 最大 -945.60</small></div>
+                <div class="matrixCell intensity2"><strong>45</strong><span class="ok">+890.60</span><small>14.09% · 最大 -726.10</small></div>
+                <div class="matrixCell intensity4"><strong>65</strong><span class="bad">-279.69</span><small>23.20% · 最大 -1,543.00</small></div>
+                <div class="matrixCell intensity3"><strong>34</strong><span class="bad">-116.73</span><small>10.44% · 最大 -973.00</small></div>
+                <div class="matrixCell intensity2"><strong>13</strong><span class="ok">+468.70</span><small>2.29% · 最大 +1.40</small></div>
+                <div class="matrixCell intensity1"><strong>1</strong><span class="ok">+14.00</span><small>0.07% · 最大 +14.00</small></div>
+              </div>
+            </div>
+          </section>
+        </section>
+
+        <section class="surfacePanel" id="loss-review-panel" role="tabpanel" aria-labelledby="loss-review-tab" hidden>
+          <header class="lossReviewHeader">
+            <div>
+              <h2><span class="buttonIcon">!</span>亏损复盘</h2>
+              <p class="panelNote">按全局时间范围查看亏损交易组的原因分类汇总和明细入口</p>
+            </div>
+            <span class="sourcePill">Review Journal</span>
+          </header>
+
+          <div class="timeFilter" aria-label="亏损复盘全局时间筛选">
+            <div class="timeFilterButtons" role="group" aria-label="亏损复盘时间筛选">
+              <button class="smallButton active" type="button">全部</button>
+              <button class="smallButton" type="button">本月</button>
+              <button class="smallButton" type="button">本周</button>
+              <button class="smallButton" type="button">特定时间段</button>
+            </div>
+            <span class="toolbarMeta">全部亏损单</span>
           </div>
 
-          <div class="module-panel" id="loss-review-panel" role="tabpanel" aria-labelledby="loss-review-tab" hidden>
-            <div class="time-filter" aria-label="亏损复盘时间筛选">
-              <span class="filter-chip active">全部</span>
-              <span class="filter-chip">本月</span>
-              <span class="filter-chip">本周</span>
-              <span class="filter-chip">特定时间段</span>
-            </div>
+          <dl class="compactFacts lossSummaryGrid">
+            <div><dt>亏损单</dt><dd>18</dd></div>
+            <div><dt>已复盘</dt><dd>12</dd></div>
+            <div><dt>待复盘</dt><dd>6</dd></div>
+            <div><dt>亏损合计</dt><dd class="bad">-842.70</dd></div>
+          </dl>
 
-            <div class="summary">
-              <div><span class="label">亏损单</span><strong>18</strong></div>
-              <div><span class="label">已复盘</span><strong>12</strong></div>
-              <div><span class="label">待复盘</span><strong>6</strong></div>
-              <div><span class="label">亏损合计</span><strong class="risk">-842.70</strong></div>
-              <div><span class="label">最大单笔亏损</span><strong class="risk">-188.40</strong></div>
-              <div><span class="label">明细分页</span><strong>20/页</strong></div>
-            </div>
-
-            <section class="matrix-panel" aria-label="亏损复盘热力矩阵">
-              <div class="matrix-head">
-                <div>
-                  <h3>亏损热力矩阵</h3>
-                  <p class="muted">只读定位最大亏损区；矩阵格不筛选订单明细</p>
-                </div>
-                <span class="badge status">最大亏损区 10:30-11:30 · 高波动</span>
+          <section class="matrixPanel" aria-label="亏损复盘热力时间矩阵">
+            <header class="matrixHeader">
+              <div>
+                <h3>亏损热力时间矩阵</h3>
+                <p class="panelNote">只读定位最大亏损区；矩阵格不筛选订单明细</p>
               </div>
-              <div class="matrix-grid">
-                <div class="matrix-cell axis">ATR 分层</div>
-                <div class="matrix-cell header">09:30</div>
-                <div class="matrix-cell header">10:30</div>
-                <div class="matrix-cell header">11:30</div>
-                <div class="matrix-cell header">13:30</div>
-                <div class="matrix-cell header">15:00</div>
-                <div class="matrix-cell axis">极端冲击</div>
-                <div class="matrix-cell bad">2 单<br />-96.30</div>
-                <div class="matrix-cell hot">4 单<br />-188.40</div>
-                <div class="matrix-cell">1 单<br />-21.10</div>
-                <div class="matrix-cell">0 单</div>
-                <div class="matrix-cell">1 单<br />-16.80</div>
-                <div class="matrix-cell axis">缺 ATR 证据</div>
-                <div class="matrix-cell">1 单<br />-24.50</div>
-                <div class="matrix-cell">2 单<br />-72.90</div>
-                <div class="matrix-cell">1 单<br />-31.20</div>
-                <div class="matrix-cell">0 单</div>
-                <div class="matrix-cell">0 单</div>
+              <div class="matrixSummary">
+                <strong class="bad">最大亏损区：早盘高动能 × 高波动 · -1,424.77</strong>
+              </div>
+            </header>
+            <div class="matrixScroll">
+              <div class="matrixGrid lossMatrixGrid">
+                <div class="matrixCorner"></div>
+                <div class="matrixAxis matrixColumnHead"><strong>09:30-10:30</strong><small>早盘高动能</small></div>
+                <div class="matrixAxis matrixColumnHead"><strong>10:30-11:30</strong><small>早盘至中盘过渡</small></div>
+                <div class="matrixAxis matrixColumnHead"><strong>11:30-13:30</strong><small>中盘死寂垃圾时间</small></div>
+                <div class="matrixAxis matrixColumnHead"><strong>13:30-15:00</strong><small>尾盘蓄势期</small></div>
+                <div class="matrixAxis matrixColumnHead"><strong>15:00-16:00</strong><small>尾盘生死时速</small></div>
+                <div class="matrixAxis matrixRowHead"><strong>极端冲击</strong><small>&gt; 3.0 x ATR</small></div>
+                <div class="matrixCell intensity2"><strong>2</strong><span class="bad">-187.20</span><small>最大 -239.20</small></div>
+                <div class="matrixCell empty"><strong>0</strong><span>0.00</span><small>最大 N/A</small></div>
+                <div class="matrixCell empty"><strong>0</strong><span>0.00</span><small>最大 N/A</small></div>
+                <div class="matrixCell empty"><strong>0</strong><span>0.00</span><small>最大 N/A</small></div>
+                <div class="matrixCell empty"><strong>0</strong><span>0.00</span><small>最大 N/A</small></div>
+                <div class="matrixAxis matrixRowHead"><strong>高波动</strong><small>1.5-3.0 x ATR</small></div>
+                <div class="matrixCell intensity4"><strong>10</strong><span class="bad">-1,424.77</span><small>最大 -1,767.60</small></div>
+                <div class="matrixCell intensity1"><strong>2</strong><span class="ok">+71.20</span><small>最大 +23.20</small></div>
+                <div class="matrixCell intensity1"><strong>3</strong><span class="ok">+180.10</span><small>最大 +24.40</small></div>
+                <div class="matrixCell intensity2"><strong>8</strong><span class="ok">+1,209.00</span><small>最大 -82.00</small></div>
+                <div class="matrixCell intensity1"><strong>3</strong><span class="ok">+112.30</span><small>最大 -9.10</small></div>
+              </div>
+            </div>
+          </section>
+
+          <div class="lossReviewLayout">
+            <section class="reasonPanel" aria-label="亏损原因分类汇总">
+              <div class="detailHead">
+                <div>
+                  <h3>原因分类汇总</h3>
+                  <p class="panelNote">一级原因与二级原因联动多选筛选</p>
+                </div>
+                <span class="sourcePill">0 个筛选</span>
+              </div>
+              <div class="reasonChart">
+                <div class="reasonChartHead"><div><strong>一级原因</strong><small>按一级原因统计；未选择时显示全部</small></div></div>
+                <div class="reasonRows">
+                  <div class="reasonOption active"><strong>开仓信号 · 45%</strong><div class="reasonBar"><span style="width: 45%;"></span></div></div>
+                  <div class="reasonOption"><strong>平仓信号 · 33%</strong><div class="reasonBar"><span style="width: 33%;"></span></div></div>
+                  <div class="reasonOption"><strong>误操作 · 22%</strong><div class="reasonBar"><span style="width: 22%;"></span></div></div>
+                </div>
               </div>
             </section>
 
-            <div class="loss-grid">
-              <section class="reason-panel" aria-label="亏损原因分类汇总">
-                <h3>原因分类汇总</h3>
-                <p class="muted">一级原因与二级原因用于联动筛选亏损单列表</p>
-                <div class="reason-chart">
-                  <div class="reason-row"><span>开仓信号</span><div class="reason-bar"><span style="width: 45%;"></span></div><span>45%</span></div>
-                  <div class="reason-row"><span>平仓信号</span><div class="reason-bar warn"><span style="width: 33%;"></span></div><span>33%</span></div>
-                  <div class="reason-row"><span>误操作</span><div class="reason-bar bad"><span style="width: 22%;"></span></div><span>22%</span></div>
+            <section class="lossListPanel" aria-label="亏损单列表明细">
+              <div class="detailHead">
+                <div>
+                  <h3>亏损单列表</h3>
+                  <p class="panelNote">默认按时间倒序，每页 20 笔；可叠加原因筛选</p>
                 </div>
-              </section>
-
-              <section class="loss-list" aria-label="亏损单列表">
-                <div class="panel-title">
-                  <div>
-                    <h3>亏损单列表</h3>
-                    <p class="muted">默认按时间倒序，也可按亏损金额倒序</p>
-                  </div>
-                  <span class="badge">1-3 / 18</span>
+                <span class="sourcePill">1-3 / 18 笔</span>
+              </div>
+              <div class="listToolbar">
+                <div class="sortControls" role="group" aria-label="亏损单排序">
+                  <button class="smallButton active" type="button">按时间倒序</button>
+                  <button class="smallButton" type="button">按亏损金额倒序</button>
                 </div>
-                <article class="loss-item">
-                  <div><strong>2026-06-04 · MU</strong><p class="muted">开仓信号 · 追高突破失败</p></div>
-                  <strong class="risk">-188.40</strong>
+                <span class="toolbarMeta">20 笔/页</span>
+              </div>
+              <div class="lossTradeList">
+                <article class="lossTradeItem">
+                  <div class="lossTradeMain"><strong>2026-06-04 · MU</strong><small>多头 · 320 股 · 18 分钟</small></div>
+                  <dl class="compactFacts lossTradeFacts"><div><dt>PnL</dt><dd class="bad">-188.40</dd></div><div><dt>复盘</dt><dd>开仓信号</dd></div><div><dt>原因</dt><dd>追高突破失败</dd></div></dl>
+                  <button class="linkButton" type="button">下钻复盘</button>
                 </article>
-                <article class="loss-item">
-                  <div><strong>2026-06-03 · NVDA</strong><p class="muted">平仓信号 · 止损迟疑</p></div>
-                  <strong class="risk">-126.10</strong>
+                <article class="lossTradeItem">
+                  <div class="lossTradeMain"><strong>2026-06-03 · NVDA</strong><small>空头 · 210 股 · 11 分钟</small></div>
+                  <dl class="compactFacts lossTradeFacts"><div><dt>PnL</dt><dd class="bad">-126.10</dd></div><div><dt>复盘</dt><dd>平仓信号</dd></div><div><dt>原因</dt><dd>止损迟疑</dd></div></dl>
+                  <button class="linkButton" type="button">下钻复盘</button>
                 </article>
-                <article class="loss-item">
-                  <div><strong>2026-06-02 · AMD</strong><p class="muted">误操作 · 仓位过大</p></div>
-                  <strong class="risk">-96.70</strong>
+                <article class="lossTradeItem">
+                  <div class="lossTradeMain"><strong>2026-06-02 · AMD</strong><small>多头 · 180 股 · 9 分钟</small></div>
+                  <dl class="compactFacts lossTradeFacts"><div><dt>PnL</dt><dd class="bad">-96.70</dd></div><div><dt>复盘</dt><dd>误操作</dd></div><div><dt>原因</dt><dd>仓位过大</dd></div></dl>
+                  <button class="linkButton" type="button">下钻复盘</button>
                 </article>
-              </section>
-            </div>
+              </div>
+            </section>
           </div>
         </section>
       </section>
-
-      <section class="filters" aria-label="当前复盘">
-        <article class="field"><span class="label">当前复盘日期</span><div class="input-like">04/06/2026</div></article>
-        <article class="field"><span class="label">当前复盘标的</span><div class="input-like">MU</div></article>
-        <article class="field"><span class="label">成交股数</span><span class="value">1,040</span><span class="hint">BUY/SELL 平仓数量</span></article>
-        <article class="field"><span class="label">PnL</span><span class="value positive">+1,338.95</span></article>
-        <article class="field"><span class="label">胜率</span><span class="value">100.00%</span></article>
-        <article class="field"><span class="label">盈亏比</span><span class="value">∞</span></article>
-        <article class="field"><span class="label">持仓最大回撤</span><span class="value risk">1,106.00</span></article>
-      </section>
-
-      <section class="lower">
-        <article class="chart" aria-label="分钟蜡烛复盘">
-          <div class="panel-title">
-            <div>
-              <h2>分钟蜡烛复盘</h2>
-              <p class="muted">分钟线和成交点来自已保存 read model；策略研究请切换到策略测试</p>
-            </div>
-            <div class="right-actions">
-              <span class="badge green">数据可用</span>
-              <span class="badge">买卖点</span>
-              <button class="small-action" type="button">重新归档</button>
-            </div>
-          </div>
-          <div class="badges">
-            <span class="badge">MU</span>
-            <span class="badge">YAHOO</span>
-            <span class="badge">Bars 533</span>
-            <span class="badge">VWAP 999.37</span>
-            <span class="badge">High 1,079.57</span>
-            <span class="badge">Low 971.68</span>
-            <span class="badge">Volume 34,616,554</span>
-            <span class="badge">hash 6f7e1d93f9...72c10087</span>
-          </div>
-          <div class="plot">
-            <div class="line one"></div>
-            <div class="line two"></div>
-            <div class="marker buy">BUY</div>
-            <div class="marker sell">SELL</div>
-          </div>
-        </article>
-
-        <aside class="watch" aria-label="盘前 Watchlist">
-          <div class="panel-title">
-            <div>
-              <h2>盘前 Watchlist</h2>
-              <p class="muted">reason codes 与 metrics hash 来自 watchlist read model</p>
-            </div>
-            <div class="right-actions">
-              <span class="badge status">未生成</span>
-              <button class="small-action" type="button">生成</button>
-            </div>
-          </div>
-          <div class="watch-empty">
-            当前日期尚未生成 watchlist<br />
-            可在本地复盘台连接后端后重新生成
-          </div>
-        </aside>
-      </section>
     </main>
+
     <script>
       const reviewTabs = document.querySelectorAll("[data-review-tab]");
       const reviewPanels = {
@@ -938,7 +805,11 @@
         });
       });
 
-      const requestedReviewTab = new URLSearchParams(window.location.search).get("view") === "loss" || window.location.hash === "#loss-review" ? "loss" : "data";
+      const requestedReviewTab =
+        new URLSearchParams(window.location.search).get("view") === "loss" ||
+        window.location.hash === "#loss-review"
+          ? "loss"
+          : "data";
       selectReviewTab(requestedReviewTab);
     </script>
   </body>

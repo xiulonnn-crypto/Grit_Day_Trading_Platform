@@ -11,12 +11,15 @@ def test_root_index_static_review_tabs_are_switchable() -> None:
     assert 'data-review-tab="loss"' in html
     assert 'id="data-review-panel"' in html
     assert 'id="loss-review-panel"' in html
-    assert "数据下钻热力矩阵" in html
-    assert "亏损热力矩阵" in html
+    assert 'class="workspaceTabs"' in html
+    assert "实时交易" in html
+    assert "热力时间矩阵" in html
+    assert "亏损热力时间矩阵" in html
     assert "亏损单列表" in html
-    assert "P3 亏损复盘静态快照已更新" in html
     assert 'document.querySelectorAll("[data-review-tab]")' in html
     assert "function selectReviewTab(target)" in html
     assert 'panel.hidden = key !== target' in html
     assert 'get("view") === "loss"' in html
     assert 'window.location.hash === "#loss-review"' in html
+    assert "reviewDrillPrimary" not in html
+    assert "P3 亏损复盘静态快照已更新" not in html
