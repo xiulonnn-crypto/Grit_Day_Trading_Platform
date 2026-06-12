@@ -67,5 +67,25 @@ def test_root_index_defaults_to_loss_review_panel() -> None:
     assert 'class="profitOnlyContent emptyState"' in html
     assert 'class="lossOnlyContent"' in html
     assert 'class="lossTradeList profitVisible"' in html
-    assert "\u6700\u5927\u4e8f\u635f\u533a\uff1a\u65e9\u76d8\u9ad8\u52a8\u80fd \u00d7 \u9ad8\u6ce2\u52a8" in html
-    assert "\u6700\u5927\u76c8\u5229\u533a\uff1a\u5c3e\u76d8\u84c4\u52bf\u671f \u00d7 \u9ad8\u6ce2\u52a8" in html
+    assert "\u6700\u5927\u4e8f\u635f\u533a\uff1a\u65e9\u76d8\u9ad8\u52a8\u80fd \u00d7 \u5e38\u89c4\u6ce2\u52a8" in html
+    assert "\u6700\u5927\u76c8\u5229\u533a\uff1a\u65e9\u76d8\u9ad8\u52a8\u80fd \u00d7 \u5e38\u89c4\u6ce2\u52a8" in html
+
+
+def test_root_index_loss_review_snapshot_matches_local_read_model_shape() -> None:
+    html = ROOT_INDEX.read_text(encoding="utf-8")
+
+    assert '<span class="lossVisible">26</span><span class="profitVisible">259</span>' in html
+    assert '<span class="bad lossVisible">-10,824.34</span>' in html
+    assert '<span class="ok profitVisible">+13,859.63</span>' in html
+    assert '<span class="lossVisible">1-20 / 26 \u7b14</span>' in html
+    assert '<span class="profitVisible">1-20 / 259 \u7b14</span>' in html
+    assert "\u5e38\u89c4\u6ce2\u52a8" in html
+    assert "\u4f4e\u6ce2\u52a8" in html
+    assert "\u975e\u5e38\u89c4" in html
+    assert "\u7f3a ATR \u8bc1\u636e" in html
+    assert "\u9006\u52bf\u5165\u573a" in html
+    assert "\u8ffd\u7a81\u7834\u8fc7\u6025" in html
+    assert "\u5e73\u4ed3\u4fe1\u53f7\u672a\u6267\u884c" in html
+    assert "\u7b2c 1 / 2 \u9875" in html
+    assert "\u7b2c 1 / 13 \u9875" in html
+    assert html.count('class="lossTradeItem"') >= 40

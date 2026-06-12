@@ -17,6 +17,8 @@
 
       body {
         margin: 0;
+        max-width: 100%;
+        overflow-x: hidden;
       }
 
       button {
@@ -27,6 +29,8 @@
 
       .shell {
         min-height: 100vh;
+        max-width: 100%;
+        overflow-x: hidden;
         padding: 24px;
       }
 
@@ -89,6 +93,16 @@
       .panelNote {
         color: #607080;
         margin-top: 6px;
+      }
+
+      .topbar section,
+      .topbar p:not(.eyebrow) {
+        min-width: 0;
+        overflow-wrap: anywhere;
+      }
+
+      .mobileLineBreak {
+        display: none;
       }
 
       .panelNote,
@@ -333,6 +347,7 @@
       }
 
       .matrixScroll {
+        max-width: 100%;
         min-width: 0;
         overflow-x: auto;
         padding-bottom: 2px;
@@ -713,6 +728,19 @@
         grid-template-columns: minmax(160px, 1fr) minmax(260px, 1.2fr) auto;
       }
 
+      .lossReviewPagination {
+        align-items: center;
+        display: flex;
+        gap: 8px;
+        justify-content: flex-end;
+      }
+
+      .lossReviewPagination span {
+        color: #405160;
+        font-size: 12px;
+        font-weight: 800;
+      }
+
       .lossTradeFacts {
         grid-template-columns: repeat(3, minmax(70px, 1fr));
       }
@@ -745,6 +773,16 @@
           display: grid;
         }
 
+        .topbar section,
+        .topbar p:not(.eyebrow) {
+          max-width: calc(100vw - 32px);
+          word-break: break-all;
+        }
+
+        .mobileLineBreak {
+          display: block;
+        }
+
         .workspaceTabs,
         .surfaceTabs,
         .reviewDrillSurfaceTabs,
@@ -775,7 +813,7 @@
         <section>
           <p class="eyebrow">P2 REVIEW DESK</p>
           <h1>日内复盘台</h1>
-          <p>STP 成交证据、行情上下文、盘前 watchlist 与策略复盘信号</p>
+          <p>STP 成交证据、行情上下文、盘前 watchlist<span class="mobileLineBreak"></span> 与策略复盘信号</p>
         </section>
         <button class="uploadButton" type="button"><span class="uploadIcon">↑</span>上传 STP TXT</button>
       </header>
@@ -899,10 +937,10 @@
           </div>
 
           <dl class="compactFacts lossSummaryGrid">
-            <div><dt><span class="lossVisible">亏损单</span><span class="profitVisible">盈利单</span></dt><dd><span class="lossVisible">18</span><span class="profitVisible">14</span></dd></div>
-            <div><dt><span class="lossVisible">已复盘</span><span class="profitVisible">原因记录</span></dt><dd><span class="lossVisible">12</span><span class="profitVisible">不适用</span></dd></div>
-            <div><dt><span class="lossVisible">待复盘</span><span class="profitVisible">原因筛选</span></dt><dd><span class="lossVisible">6</span><span class="profitVisible">空</span></dd></div>
-            <div><dt><span class="lossVisible">亏损合计</span><span class="profitVisible">盈利合计</span></dt><dd><span class="bad lossVisible">-842.70</span><span class="ok profitVisible">+1,209.00</span></dd></div>
+            <div><dt><span class="lossVisible">亏损单</span><span class="profitVisible">盈利单</span></dt><dd><span class="lossVisible">26</span><span class="profitVisible">259</span></dd></div>
+            <div><dt><span class="lossVisible">已复盘</span><span class="profitVisible">原因记录</span></dt><dd><span class="lossVisible">26</span><span class="profitVisible">不适用</span></dd></div>
+            <div><dt><span class="lossVisible">待复盘</span><span class="profitVisible">原因筛选</span></dt><dd><span class="lossVisible">0</span><span class="profitVisible">空</span></dd></div>
+            <div><dt><span class="lossVisible">亏损合计</span><span class="profitVisible">盈利合计</span></dt><dd><span class="bad lossVisible">-10,824.34</span><span class="ok profitVisible">+13,859.63</span></dd></div>
           </dl>
 
           <section class="matrixPanel" aria-label="盈亏复盘热力时间矩阵">
@@ -913,11 +951,11 @@
               </div>
               <div class="matrixSummary">
                 <span class="sourcePill"><span class="lossVisible">亏损单</span><span class="profitVisible">盈利单</span></span>
-                <strong class="bad lossVisible">最大亏损区：早盘高动能 × 高波动 · -1,424.77</strong>
-                <strong class="ok profitVisible">最大盈利区：尾盘蓄势期 × 高波动 · +1,209.00</strong>
+                <strong class="bad lossVisible">最大亏损区：早盘高动能 × 常规波动 · -3,788.50</strong>
+                <strong class="ok profitVisible">最大盈利区：早盘高动能 × 常规波动 · +5,054.91</strong>
               </div>
             </header>
-            <div class="matrixScroll">
+            <div class="matrixScroll lossVisible">
               <div class="matrixGrid lossMatrixGrid">
                 <div class="matrixCorner"></div>
                 <div class="matrixAxis matrixColumnHead"><strong>早盘高动能</strong><small>09:30-10:30</small></div>
@@ -926,19 +964,71 @@
                 <div class="matrixAxis matrixColumnHead"><strong>尾盘蓄势期</strong><small>13:30-15:00</small></div>
                 <div class="matrixAxis matrixColumnHead"><strong>尾盘生死时速</strong><small>15:00-16:00</small></div>
                 <div class="matrixAxis matrixRowHead"><strong>极端冲击</strong><small>&gt; 3.0 x ATR</small></div>
-                <div class="matrixCell intensity2"><strong>2</strong><span class="bad">-187.20</span><small>1.43% · 最大 -239.20</small></div>
+                <div class="matrixCell intensity1"><strong>1</strong><span class="bad">-239.20</span><small>2.21% · 最大 -239.20</small></div>
                 <div class="matrixCell empty"><strong>0</strong><span>0.00</span><small>0.00% · 最大 N/A</small></div>
                 <div class="matrixCell empty"><strong>0</strong><span>0.00</span><small>0.00% · 最大 N/A</small></div>
                 <div class="matrixCell empty"><strong>0</strong><span>0.00</span><small>0.00% · 最大 N/A</small></div>
                 <div class="matrixCell empty"><strong>0</strong><span>0.00</span><small>0.00% · 最大 N/A</small></div>
                 <div class="matrixAxis matrixRowHead"><strong>高波动</strong><small>1.5-3.0 x ATR</small></div>
-                <div class="matrixCell intensity4"><strong>10</strong><span class="bad">-1,424.77</span><small>10.33% · 最大 -1,767.60</small></div>
-                <div class="matrixCell intensity1"><strong>2</strong><span class="ok">+71.20</span><small>0.35% · 最大 +23.20</small></div>
-                <div class="matrixCell intensity1"><strong>3</strong><span class="ok">+180.10</span><small>0.88% · 最大 +24.40</small></div>
-                <div class="matrixCell intensity2"><strong>8</strong><span class="ok">+1,209.00</span><small>6.72% · 最大 -82.00</small></div>
-                <div class="matrixCell intensity1"><strong>3</strong><span class="ok">+112.30</span><small>0.64% · 最大 -9.10</small></div>
+                <div class="matrixCell intensity3"><strong>2</strong><span class="bad">-1,949.80</span><small>18.01% · 最大 -1,767.60</small></div>
+                <div class="matrixCell empty"><strong>0</strong><span>0.00</span><small>0.00% · 最大 N/A</small></div>
+                <div class="matrixCell empty"><strong>0</strong><span>0.00</span><small>0.00% · 最大 N/A</small></div>
+                <div class="matrixCell intensity1"><strong>1</strong><span class="bad">-82.00</span><small>0.76% · 最大 -82.00</small></div>
+                <div class="matrixCell intensity1"><strong>1</strong><span class="bad">-9.10</span><small>0.08% · 最大 -9.10</small></div>
+                <div class="matrixAxis matrixRowHead"><strong>常规波动</strong><small>0.5-1.5 x ATR</small></div>
+                <div class="matrixCell intensity4"><strong>6</strong><span class="bad">-3,788.50</span><small>35.00% · 最大 -1,191.60</small></div>
+                <div class="matrixCell intensity2"><strong>4</strong><span class="bad">-993.70</span><small>9.18% · 最大 -726.10</small></div>
+                <div class="matrixCell intensity3"><strong>7</strong><span class="bad">-2,508.84</span><small>23.18% · 最大 -1,543.00</small></div>
+                <div class="matrixCell intensity2"><strong>3</strong><span class="bad">-1,185.60</span><small>10.95% · 最大 -973.00</small></div>
+                <div class="matrixCell intensity1"><strong>1</strong><span class="bad">-67.60</span><small>0.62% · 最大 -67.60</small></div>
+                <div class="matrixAxis matrixRowHead"><strong>低波动</strong><small>&lt; 0.5 x ATR</small></div>
+                <div class="matrixCell empty"><strong>0</strong><span>0.00</span><small>0.00% · 最大 N/A</small></div>
+                <div class="matrixCell empty"><strong>0</strong><span>0.00</span><small>0.00% · 最大 N/A</small></div>
+                <div class="matrixCell empty"><strong>0</strong><span>0.00</span><small>0.00% · 最大 N/A</small></div>
+                <div class="matrixCell empty"><strong>0</strong><span>0.00</span><small>0.00% · 最大 N/A</small></div>
+                <div class="matrixCell empty"><strong>0</strong><span>0.00</span><small>0.00% · 最大 N/A</small></div>
               </div>
             </div>
+            <div class="matrixScroll profitVisible">
+              <div class="matrixGrid">
+                <div class="matrixCorner"></div>
+                <div class="matrixAxis matrixColumnHead"><strong>早盘高动能</strong><small>09:30-10:30</small></div>
+                <div class="matrixAxis matrixColumnHead"><strong>早盘至中盘过渡</strong><small>10:30-11:30</small></div>
+                <div class="matrixAxis matrixColumnHead"><strong>中盘死寂垃圾时间</strong><small>11:30-13:30</small></div>
+                <div class="matrixAxis matrixColumnHead"><strong>尾盘蓄势期</strong><small>13:30-15:00</small></div>
+                <div class="matrixAxis matrixColumnHead"><strong>尾盘生死时速</strong><small>15:00-16:00</small></div>
+                <div class="matrixAxis matrixColumnHead"><strong>非常规</strong><small>09:30前/16:00后</small></div>
+                <div class="matrixAxis matrixRowHead"><strong>极端冲击</strong><small>&gt; 3.0 x ATR</small></div>
+                <div class="matrixCell intensity1"><strong>1</strong><span class="ok">+52.00</span><small>0.38% · 最大 +52.00</small></div>
+                <div class="matrixCell empty"><strong>0</strong><span>0.00</span><small>0.00% · 最大 N/A</small></div>
+                <div class="matrixCell empty"><strong>0</strong><span>0.00</span><small>0.00% · 最大 N/A</small></div>
+                <div class="matrixCell empty"><strong>0</strong><span>0.00</span><small>0.00% · 最大 N/A</small></div>
+                <div class="matrixCell empty"><strong>0</strong><span>0.00</span><small>0.00% · 最大 N/A</small></div>
+                <div class="matrixCell empty"><strong>0</strong><span>0.00</span><small>0.00% · 最大 N/A</small></div>
+                <div class="matrixAxis matrixRowHead"><strong>高波动</strong><small>1.5-3.0 x ATR</small></div>
+                <div class="matrixCell intensity1"><strong>10</strong><span class="ok">+366.43</span><small>2.64% · 最大 +4.86</small></div>
+                <div class="matrixCell intensity1"><strong>2</strong><span class="ok">+71.20</span><small>0.51% · 最大 +23.20</small></div>
+                <div class="matrixCell intensity1"><strong>3</strong><span class="ok">+180.10</span><small>1.30% · 最大 +24.40</small></div>
+                <div class="matrixCell intensity2"><strong>7</strong><span class="ok">+1,291.00</span><small>9.31% · 最大 +11.00</small></div>
+                <div class="matrixCell intensity1"><strong>2</strong><span class="ok">+121.40</span><small>0.88% · 最大 +31.80</small></div>
+                <div class="matrixCell empty"><strong>0</strong><span>0.00</span><small>0.00% · 最大 N/A</small></div>
+                <div class="matrixAxis matrixRowHead"><strong>常规波动</strong><small>0.5-1.5 x ATR</small></div>
+                <div class="matrixCell intensity4"><strong>66</strong><span class="ok">+5,054.91</span><small>36.47% · 最大 +8.00</small></div>
+                <div class="matrixCell intensity2"><strong>41</strong><span class="ok">+1,884.30</span><small>13.60% · 最大 +2.00</small></div>
+                <div class="matrixCell intensity3"><strong>61</strong><span class="ok">+2,851.72</span><small>20.58% · 最大 +0.20</small></div>
+                <div class="matrixCell intensity1"><strong>39</strong><span class="ok">+1,150.27</span><small>8.30% · 最大 +0.40</small></div>
+                <div class="matrixCell intensity1"><strong>19</strong><span class="ok">+599.10</span><small>4.32% · 最大 +1.40</small></div>
+                <div class="matrixCell intensity1"><strong>1</strong><span class="ok">+14.00</span><small>0.10% · 最大 +14.00</small></div>
+                <div class="matrixAxis matrixRowHead"><strong>低波动</strong><small>&lt; 0.5 x ATR</small></div>
+                <div class="matrixCell intensity1"><strong>2</strong><span class="ok">+109.00</span><small>0.79% · 最大 +49.00</small></div>
+                <div class="matrixCell intensity1"><strong>2</strong><span class="ok">+47.80</span><small>0.34% · 最大 +22.40</small></div>
+                <div class="matrixCell intensity1"><strong>2</strong><span class="ok">+45.00</span><small>0.32% · 最大 +10.00</small></div>
+                <div class="matrixCell intensity1"><strong>1</strong><span class="ok">+21.40</span><small>0.15% · 最大 +21.40</small></div>
+                <div class="matrixCell empty"><strong>0</strong><span>0.00</span><small>0.00% · 最大 N/A</small></div>
+                <div class="matrixCell empty"><strong>0</strong><span>0.00</span><small>0.00% · 最大 N/A</small></div>
+              </div>
+            </div>
+            <p class="matrixNote">时间窗口采用 09:30-16:00 五大美股日内微观结构划分；纵轴使用后端从本地分钟线归档计算的开仓 1min K 振幅 / 前 20 根 ATR，缺足够历史分钟线时进入缺 ATR 证据。</p>
           </section>
 
           <div class="lossReviewLayout">
@@ -957,17 +1047,17 @@
                       <strong>一级原因</strong>
                       <small>按一级原因统计；未选择时显示全部</small>
                     </div>
-                    <span class="sourcePill">18 笔</span>
+                    <span class="sourcePill">26 笔</span>
                   </div>
                   <div class="lossReviewPieWrap">
-                    <div class="lossReviewPie" style="background: conic-gradient(#1f6f67 0 45%, #4f63a8 45% 78%, #ad6800 78% 100%);">
-                      <span>18</span>
+                    <div class="lossReviewPie" style="background: conic-gradient(#4f63a8 0 69.23%, #d46b08 69.23% 96.15%, #237804 96.15% 100%);">
+                      <span>26</span>
                       <small>亏损单</small>
                     </div>
                     <div class="lossReviewPieLegend" aria-label="一级原因多选筛选">
-                      <label class="lossReviewFilterOption active"><input checked type="checkbox" /><span class="lossReviewLegendSwatch" style="background-color:#1f6f67"></span><span class="lossReviewLegendText"><strong>开仓信号</strong><small>8 笔 · 45% · -411.80</small></span></label>
-                      <label class="lossReviewFilterOption"><input type="checkbox" /><span class="lossReviewLegendSwatch" style="background-color:#4f63a8"></span><span class="lossReviewLegendText"><strong>平仓信号</strong><small>6 笔 · 33% · -276.20</small></span></label>
-                      <label class="lossReviewFilterOption"><input type="checkbox" /><span class="lossReviewLegendSwatch" style="background-color:#ad6800"></span><span class="lossReviewLegendText"><strong>误操作</strong><small>4 笔 · 22% · -154.70</small></span></label>
+                      <label class="lossReviewFilterOption"><input type="checkbox" /><span class="lossReviewLegendSwatch" style="background-color:#4f63a8"></span><span class="lossReviewLegendText"><strong>开仓信号</strong><small>18 笔 · 69.23% · -8,490.00</small></span></label>
+                      <label class="lossReviewFilterOption"><input type="checkbox" /><span class="lossReviewLegendSwatch" style="background-color:#d46b08"></span><span class="lossReviewLegendText"><strong>平仓信号</strong><small>7 笔 · 26.92% · -1,971.14</small></span></label>
+                      <label class="lossReviewFilterOption"><input type="checkbox" /><span class="lossReviewLegendSwatch" style="background-color:#237804"></span><span class="lossReviewLegendText"><strong>误操作</strong><small>1 笔 · 3.85% · -363.20</small></span></label>
                     </div>
                   </div>
                 </div>
@@ -977,18 +1067,22 @@
                       <strong>二级原因</strong>
                       <small>随一级原因筛选联动；未选择时显示全部</small>
                     </div>
-                    <span class="sourcePill">18 笔</span>
+                    <span class="sourcePill">26 笔</span>
                   </div>
                   <div class="lossReviewPieWrap">
-                    <div class="lossReviewPie" style="background: conic-gradient(#1f6f67 0 39%, #4f63a8 39% 67%, #ad6800 67% 83%, #2d8b7f 83% 100%);">
-                      <span>18</span>
+                    <div class="lossReviewPie" style="background: conic-gradient(#4f63a8 0 38.46%, #d46b08 38.46% 53.84%, #237804 53.84% 65.38%, #8c6d1f 65.38% 76.92%, #0f766e 76.92% 84.61%, #a8071a 84.61% 92.30%, #607080 92.30% 96.15%, #4f63a8 96.15% 100%);">
+                      <span>26</span>
                       <small>亏损单</small>
                     </div>
                     <div class="lossReviewPieLegend" aria-label="二级原因多选筛选">
-                      <label class="lossReviewFilterOption active"><input checked type="checkbox" /><span class="lossReviewLegendSwatch" style="background-color:#1f6f67"></span><span class="lossReviewLegendText"><strong>追高突破失败</strong><small>7 笔 · 39% · -322.10</small></span></label>
-                      <label class="lossReviewFilterOption"><input type="checkbox" /><span class="lossReviewLegendSwatch" style="background-color:#4f63a8"></span><span class="lossReviewLegendText"><strong>止损迟疑</strong><small>5 笔 · 28% · -238.40</small></span></label>
-                      <label class="lossReviewFilterOption"><input type="checkbox" /><span class="lossReviewLegendSwatch" style="background-color:#ad6800"></span><span class="lossReviewLegendText"><strong>仓位过大</strong><small>3 笔 · 16% · -152.90</small></span></label>
-                      <label class="lossReviewFilterOption"><input type="checkbox" /><span class="lossReviewLegendSwatch" style="background-color:#2d8b7f"></span><span class="lossReviewLegendText"><strong>计划未执行</strong><small>3 笔 · 17% · -129.30</small></span></label>
+                      <label class="lossReviewFilterOption"><input type="checkbox" /><span class="lossReviewLegendSwatch" style="background-color:#4f63a8"></span><span class="lossReviewLegendText"><strong>逆势入场</strong><small>10 笔 · 38.46% · -3,399.10</small></span></label>
+                      <label class="lossReviewFilterOption"><input type="checkbox" /><span class="lossReviewLegendSwatch" style="background-color:#d46b08"></span><span class="lossReviewLegendText"><strong>追突破过急</strong><small>4 笔 · 15.38% · -4,010.80</small></span></label>
+                      <label class="lossReviewFilterOption"><input type="checkbox" /><span class="lossReviewLegendSwatch" style="background-color:#237804"></span><span class="lossReviewLegendText"><strong>平仓计划不清</strong><small>3 笔 · 11.54% · -665.34</small></span></label>
+                      <label class="lossReviewFilterOption"><input type="checkbox" /><span class="lossReviewLegendSwatch" style="background-color:#8c6d1f"></span><span class="lossReviewLegendText"><strong>确认不足</strong><small>3 笔 · 11.54% · -929.80</small></span></label>
+                      <label class="lossReviewFilterOption"><input type="checkbox" /><span class="lossReviewLegendSwatch" style="background-color:#0f766e"></span><span class="lossReviewLegendText"><strong>止损过慢</strong><small>2 笔 · 7.69% · -1,055.00</small></span></label>
+                      <label class="lossReviewFilterOption"><input type="checkbox" /><span class="lossReviewLegendSwatch" style="background-color:#a8071a"></span><span class="lossReviewLegendText"><strong>平仓信号未执行</strong><small>2 笔 · 7.69% · -250.80</small></span></label>
+                      <label class="lossReviewFilterOption"><input type="checkbox" /><span class="lossReviewLegendSwatch" style="background-color:#607080"></span><span class="lossReviewLegendText"><strong>入场位置差</strong><small>1 笔 · 3.85% · -150.30</small></span></label>
+                      <label class="lossReviewFilterOption"><input type="checkbox" /><span class="lossReviewLegendSwatch" style="background-color:#4f63a8"></span><span class="lossReviewLegendText"><strong>重复下单</strong><small>1 笔 · 3.85% · -363.20</small></span></label>
                     </div>
                   </div>
                 </div>
@@ -1008,7 +1102,7 @@
                   <h3><span class="lossVisible">亏损单列表</span><span class="profitVisible">盈利单列表</span></h3>
                   <p class="panelNote"><span class="lossVisible">默认按时间倒序，每页 20 笔；可叠加原因筛选</span><span class="profitVisible">默认按时间倒序，每页 20 笔；盈利视图不叠加原因筛选</span></p>
                 </div>
-                <span class="sourcePill"><span class="lossVisible">1-3 / 18 笔</span><span class="profitVisible">1-3 / 14 笔</span></span>
+                <span class="sourcePill"><span class="lossVisible">1-20 / 26 笔</span><span class="profitVisible">1-20 / 259 笔</span></span>
               </div>
               <div class="listToolbar">
                 <div class="sortControls" role="group" aria-label="亏损单排序">
@@ -1019,37 +1113,212 @@
               </div>
               <div class="lossTradeList lossVisible">
                 <article class="lossTradeItem">
-                  <div class="lossTradeMain"><strong>2026-06-04 · MU</strong><small>多头 · 320 股 · 18 分钟</small></div>
-                  <dl class="compactFacts lossTradeFacts"><div><dt>PnL</dt><dd class="bad">-188.40</dd></div><div><dt>复盘</dt><dd>开仓信号</dd></div><div><dt>原因</dt><dd>追高突破失败</dd></div></dl>
+                  <div class="lossTradeMain"><strong>2026-06-12 · MU</strong><small>多头 · 20 股 · 4.37 分钟</small></div>
+                  <dl class="compactFacts lossTradeFacts"><div><dt>PnL</dt><dd class="bad">-67.60</dd></div><div><dt>复盘</dt><dd>开仓信号</dd></div><div><dt>原因</dt><dd>逆势入场</dd></div></dl>
                   <button class="linkButton" type="button">下钻复盘</button>
                 </article>
                 <article class="lossTradeItem">
-                  <div class="lossTradeMain"><strong>2026-06-03 · NVDA</strong><small>空头 · 210 股 · 11 分钟</small></div>
-                  <dl class="compactFacts lossTradeFacts"><div><dt>PnL</dt><dd class="bad">-126.10</dd></div><div><dt>复盘</dt><dd>平仓信号</dd></div><div><dt>原因</dt><dd>止损迟疑</dd></div></dl>
+                  <div class="lossTradeMain"><strong>2026-06-12 · MU</strong><small>多头 · 20 股 · 3.18 分钟</small></div>
+                  <dl class="compactFacts lossTradeFacts"><div><dt>PnL</dt><dd class="bad">-61.60</dd></div><div><dt>复盘</dt><dd>开仓信号</dd></div><div><dt>原因</dt><dd>确认不足</dd></div></dl>
                   <button class="linkButton" type="button">下钻复盘</button>
                 </article>
                 <article class="lossTradeItem">
-                  <div class="lossTradeMain"><strong>2026-06-02 · AMD</strong><small>多头 · 180 股 · 9 分钟</small></div>
-                  <dl class="compactFacts lossTradeFacts"><div><dt>PnL</dt><dd class="bad">-96.70</dd></div><div><dt>复盘</dt><dd>误操作</dd></div><div><dt>原因</dt><dd>仓位过大</dd></div></dl>
+                  <div class="lossTradeMain"><strong>2026-06-12 · MU</strong><small>空头 · 100 股 · 10.28 分钟</small></div>
+                  <dl class="compactFacts lossTradeFacts"><div><dt>PnL</dt><dd class="bad">-1,191.60</dd></div><div><dt>复盘</dt><dd>开仓信号</dd></div><div><dt>原因</dt><dd>逆势入场</dd></div></dl>
+                  <button class="linkButton" type="button">下钻复盘</button>
+                </article>
+                <article class="lossTradeItem">
+                  <div class="lossTradeMain"><strong>2026-06-12 · MU</strong><small>空头 · 40 股 · 4.90 分钟</small></div>
+                  <dl class="compactFacts lossTradeFacts"><div><dt>PnL</dt><dd class="bad">-182.20</dd></div><div><dt>复盘</dt><dd>平仓信号</dd></div><div><dt>原因</dt><dd>平仓信号未执行</dd></div></dl>
+                  <button class="linkButton" type="button">下钻复盘</button>
+                </article>
+                <article class="lossTradeItem">
+                  <div class="lossTradeMain"><strong>2026-06-11 · MU</strong><small>空头 · 120 股 · 14.13 分钟</small></div>
+                  <dl class="compactFacts lossTradeFacts"><div><dt>PnL</dt><dd class="bad">-151.00</dd></div><div><dt>复盘</dt><dd>开仓信号</dd></div><div><dt>原因</dt><dd>逆势入场</dd></div></dl>
+                  <button class="linkButton" type="button">下钻复盘</button>
+                </article>
+                <article class="lossTradeItem">
+                  <div class="lossTradeMain"><strong>2026-06-11 · MU</strong><small>空头 · 80 股 · 9.28 分钟</small></div>
+                  <dl class="compactFacts lossTradeFacts"><div><dt>PnL</dt><dd class="bad">-973.00</dd></div><div><dt>复盘</dt><dd>平仓信号</dd></div><div><dt>原因</dt><dd>止损过慢</dd></div></dl>
+                  <button class="linkButton" type="button">下钻复盘</button>
+                </article>
+                <article class="lossTradeItem">
+                  <div class="lossTradeMain"><strong>2026-06-11 · MU</strong><small>多头 · 20 股 · 8.90 分钟</small></div>
+                  <dl class="compactFacts lossTradeFacts"><div><dt>PnL</dt><dd class="bad">-16.20</dd></div><div><dt>复盘</dt><dd>开仓信号</dd></div><div><dt>原因</dt><dd>逆势入场</dd></div></dl>
+                  <button class="linkButton" type="button">下钻复盘</button>
+                </article>
+                <article class="lossTradeItem">
+                  <div class="lossTradeMain"><strong>2026-06-11 · MU</strong><small>多头 · 40 股 · 5.13 分钟</small></div>
+                  <dl class="compactFacts lossTradeFacts"><div><dt>PnL</dt><dd class="bad">-89.20</dd></div><div><dt>复盘</dt><dd>开仓信号</dd></div><div><dt>原因</dt><dd>逆势入场</dd></div></dl>
+                  <button class="linkButton" type="button">下钻复盘</button>
+                </article>
+                <article class="lossTradeItem">
+                  <div class="lossTradeMain"><strong>2026-06-10 · MU</strong><small>多头 · 20 股 · 13.38 分钟</small></div>
+                  <dl class="compactFacts lossTradeFacts"><div><dt>PnL</dt><dd class="bad">-82.00</dd></div><div><dt>复盘</dt><dd>平仓信号</dd></div><div><dt>原因</dt><dd>止损过慢</dd></div></dl>
+                  <button class="linkButton" type="button">下钻复盘</button>
+                </article>
+                <article class="lossTradeItem">
+                  <div class="lossTradeMain"><strong>2026-06-10 · MU</strong><small>多头 · 60 股 · 10.33 分钟</small></div>
+                  <dl class="compactFacts lossTradeFacts"><div><dt>PnL</dt><dd class="bad">-461.00</dd></div><div><dt>复盘</dt><dd>开仓信号</dd></div><div><dt>原因</dt><dd>追突破过急</dd></div></dl>
+                  <button class="linkButton" type="button">下钻复盘</button>
+                </article>
+                <article class="lossTradeItem">
+                  <div class="lossTradeMain"><strong>2026-06-10 · MU</strong><small>多头 · 40 股 · 1.57 分钟</small></div>
+                  <dl class="compactFacts lossTradeFacts"><div><dt>PnL</dt><dd class="bad">-363.20</dd></div><div><dt>复盘</dt><dd>误操作</dd></div><div><dt>原因</dt><dd>重复下单</dd></div></dl>
+                  <button class="linkButton" type="button">下钻复盘</button>
+                </article>
+                <article class="lossTradeItem">
+                  <div class="lossTradeMain"><strong>2026-06-10 · MU</strong><small>空头 · 40 股 · 13.17 分钟</small></div>
+                  <dl class="compactFacts lossTradeFacts"><div><dt>PnL</dt><dd class="bad">-23.44</dd></div><div><dt>复盘</dt><dd>平仓信号</dd></div><div><dt>原因</dt><dd>平仓计划不清</dd></div></dl>
+                  <button class="linkButton" type="button">下钻复盘</button>
+                </article>
+                <article class="lossTradeItem">
+                  <div class="lossTradeMain"><strong>2026-06-10 · MU</strong><small>多头 · 20 股 · 3.27 分钟</small></div>
+                  <dl class="compactFacts lossTradeFacts"><div><dt>PnL</dt><dd class="bad">-109.20</dd></div><div><dt>复盘</dt><dd>开仓信号</dd></div><div><dt>原因</dt><dd>逆势入场</dd></div></dl>
+                  <button class="linkButton" type="button">下钻复盘</button>
+                </article>
+                <article class="lossTradeItem">
+                  <div class="lossTradeMain"><strong>2026-06-08 · MU</strong><small>多头 · 200 股 · 10.80 分钟</small></div>
+                  <dl class="compactFacts lossTradeFacts"><div><dt>PnL</dt><dd class="bad">-1,543.00</dd></div><div><dt>复盘</dt><dd>开仓信号</dd></div><div><dt>原因</dt><dd>追突破过急</dd></div></dl>
+                  <button class="linkButton" type="button">下钻复盘</button>
+                </article>
+                <article class="lossTradeItem">
+                  <div class="lossTradeMain"><strong>2026-06-08 · MU</strong><small>空头 · 160 股 · 10.05 分钟</small></div>
+                  <dl class="compactFacts lossTradeFacts"><div><dt>PnL</dt><dd class="bad">-726.10</dd></div><div><dt>复盘</dt><dd>开仓信号</dd></div><div><dt>原因</dt><dd>逆势入场</dd></div></dl>
+                  <button class="linkButton" type="button">下钻复盘</button>
+                </article>
+                <article class="lossTradeItem">
+                  <div class="lossTradeMain"><strong>2026-06-08 · MU</strong><small>多头 · 80 股 · 3.15 分钟</small></div>
+                  <dl class="compactFacts lossTradeFacts"><div><dt>PnL</dt><dd class="bad">-945.60</dd></div><div><dt>复盘</dt><dd>开仓信号</dd></div><div><dt>原因</dt><dd>逆势入场</dd></div></dl>
+                  <button class="linkButton" type="button">下钻复盘</button>
+                </article>
+                <article class="lossTradeItem">
+                  <div class="lossTradeMain"><strong>2026-06-08 · MU</strong><small>多头 · 60 股 · 6.62 分钟</small></div>
+                  <dl class="compactFacts lossTradeFacts"><div><dt>PnL</dt><dd class="bad">-150.30</dd></div><div><dt>复盘</dt><dd>开仓信号</dd></div><div><dt>原因</dt><dd>入场位置差</dd></div></dl>
+                  <button class="linkButton" type="button">下钻复盘</button>
+                </article>
+                <article class="lossTradeItem">
+                  <div class="lossTradeMain"><strong>2026-06-08 · MU</strong><small>多头 · 40 股 · 1.88 分钟</small></div>
+                  <dl class="compactFacts lossTradeFacts"><div><dt>PnL</dt><dd class="bad">-239.20</dd></div><div><dt>复盘</dt><dd>开仓信号</dd></div><div><dt>原因</dt><dd>追突破过急</dd></div></dl>
+                  <button class="linkButton" type="button">下钻复盘</button>
+                </article>
+                <article class="lossTradeItem">
+                  <div class="lossTradeMain"><strong>2026-06-05 · MU</strong><small>多头 · 100 股 · 16.78 分钟</small></div>
+                  <dl class="compactFacts lossTradeFacts"><div><dt>PnL</dt><dd class="bad">-1,767.60</dd></div><div><dt>复盘</dt><dd>开仓信号</dd></div><div><dt>原因</dt><dd>追突破过急</dd></div></dl>
+                  <button class="linkButton" type="button">下钻复盘</button>
+                </article>
+                <article class="lossTradeItem">
+                  <div class="lossTradeMain"><strong>2026-06-03 · MU</strong><small>多头 · 80 股 · 9.55 分钟</small></div>
+                  <dl class="compactFacts lossTradeFacts"><div><dt>PnL</dt><dd class="bad">-632.80</dd></div><div><dt>复盘</dt><dd>平仓信号</dd></div><div><dt>原因</dt><dd>平仓计划不清</dd></div></dl>
                   <button class="linkButton" type="button">下钻复盘</button>
                 </article>
               </div>
               <div class="lossTradeList profitVisible">
                 <article class="lossTradeItem">
-                  <div class="lossTradeMain"><strong>2026-06-04 · TSLA</strong><small>多头 · 260 股 · 16 分钟</small></div>
-                  <dl class="compactFacts lossTradeFacts"><div><dt>PnL</dt><dd class="ok">+316.40</dd></div><div><dt>结果</dt><dd>盈利</dd></div><div><dt>复盘原因</dt><dd>不适用</dd></div></dl>
+                  <div class="lossTradeMain"><strong>2026-06-12 · MU</strong><small>空头 · 20 股 · 1.42 分钟</small></div>
+                  <dl class="compactFacts lossTradeFacts"><div><dt>PnL</dt><dd class="ok">+11.80</dd></div><div><dt>结果</dt><dd>盈利</dd></div><div><dt>复盘原因</dt><dd>不适用</dd></div></dl>
                   <button class="linkButton" type="button">下钻复盘</button>
                 </article>
                 <article class="lossTradeItem">
-                  <div class="lossTradeMain"><strong>2026-06-03 · NVDA</strong><small>空头 · 180 股 · 13 分钟</small></div>
-                  <dl class="compactFacts lossTradeFacts"><div><dt>PnL</dt><dd class="ok">+244.20</dd></div><div><dt>结果</dt><dd>盈利</dd></div><div><dt>复盘原因</dt><dd>不适用</dd></div></dl>
+                  <div class="lossTradeMain"><strong>2026-06-12 · MU</strong><small>多头 · 20 股 · 1.70 分钟</small></div>
+                  <dl class="compactFacts lossTradeFacts"><div><dt>PnL</dt><dd class="ok">+20.00</dd></div><div><dt>结果</dt><dd>盈利</dd></div><div><dt>复盘原因</dt><dd>不适用</dd></div></dl>
                   <button class="linkButton" type="button">下钻复盘</button>
                 </article>
                 <article class="lossTradeItem">
-                  <div class="lossTradeMain"><strong>2026-06-02 · AMD</strong><small>多头 · 200 股 · 8 分钟</small></div>
-                  <dl class="compactFacts lossTradeFacts"><div><dt>PnL</dt><dd class="ok">+128.80</dd></div><div><dt>结果</dt><dd>盈利</dd></div><div><dt>复盘原因</dt><dd>不适用</dd></div></dl>
+                  <div class="lossTradeMain"><strong>2026-06-12 · MU</strong><small>多头 · 20 股 · 0.58 分钟</small></div>
+                  <dl class="compactFacts lossTradeFacts"><div><dt>PnL</dt><dd class="ok">+42.00</dd></div><div><dt>结果</dt><dd>盈利</dd></div><div><dt>复盘原因</dt><dd>不适用</dd></div></dl>
                   <button class="linkButton" type="button">下钻复盘</button>
                 </article>
+                <article class="lossTradeItem">
+                  <div class="lossTradeMain"><strong>2026-06-12 · MU</strong><small>多头 · 20 股 · 0.23 分钟</small></div>
+                  <dl class="compactFacts lossTradeFacts"><div><dt>PnL</dt><dd class="ok">+20.80</dd></div><div><dt>结果</dt><dd>盈利</dd></div><div><dt>复盘原因</dt><dd>不适用</dd></div></dl>
+                  <button class="linkButton" type="button">下钻复盘</button>
+                </article>
+                <article class="lossTradeItem">
+                  <div class="lossTradeMain"><strong>2026-06-12 · MU</strong><small>多头 · 20 股 · 0.75 分钟</small></div>
+                  <dl class="compactFacts lossTradeFacts"><div><dt>PnL</dt><dd class="ok">+20.20</dd></div><div><dt>结果</dt><dd>盈利</dd></div><div><dt>复盘原因</dt><dd>不适用</dd></div></dl>
+                  <button class="linkButton" type="button">下钻复盘</button>
+                </article>
+                <article class="lossTradeItem">
+                  <div class="lossTradeMain"><strong>2026-06-12 · MU</strong><small>空头 · 20 股 · 1.05 分钟</small></div>
+                  <dl class="compactFacts lossTradeFacts"><div><dt>PnL</dt><dd class="ok">+15.60</dd></div><div><dt>结果</dt><dd>盈利</dd></div><div><dt>复盘原因</dt><dd>不适用</dd></div></dl>
+                  <button class="linkButton" type="button">下钻复盘</button>
+                </article>
+                <article class="lossTradeItem">
+                  <div class="lossTradeMain"><strong>2026-06-12 · MU</strong><small>多头 · 20 股 · 1.48 分钟</small></div>
+                  <dl class="compactFacts lossTradeFacts"><div><dt>PnL</dt><dd class="ok">+17.60</dd></div><div><dt>结果</dt><dd>盈利</dd></div><div><dt>复盘原因</dt><dd>不适用</dd></div></dl>
+                  <button class="linkButton" type="button">下钻复盘</button>
+                </article>
+                <article class="lossTradeItem">
+                  <div class="lossTradeMain"><strong>2026-06-12 · MU</strong><small>空头 · 20 股 · 4.67 分钟</small></div>
+                  <dl class="compactFacts lossTradeFacts"><div><dt>PnL</dt><dd class="ok">+0.40</dd></div><div><dt>结果</dt><dd>盈利</dd></div><div><dt>复盘原因</dt><dd>不适用</dd></div></dl>
+                  <button class="linkButton" type="button">下钻复盘</button>
+                </article>
+                <article class="lossTradeItem">
+                  <div class="lossTradeMain"><strong>2026-06-12 · MU</strong><small>多头 · 20 股 · 2.18 分钟</small></div>
+                  <dl class="compactFacts lossTradeFacts"><div><dt>PnL</dt><dd class="ok">+2.40</dd></div><div><dt>结果</dt><dd>盈利</dd></div><div><dt>复盘原因</dt><dd>不适用</dd></div></dl>
+                  <button class="linkButton" type="button">下钻复盘</button>
+                </article>
+                <article class="lossTradeItem">
+                  <div class="lossTradeMain"><strong>2026-06-12 · MU</strong><small>多头 · 80 股 · 51.50 分钟</small></div>
+                  <dl class="compactFacts lossTradeFacts"><div><dt>PnL</dt><dd class="ok">+42.60</dd></div><div><dt>结果</dt><dd>盈利</dd></div><div><dt>复盘原因</dt><dd>不适用</dd></div></dl>
+                  <button class="linkButton" type="button">下钻复盘</button>
+                </article>
+                <article class="lossTradeItem">
+                  <div class="lossTradeMain"><strong>2026-06-12 · MU</strong><small>多头 · 20 股 · 3.13 分钟</small></div>
+                  <dl class="compactFacts lossTradeFacts"><div><dt>PnL</dt><dd class="ok">+20.00</dd></div><div><dt>结果</dt><dd>盈利</dd></div><div><dt>复盘原因</dt><dd>不适用</dd></div></dl>
+                  <button class="linkButton" type="button">下钻复盘</button>
+                </article>
+                <article class="lossTradeItem">
+                  <div class="lossTradeMain"><strong>2026-06-12 · MU</strong><small>空头 · 20 股 · 0.72 分钟</small></div>
+                  <dl class="compactFacts lossTradeFacts"><div><dt>PnL</dt><dd class="ok">+20.00</dd></div><div><dt>结果</dt><dd>盈利</dd></div><div><dt>复盘原因</dt><dd>不适用</dd></div></dl>
+                  <button class="linkButton" type="button">下钻复盘</button>
+                </article>
+                <article class="lossTradeItem">
+                  <div class="lossTradeMain"><strong>2026-06-12 · MU</strong><small>多头 · 40 股 · 19.23 分钟</small></div>
+                  <dl class="compactFacts lossTradeFacts"><div><dt>PnL</dt><dd class="ok">+40.00</dd></div><div><dt>结果</dt><dd>盈利</dd></div><div><dt>复盘原因</dt><dd>不适用</dd></div></dl>
+                  <button class="linkButton" type="button">下钻复盘</button>
+                </article>
+                <article class="lossTradeItem">
+                  <div class="lossTradeMain"><strong>2026-06-12 · MU</strong><small>多头 · 20 股 · 2.35 分钟</small></div>
+                  <dl class="compactFacts lossTradeFacts"><div><dt>PnL</dt><dd class="ok">+30.57</dd></div><div><dt>结果</dt><dd>盈利</dd></div><div><dt>复盘原因</dt><dd>不适用</dd></div></dl>
+                  <button class="linkButton" type="button">下钻复盘</button>
+                </article>
+                <article class="lossTradeItem">
+                  <div class="lossTradeMain"><strong>2026-06-12 · MU</strong><small>多头 · 400 股 · 0.10 分钟</small></div>
+                  <dl class="compactFacts lossTradeFacts"><div><dt>PnL</dt><dd class="ok">+464.00</dd></div><div><dt>结果</dt><dd>盈利</dd></div><div><dt>复盘原因</dt><dd>不适用</dd></div></dl>
+                  <button class="linkButton" type="button">下钻复盘</button>
+                </article>
+                <article class="lossTradeItem">
+                  <div class="lossTradeMain"><strong>2026-06-12 · MU</strong><small>多头 · 400 股 · 170.72 分钟</small></div>
+                  <dl class="compactFacts lossTradeFacts"><div><dt>PnL</dt><dd class="ok">+128.00</dd></div><div><dt>结果</dt><dd>盈利</dd></div><div><dt>复盘原因</dt><dd>不适用</dd></div></dl>
+                  <button class="linkButton" type="button">下钻复盘</button>
+                </article>
+                <article class="lossTradeItem">
+                  <div class="lossTradeMain"><strong>2026-06-12 · MU</strong><small>多头 · 100 股 · 1.10 分钟</small></div>
+                  <dl class="compactFacts lossTradeFacts"><div><dt>PnL</dt><dd class="ok">+301.00</dd></div><div><dt>结果</dt><dd>盈利</dd></div><div><dt>复盘原因</dt><dd>不适用</dd></div></dl>
+                  <button class="linkButton" type="button">下钻复盘</button>
+                </article>
+                <article class="lossTradeItem">
+                  <div class="lossTradeMain"><strong>2026-06-12 · MU</strong><small>空头 · 20 股 · 2.02 分钟</small></div>
+                  <dl class="compactFacts lossTradeFacts"><div><dt>PnL</dt><dd class="ok">+8.15</dd></div><div><dt>结果</dt><dd>盈利</dd></div><div><dt>复盘原因</dt><dd>不适用</dd></div></dl>
+                  <button class="linkButton" type="button">下钻复盘</button>
+                </article>
+                <article class="lossTradeItem">
+                  <div class="lossTradeMain"><strong>2026-06-12 · MU</strong><small>多头 · 100 股 · 1.50 分钟</small></div>
+                  <dl class="compactFacts lossTradeFacts"><div><dt>PnL</dt><dd class="ok">+73.00</dd></div><div><dt>结果</dt><dd>盈利</dd></div><div><dt>复盘原因</dt><dd>不适用</dd></div></dl>
+                  <button class="linkButton" type="button">下钻复盘</button>
+                </article>
+                <article class="lossTradeItem">
+                  <div class="lossTradeMain"><strong>2026-06-12 · MU</strong><small>多头 · 100 股 · 0.77 分钟</small></div>
+                  <dl class="compactFacts lossTradeFacts"><div><dt>PnL</dt><dd class="ok">+300.00</dd></div><div><dt>结果</dt><dd>盈利</dd></div><div><dt>复盘原因</dt><dd>不适用</dd></div></dl>
+                  <button class="linkButton" type="button">下钻复盘</button>
+                </article>
+              </div>
+              <div class="lossReviewPagination" aria-label="盈亏复盘列表分页">
+                <button class="smallButton" disabled type="button">上一页</button>
+                <span><span class="lossVisible">第 1 / 2 页</span><span class="profitVisible">第 1 / 13 页</span></span>
+                <button class="smallButton" type="button">下一页</button>
               </div>
             </section>
           </div>
