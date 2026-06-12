@@ -482,6 +482,11 @@ type LossReviewMarketRegimeCell = {
   totalPnl: number;
   volatilityKey: LossReviewVolatilityRegimeKey;
 };
+type LossReviewTimeWindowSummary = {
+  count: number;
+  key: LossReviewTimeWindowKey;
+  totalPnl: number;
+};
 type LossReviewMarketRegimeRow = {
   cells: LossReviewMarketRegimeCell[];
   detail: string;
@@ -493,6 +498,7 @@ type LossReviewMarketRegimeMatrix = {
   maxLossAmount: number;
   maxProfitCell: LossReviewMarketRegimeCell | null;
   rows: LossReviewMarketRegimeRow[];
+  timeWindowSummaries: LossReviewTimeWindowSummary[];
   timeWindows: LossReviewTimeWindowDefinition[];
   topCell: LossReviewMarketRegimeCell | null;
 };
@@ -1123,14 +1129,33 @@ function buildLossReviewMarketRegimeMatrix(
     }
   }
 
+  const rows = lossReviewVolatilityRegimes
+    .map((regime) => ({
+      ...regime,
+      cells: timeWindows.map((window) => cells.get(lossReviewMarketRegimeCellKey(window.key, regime.key))!)
+    }))
+    .filter((row) => row.key !== "missing" || row.cells.some((cell) => cell.count > 0));
+  const timeWindowSummaries = timeWindows.map((window) =>
+    rows.reduce<LossReviewTimeWindowSummary>(
+      (summary, row) => {
+        const cell = row.cells.find((item) => item.timeWindowKey === window.key);
+        if (!cell) return summary;
+        return {
+          ...summary,
+          count: summary.count + cell.count,
+          totalPnl: summary.totalPnl + cell.totalPnl
+        };
+      },
+      { count: 0, key: window.key, totalPnl: 0 }
+    )
+  );
+
   return {
     maxLossCell,
     maxLossAmount,
     maxProfitCell,
-    rows: lossReviewVolatilityRegimes.map((regime) => ({
-      ...regime,
-      cells: timeWindows.map((window) => cells.get(lossReviewMarketRegimeCellKey(window.key, regime.key))!)
-    })),
+    rows,
+    timeWindowSummaries,
     timeWindows,
     topCell
   };
@@ -2220,7 +2245,6 @@ export default function App() {
       if (requestId !== liveSignalRequestIdRef.current) return;
       setLiveSignalResults(results);
       setLiveMonitorLastUpdated(new Date().toISOString());
-      if (results[0]?.symbol) setSelectedSymbol(results[0].symbol);
     } catch (err) {
       const message = err instanceof Error ? err.message : "实时交易信号读取失败";
       if (requestId === liveSignalRequestIdRef.current) {
@@ -2761,6 +2785,7 @@ export default function App() {
             matrix={dataReviewMarketRegimeMatrix}
             note="时间窗口采用 09:30-16:00 五大美股日内微观结构划分；这里统计当前时间范围内全部交易组。纵轴使用后端从本地分钟线归档计算的开仓 1min K 振幅 / 前 20 根 ATR；缺足够历史分钟线时进入缺 ATR 证据，不用美元亏损回退。"
             readOnly
+            showTimeWindowPnlSummary
             sourceLabel="全部订单"
             summaryMode="pnl_extremes"
             subtitle="按美股常规盘五大微观结构窗口 × 开仓 ATR Multiple 查看全部订单分布"
@@ -4072,6 +4097,7 @@ function LiveTradingWorkspace(props: {
               {props.results.map((result) => {
                 const reasonCodes = result.reason_codes ?? result.signal?.reason_codes ?? [];
                 const metricEntries = Object.entries(result.signal?.metrics ?? {}).slice(0, 6);
+                const latestBar = result.latest_bar;
                 return (
                   <article className="liveEvidenceCard" key={`${result.symbol}:evidence`}>
                     <header>
@@ -4091,6 +4117,42 @@ function LiveTradingWorkspace(props: {
                         <span className="reasonCode">无原因码</span>
                       )}
                     </div>
+                    <section className="liveLatestQuoteBlock" aria-label={`${result.symbol} 最新行情`}>
+                      <div className="liveLatestQuoteHead">
+                        <span>最新行情</span>
+                        <small>{latestBar ? formatDateTime(latestBar.timestamp) : "provider 未返回分钟线"}</small>
+                      </div>
+                      {latestBar ? (
+                        <dl className="compactFacts liveLatestQuoteFacts">
+                          <div>
+                            <dt>close</dt>
+                            <dd>{formatNullable(latestBar.close)}</dd>
+                          </div>
+                          <div>
+                            <dt>open</dt>
+                            <dd>{formatNullable(latestBar.open)}</dd>
+                          </div>
+                          <div>
+                            <dt>high</dt>
+                            <dd>{formatNullable(latestBar.high)}</dd>
+                          </div>
+                          <div>
+                            <dt>low</dt>
+                            <dd>{formatNullable(latestBar.low)}</dd>
+                          </div>
+                          <div>
+                            <dt>volume</dt>
+                            <dd>{formatInteger(latestBar.volume)}</dd>
+                          </div>
+                          <div>
+                            <dt>bars</dt>
+                            <dd>{formatInteger(result.bar_count)}</dd>
+                          </div>
+                        </dl>
+                      ) : (
+                        <p className="liveLatestQuoteEmpty">暂无最新行情</p>
+                      )}
+                    </section>
                     {metricEntries.length > 0 ? (
                       <dl className="compactFacts">
                         {metricEntries.map(([key, value]) => (
@@ -7109,6 +7171,7 @@ function LossReviewMarketRegimeMatrix(props: {
   matrix: LossReviewMarketRegimeMatrix;
   note?: string;
   readOnly?: boolean;
+  showTimeWindowPnlSummary?: boolean;
   sourceLabel?: string;
   subtitle?: string;
   summaryMode?: "concentration" | "max_loss" | "max_profit" | "pnl_extremes";
@@ -7213,6 +7276,26 @@ function LossReviewMarketRegimeMatrix(props: {
               })}
             </Fragment>
           ))}
+          {props.showTimeWindowPnlSummary ? (
+            <>
+              <div className="lossReviewMatrixAxis lossReviewMatrixRowHead lossReviewMatrixSummaryHead">
+                <strong>X 轴汇总</strong>
+                <small>收益合计</small>
+              </div>
+              {props.matrix.timeWindowSummaries.map((summary) => (
+                <div
+                  aria-label={`${lossReviewTimeWindowLabel(summary.key)} 收益合计 ${formatPnl(summary.totalPnl)}`}
+                  className={`lossReviewMatrixColumnSummary${summary.count === 0 ? " empty" : ""}`}
+                  key={`summary:${summary.key}`}
+                  role="gridcell"
+                >
+                  <span>收益</span>
+                  <strong className={summaryTone(summary.totalPnl)}>{formatPnl(summary.totalPnl)}</strong>
+                  <small>{formatInteger(summary.count)} 笔</small>
+                </div>
+              ))}
+            </>
+          ) : null}
         </div>
       </div>
       <p className="lossReviewMatrixNote">{note}</p>

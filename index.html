@@ -352,6 +352,7 @@
 
       .matrixAxis,
       .matrixCorner,
+      .matrixColumnSummary,
       .matrixCell {
         border-radius: 8px;
         min-height: 66px;
@@ -369,6 +370,27 @@
       .matrixCorner {
         background: #eef3f4;
         border: 1px solid #d8e2e6;
+      }
+
+      .matrixSummaryHead,
+      .matrixColumnSummary {
+        background: #f7fbf9;
+        border-color: #cfe7dc;
+      }
+
+      .matrixColumnSummary {
+        border: 1px solid #cfe7dc;
+        color: #344658;
+        display: grid;
+        gap: 3px;
+        justify-items: start;
+        padding: 8px;
+      }
+
+      .matrixColumnSummary.empty {
+        background: #f5f7f8;
+        border-color: #e3e9ed;
+        color: #95a1aa;
       }
 
       .matrixColumnHead {
@@ -442,7 +464,25 @@
         font-weight: 900;
       }
 
+      .matrixColumnSummary span {
+        color: #607080;
+        font-size: 11px;
+        font-weight: 900;
+      }
+
+      .matrixColumnSummary strong {
+        font-size: 13px;
+        font-weight: 900;
+        line-height: 1.15;
+      }
+
       .matrixCell small {
+        color: #607080;
+        font-size: 11px;
+        line-height: 1.3;
+      }
+
+      .matrixColumnSummary small {
         color: #607080;
         font-size: 11px;
         line-height: 1.3;
@@ -817,6 +857,14 @@
                 <div class="matrixCell intensity3"><strong>34</strong><span class="bad">-116.73</span><small>10.44% · 最大 -973.00</small></div>
                 <div class="matrixCell intensity2"><strong>13</strong><span class="ok">+468.70</span><small>2.29% · 最大 +1.40</small></div>
                 <div class="matrixCell intensity1"><strong>1</strong><span class="ok">+14.00</span><small>0.07% · 最大 +14.00</small></div>
+
+                <div class="matrixAxis matrixRowHead matrixSummaryHead"><strong>X 轴汇总</strong><small>收益合计</small></div>
+                <div class="matrixColumnSummary"><span>收益</span><strong class="bad">-942.41</strong><small>74 笔</small></div>
+                <div class="matrixColumnSummary"><span>收益</span><strong class="ok">+961.80</strong><small>47 笔</small></div>
+                <div class="matrixColumnSummary"><span>收益</span><strong class="bad">-99.59</strong><small>68 笔</small></div>
+                <div class="matrixColumnSummary"><span>收益</span><strong class="ok">+1,092.27</strong><small>42 笔</small></div>
+                <div class="matrixColumnSummary"><span>收益</span><strong class="ok">+581.00</strong><small>16 笔</small></div>
+                <div class="matrixColumnSummary"><span>收益</span><strong class="ok">+14.00</strong><small>1 笔</small></div>
               </div>
             </div>
           </section>

@@ -378,6 +378,9 @@ def test_loss_review_market_regime_matrix_uses_us_session_windows():
     assert "maxLossCell" in APP_SOURCE
     assert "lossReviewMarketRegimeZoneLabel" in APP_SOURCE
     assert "readOnly?: boolean" in APP_SOURCE
+    assert "showTimeWindowPnlSummary?: boolean" in APP_SOURCE
+    assert "timeWindowSummaries: LossReviewTimeWindowSummary[]" in APP_SOURCE
+    assert '.filter((row) => row.key !== "missing" || row.cells.some((cell) => cell.count > 0))' in APP_SOURCE
     assert "props.matrix.timeWindows.map" in APP_SOURCE
     assert "gridTemplateColumns: `minmax(150px, 0.9fr) repeat(${props.matrix.timeWindows.length}, minmax(112px, 1fr))`" in APP_SOURCE
     assert "lossReviewTimeWindows" not in APP_SOURCE
@@ -390,6 +393,7 @@ def test_loss_review_market_regime_matrix_uses_us_session_windows():
     loss_body = APP_SOURCE[loss_body_start:loss_body_end]
     assert 'summaryMode={profitLossReviewMode === "profit" ? "max_profit" : "max_loss"}' in loss_body
     assert "readOnly" in loss_body
+    assert "showTimeWindowPnlSummary" not in loss_body
     assert "最大亏损区" in APP_SOURCE
     assert "最大盈利区" in APP_SOURCE
     assert "onToggleCell" not in APP_SOURCE
@@ -443,13 +447,18 @@ def test_data_drill_orders_time_filter_metrics_matrix_before_detail():
     assert 'sourceLabel="全部订单"' in data_body
     assert 'concentrationLabel="订单集中区"' not in data_body
     assert "readOnly" in data_body
+    assert "showTimeWindowPnlSummary" in data_body
     assert 'summaryMode="pnl_extremes"' in data_body
     assert "最大盈利区" in APP_SOURCE
     assert "最大亏损区" in APP_SOURCE
+    assert "X 轴汇总" in APP_SOURCE
+    assert "收益合计" in APP_SOURCE
+    assert "props.matrix.timeWindowSummaries.map" in APP_SOURCE
     assert 'onToggleCell={toggleDataMarketRegimeCell}' not in data_body
     assert 'selectedCell={selectedDataMarketRegimeCell}' not in data_body
     assert ".dataReviewDrilldown" in STYLES_SOURCE
     assert ".lossReviewMatrixCell.readOnly" in STYLES_SOURCE
+    assert ".lossReviewMatrixColumnSummary" in STYLES_SOURCE
 
 
 def test_loss_only_filter_also_scopes_main_chart_trade_markers():
@@ -686,6 +695,7 @@ def test_live_trading_tab_uses_backend_signal_preview_without_frontend_indicator
     assert "latest_template_version: string;" in TYPES_SOURCE
     assert "position_quantity: number | null;" in TYPES_SOURCE
     assert "order_quantity: number | null;" in TYPES_SOURCE
+    assert "latest_bar: MarketBar | null;" in TYPES_SOURCE
     assert '"fake" | "futu" | "yahoo" | string' in TYPES_SOURCE
     assert "runLiveStrategySignal" in API_SOURCE
     assert 'provider: "futu" | "yahoo" | "fake" = "yahoo"' in API_SOURCE
@@ -737,3 +747,48 @@ def test_live_signal_panel_only_shows_order_details():
     assert "latest version" in body
     assert "config version" in body
     assert ".liveOrderFacts" in STYLES_SOURCE
+
+
+def test_live_signal_refresh_does_not_rewrite_review_symbol():
+    match = re.search(
+        r"async function refreshLiveSignals\(\) \{(?P<body>.*?)\n  \}",
+        APP_SOURCE,
+        flags=re.DOTALL,
+    )
+    assert match is not None
+    body = match.group("body")
+    assert "setLiveSignalResults(results)" in body
+    assert "setLiveMonitorLastUpdated(new Date().toISOString())" in body
+    assert "setSelectedSymbol(results[0].symbol)" not in body
+
+
+def test_live_evidence_panel_shows_latest_quote_per_symbol():
+    match = re.search(
+        r"function LiveTradingWorkspace\(props: \{(?P<body>.*?)\nfunction StrategyTestingWorkspace",
+        APP_SOURCE,
+        flags=re.DOTALL,
+    )
+    assert match is not None
+    body = match.group("body")
+    card_match = re.search(r'<article className="liveEvidenceCard".*?</article>', body, flags=re.DOTALL)
+    assert card_match is not None
+    evidence_card = card_match.group(0)
+    assert "const latestBar = result.latest_bar" in body
+    assert 'className="liveLatestQuoteBlock"' in evidence_card
+    assert 'aria-label={`${result.symbol} 最新行情`}' in evidence_card
+    assert "formatDateTime(latestBar.timestamp)" in evidence_card
+    assert "<dt>close</dt>" in evidence_card
+    assert "formatNullable(latestBar.close)" in evidence_card
+    assert "<dt>open</dt>" in evidence_card
+    assert "formatNullable(latestBar.open)" in evidence_card
+    assert "<dt>high</dt>" in evidence_card
+    assert "formatNullable(latestBar.high)" in evidence_card
+    assert "<dt>low</dt>" in evidence_card
+    assert "formatNullable(latestBar.low)" in evidence_card
+    assert "<dt>volume</dt>" in evidence_card
+    assert "formatInteger(latestBar.volume)" in evidence_card
+    assert "<dt>bars</dt>" in evidence_card
+    assert "formatInteger(result.bar_count)" in evidence_card
+    assert "暂无最新行情" in evidence_card
+    assert ".liveLatestQuoteBlock" in STYLES_SOURCE
+    assert ".liveLatestQuoteFacts" in STYLES_SOURCE

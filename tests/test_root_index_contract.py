@@ -18,6 +18,9 @@ def test_root_index_static_review_tabs_are_switchable() -> None:
     assert "\u4ec5\u770b\u76c8\u5229\u5355" in html
     assert "\u4ec5\u770b\u4e8f\u635f\u5355" in html
     assert "\u70ed\u529b\u65f6\u95f4\u77e9\u9635" in html
+    assert "X \u8f74\u6c47\u603b" in html
+    assert "\u6536\u76ca\u5408\u8ba1" in html
+    assert 'class="matrixColumnSummary"' in html
     assert 'document.querySelectorAll("[data-review-tab]")' in html
     assert 'class="reviewDrillSurfaceTabs"' in html
     assert 'class="reviewDrillSurfaceTab active"' in html

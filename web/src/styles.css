@@ -612,6 +612,7 @@ h2 {
 
 .lossReviewMatrixAxis,
 .lossReviewMatrixCorner,
+.lossReviewMatrixColumnSummary,
 .lossReviewMatrixCell {
   border-radius: 8px;
   min-height: 66px;
@@ -652,6 +653,57 @@ h2 {
 .lossReviewMatrixCorner {
   background: #eef3f4;
   border: 1px solid #d8e2e6;
+}
+
+.lossReviewMatrixSummaryHead,
+.lossReviewMatrixColumnSummary {
+  background: #f7fbf9;
+  border-color: #cfe7dc;
+}
+
+.lossReviewMatrixColumnSummary {
+  border: 1px solid #cfe7dc;
+  color: #344658;
+  display: grid;
+  gap: 3px;
+  justify-items: start;
+  padding: 8px;
+}
+
+.lossReviewMatrixColumnSummary.empty {
+  background: #f5f7f8;
+  border-color: #e3e9ed;
+  color: #95a1aa;
+}
+
+.lossReviewMatrixColumnSummary span {
+  color: #607080;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.lossReviewMatrixColumnSummary strong {
+  font-size: 13px;
+  font-weight: 900;
+  line-height: 1.15;
+}
+
+.lossReviewMatrixColumnSummary strong.ok {
+  color: #237804;
+}
+
+.lossReviewMatrixColumnSummary strong.bad {
+  color: #a8071a;
+}
+
+.lossReviewMatrixColumnSummary strong.neutral {
+  color: #344658;
+}
+
+.lossReviewMatrixColumnSummary small {
+  color: #607080;
+  font-size: 11px;
+  line-height: 1.3;
 }
 
 .lossReviewMatrixCell {
@@ -1198,6 +1250,43 @@ h2 {
   color: #607080;
   font-size: 12px;
   overflow-wrap: anywhere;
+}
+
+.liveLatestQuoteBlock {
+  border-top: 1px solid #eef2f4;
+  display: grid;
+  gap: 8px;
+  padding-top: 10px;
+}
+
+.liveLatestQuoteHead {
+  align-items: baseline;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  justify-content: space-between;
+  min-width: 0;
+}
+
+.liveLatestQuoteHead span {
+  color: #17212b;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.liveLatestQuoteHead small,
+.liveLatestQuoteEmpty {
+  color: #607080;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.liveLatestQuoteFacts {
+  grid-template-columns: repeat(auto-fit, minmax(72px, 1fr));
+}
+
+.liveLatestQuoteEmpty {
+  margin: 0;
 }
 
 .liveOrderFacts {
