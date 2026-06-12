@@ -12,14 +12,39 @@ def test_root_index_static_review_tabs_are_switchable() -> None:
     assert 'id="data-review-panel"' in html
     assert 'id="loss-review-panel"' in html
     assert 'class="workspaceTabs"' in html
-    assert "实时交易" in html
-    assert "热力时间矩阵" in html
-    assert "亏损热力时间矩阵" in html
-    assert "亏损单列表" in html
+    assert "\u7b56\u7565\u6d4b\u8bd5" in html
+    assert "\u5b9e\u65f6\u4ea4\u6613" in html
+    assert "\u70ed\u529b\u65f6\u95f4\u77e9\u9635" in html
     assert 'document.querySelectorAll("[data-review-tab]")' in html
     assert "function selectReviewTab(target)" in html
     assert 'panel.hidden = key !== target' in html
-    assert 'get("view") === "loss"' in html
-    assert 'window.location.hash === "#loss-review"' in html
+    assert 'reviewViewParam === "data"' in html
+    assert 'window.location.hash === "#data-review"' in html
     assert "reviewDrillPrimary" not in html
-    assert "P3 亏损复盘静态快照已更新" not in html
+    assert "P3 \u4e8f\u635f\u590d\u76d8\u9759\u6001\u5feb\u7167" not in html
+
+
+def test_root_index_defaults_to_loss_review_panel() -> None:
+    html = ROOT_INDEX.read_text(encoding="utf-8")
+
+    assert (
+        'id="data-review-tab" data-review-tab="data" role="tab" '
+        'aria-controls="data-review-panel" aria-selected="false"'
+    ) in html
+    assert (
+        'id="loss-review-tab" data-review-tab="loss" role="tab" '
+        'aria-controls="loss-review-panel" aria-selected="true"'
+    ) in html
+    assert (
+        'id="data-review-panel" role="tabpanel" '
+        'aria-labelledby="data-review-tab" hidden'
+    ) in html
+    assert (
+        'id="loss-review-panel" role="tabpanel" '
+        'aria-labelledby="loss-review-tab">'
+    ) in html
+    assert "\u4e8f\u635f\u590d\u76d8" in html
+    assert "\u4e8f\u635f\u70ed\u529b\u65f6\u95f4\u77e9\u9635" in html
+    assert "\u539f\u56e0\u5206\u7c7b\u6c47\u603b" in html
+    assert "\u4e8f\u635f\u5355\u5217\u8868" in html
+    assert "\u6700\u5927\u4e8f\u635f\u533a\uff1a\u65e9\u76d8\u9ad8\u52a8\u80fd \u00d7 \u9ad8\u6ce2\u52a8" in html

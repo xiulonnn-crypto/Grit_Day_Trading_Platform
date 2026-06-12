@@ -584,11 +584,11 @@
 
       <section class="reviewDrillPanel" aria-label="交易复盘下钻">
         <div class="surfaceTabs" role="tablist" aria-label="下钻复盘模块">
-          <button class="surfaceTab active" id="data-review-tab" data-review-tab="data" role="tab" aria-controls="data-review-panel" aria-selected="true" type="button"><span class="buttonIcon">▦</span>数据下钻</button>
-          <button class="surfaceTab" id="loss-review-tab" data-review-tab="loss" role="tab" aria-controls="loss-review-panel" aria-selected="false" type="button"><span class="buttonIcon">!</span>亏损复盘</button>
+          <button class="surfaceTab" id="data-review-tab" data-review-tab="data" role="tab" aria-controls="data-review-panel" aria-selected="false" type="button"><span class="buttonIcon">▦</span>数据下钻</button>
+          <button class="surfaceTab active" id="loss-review-tab" data-review-tab="loss" role="tab" aria-controls="loss-review-panel" aria-selected="true" type="button"><span class="buttonIcon">!</span>亏损复盘</button>
         </div>
 
-        <section class="surfacePanel" id="data-review-panel" role="tabpanel" aria-labelledby="data-review-tab">
+        <section class="surfacePanel" id="data-review-panel" role="tabpanel" aria-labelledby="data-review-tab" hidden>
           <div class="timeFilter" aria-label="数据下钻全局时间筛选">
             <div class="timeFilterButtons" role="group" aria-label="数据下钻时间筛选">
               <button class="smallButton active" type="button">全部</button>
@@ -658,7 +658,7 @@
           </section>
         </section>
 
-        <section class="surfacePanel" id="loss-review-panel" role="tabpanel" aria-labelledby="loss-review-tab" hidden>
+        <section class="surfacePanel" id="loss-review-panel" role="tabpanel" aria-labelledby="loss-review-tab">
           <header class="lossReviewHeader">
             <div>
               <h2><span class="buttonIcon">!</span>亏损复盘</h2>
@@ -805,11 +805,11 @@
         });
       });
 
+      const reviewViewParam = new URLSearchParams(window.location.search).get("view");
       const requestedReviewTab =
-        new URLSearchParams(window.location.search).get("view") === "loss" ||
-        window.location.hash === "#loss-review"
-          ? "loss"
-          : "data";
+        reviewViewParam === "data" || window.location.hash === "#data-review"
+          ? "data"
+          : "loss";
       selectReviewTab(requestedReviewTab);
     </script>
   </body>
