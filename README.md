@@ -17,7 +17,7 @@
 
 - 复盘台顶层包含「交易复盘」「策略测试」和「实时交易」三个工作区；交易复盘只保留成交证据、分钟线、买卖点、Watchlist、交易组和批次证据，策略研究集中到策略测试，实时交易只做只读信号预览。
 - 复盘台新增「实时交易」工作区，可下拉选择策略和标的，用 Futu、Yahoo 或 Fake provider 的实时分钟线生成只读 BUY/SELL/HOLD 信号、下单原因和证据 hash，并展示最新策略版本号；该工作区不自动下单，也不修改 STP 成交事实。
-- 交易复盘工作区头部展示有记录以来的 committed fills 汇总，并支持按交易日或按标的下钻；选择具体日期+标的后进入分钟蜡烛和交易组复盘模块，成交组会展示来自分钟线最值的持仓最大回撤追溯。
+- 交易复盘工作区头部展示有记录以来的 committed fills 汇总，并支持按交易日或按标的下钻；选择具体日期+标的后进入分钟蜡烛和交易组复盘模块，成交组会展示按成交路径和分钟线最值追溯的持仓最大回撤。
 - 策略测试工作区按「策略配置」「策略测试」「测试复盘（最近30天）」「策略优化」组织；测试复盘先展示策略整体指标，再按日期或按标的汇总下钻到单日复盘，避免把成交复盘和参数研究混在同一个操作面板。
 - 复盘台提供「交易策略配置」操作按钮，可打开配置弹层，从模板添加策略、编辑参数、开启或关闭策略，并查看策略版本记录或回退到历史参数快照。
 - `POST /api/strategies/{strategy_id}/test-runs` 会基于所选标的截至日期最近 30 天（自然日）内的本地已归档分钟线生成 strategy test batch；窗口内没有归档时保存可见失败状态，不自动拉行情，也不向更早交易日补足。
@@ -90,7 +90,7 @@ Grit Day Trading Platform 是个人日内交易闭环 Web 系统。首版目标�
 - 已支持旧 parser 造成的零行 file-level 失败批次在新 parser 下重解析，避免同一文件永远返回旧失败状态。
 - 已支持缺 execution id 的重复成交行逐行入账，并在 daily summary 中展示配对交易股数。
 - 已支持跨批次重导的成交 read-model 去重：原始批次和 evidence rows 保留，成交列表和 KPI 不重复计算同一批修正重导。
-- 已支持按平仓 round-trip 计算 PnL、胜率、盈亏比、单笔期望值和每股净收益：每次 B&S 或 S&B 回到平仓状态才算一笔交易；复盘指标中的持仓最大回撤只读引用已归档分钟线 high/low，不改写成交事实。
+- 已支持按平仓 round-trip 计算 PnL、胜率、盈亏比、单笔期望值和每股净收益：每次 B&S 或 S&B 回到平仓状态才算一笔交易；复盘指标中的持仓最大回撤只读引用成交路径和已归档分钟线 high/low，不改写成交事实。
 - 已实现 storage migration marker、唯一索引、账号 canonicalization trigger 和幂等写入。
 - 已实现 P0 复盘台骨架，展示上传、批次、异常行、成交表和基础 KPI。
 
@@ -171,7 +171,7 @@ Grit Day Trading Platform 是个人日内交易闭环 Web 系统。首版目标�
 - `GET /api/imports/{batch_id}`：查看批次状态、parser version、mapping version 和错误摘要。
 - `GET /api/imports/{batch_id}/quarantine`：查看异常行、原始文本、失败字段、失败原因和修复建议。
 - `GET /api/fills`：按日期、账号、symbol 查询 committed 成交 read-model；跨批重导的同一 fallback 成交只展示最新批次。
-- `GET /api/review/daily-summary?date=YYYY-MM-DD`：查看只基于 committed 成交 read-model 计算的 PnL、胜率、盈亏比、单笔期望值、每股净收益、持仓最大回撤、成交数量和异常行数量；这些核心 KPI 按已平仓 round-trip 和成交组分钟线追溯统计。
+- `GET /api/review/daily-summary?date=YYYY-MM-DD`：查看只基于 committed 成交 read-model 计算的 PnL、胜率、盈亏比、单笔期望值、每股净收益、持仓最大回撤、成交数量和异常行数量；这些核心 KPI 按已平仓 round-trip、成交组实际持仓路径和分钟线追溯统计。
 - `GET /api/review/summary`：按全局、日期或标的范围查看 committed fills 轻量汇总。
 - `GET /api/review/summary-groups`：按交易日或标的返回轻量下钻汇总，供复盘页选择具体日期+标的；完整交易评价只在交易组详情路径读取。
 - `GET /api/trade-groups?date=YYYY-MM-DD&include_details=false`：读取复盘页首屏交易组轻量列表，不携带组内 fills 和评价因子明细；不传 `date` 时返回全部日期的轻量交易组，供盈亏复盘下钻汇总；Replay 操作再用 `include_details=true` 拉取完整证据。

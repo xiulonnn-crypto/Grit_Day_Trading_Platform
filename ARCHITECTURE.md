@@ -71,7 +71,7 @@
 
 - Canonical source: 交易组只从 committed `fills` read model 构建。STP TXT 的成交时间、价格、数量、方向和证据行仍是交易事实源。
 - Read model: `GET /api/trade-groups?date=YYYY-MM-DD&account=&symbol=&include_details=false` 按 `account_canonical + symbol` 和成交时间把仓位从开仓到清仓配成交易组，首屏可返回不含组内 fills 和评价因子明细的轻量列表；`date` 可省略以返回全部日期的轻量交易组，供盈亏复盘和数据下钻时间范围矩阵读取。数据下钻的时间筛选、统计指标、热力时间矩阵和日期/标的列表都是从轻量 trade group read model 派生的前端只读投影；矩阵按美股常规盘五大微观结构窗口和 `position_drawdown.entry_atr_multiple` 分桶只读展示全部订单分布、最大盈利区、最大亏损区和每个时间窗口的收益合计；缺 ATR 证据行仅在存在对应订单时展示，不筛选下方下钻列表，不写入行情归档、交易组或 Review Journal。盈亏复盘按「仅看盈利单/仅看亏损单」单选投影同一轻量 read model，默认亏损视图；盈利视图不展示原因分类，也不写 Review Journal。replay 详情使用 `include_details=true` 读取完整 fills、已实现 PnL、持仓最大回撤、开仓 ATR Multiple 和评分证据。`GET /api/review/summary` 与 `GET /api/review/summary-groups` 只聚合 committed fills 和轻量 closed trade groups，用于全局、日期和标的下钻汇总，并返回单笔期望值、每股净收益和持仓最大回撤。复盘摘要不得触发完整交易评价模型；完整评价只属于交易列表和 replay 详情。
-- Artifact source: 交易 replay 弹层只读取本地 `market_minute_archives.bars_json` 和 `bars_hash` 作为行情图表来源，打开弹层不会自动触发 provider 拉取；持仓最大回撤只读取开仓到清仓窗口内的分钟 high/low、archive id 和 bars hash；评分只读取 archive 中的 VWAP、当日高低、成交量上下文和 provider 状态。
+- Artifact source: 交易 replay 弹层只读取本地 `market_minute_archives.bars_json` 和 `bars_hash` 作为行情图表来源，打开弹层不会自动触发 provider 拉取；持仓最大回撤按组内成交时间维护实际 open position 与均价，只用开仓到清仓窗口内的分钟 high/low、archive id 和 bars hash 追溯不利波动；评分只读取 archive 中的 VWAP、当日高低、成交量上下文和 provider 状态。
 - Idempotency key: `trade_group_id = tg_ + sha256(trade_group_v1 + account + symbol + direction + open/close time + hashed fill idempotency signatures)`。API 不暴露原始 fill idempotency key。
 - Evaluation model: `trade_eval_intraday_v1` 是只读规则评分模型。评分维度包括 VWAP 执行质量、趋势配合、成交量确认、MFE/MAE、清仓效率和 PnL 结果。
 - Failure contract: `provider_failed`、`missing`、`timezone_conflict` 或无 bars 时，持仓最大回撤和评价返回 `insufficient_market_data`，不能生成正常评分或成功图表；open group 返回 `not_applicable_open_trade`。
@@ -245,7 +245,7 @@ P0 允许一种窄口径的 fill-only TXT：文件无表头，基础列顺序固
 
 成交 read-model 必须在不删除证据账本的前提下处理跨批重导：如果同一批成交因补表头、编码变化或尾部空行导致 `file_hash` 改变，`import_batches`、`import_rows` 和底层 `fills` 可保留全部证据；`GET /api/fills` 和 daily summary 只对同一 fallback 成交签名的最新批次计数。同一文件内部重复的 raw rows 仍按出现次数保留，不能被压缩成一笔。
 
-Daily summary 与 review summary 的 PnL、胜率、盈亏比、单笔期望值和每股净收益必须按已平仓 round-trip 计算：同一账号和标的下，仓位从 0 开始，B&S 或 S&B 回到 0 时结算一笔交易；多次开平仓必须拆成多笔。未平仓单边成交不进入胜率、盈亏比、单笔期望值、每股净收益、持仓最大回撤或已实现 PnL。全局、日期和标的下钻汇总都只能读取 committed fills 和 closed trade groups，不得由前端按成交列表自行重算核心 KPI。单笔期望值按 `胜率 * 平均盈利金额 - 败率 * 平均亏损金额` 计算；每股净收益按 `PnL / 成交股数` 计算；持仓最大回撤按 closed trade group 引用的 `market_minute_archives` 窗口 high/low 计算，汇总取范围内可用成交组的最大值。
+Daily summary 与 review summary 的 PnL、胜率、盈亏比、单笔期望值和每股净收益必须按已平仓 round-trip 计算：同一账号和标的下，仓位从 0 开始，B&S 或 S&B 回到 0 时结算一笔交易；多次开平仓必须拆成多笔。未平仓单边成交不进入胜率、盈亏比、单笔期望值、每股净收益、持仓最大回撤或已实现 PnL。全局、日期和标的下钻汇总都只能读取 committed fills 和 closed trade groups，不得由前端按成交列表自行重算核心 KPI。单笔期望值按 `胜率 * 平均盈利金额 - 败率 * 平均亏损金额` 计算；每股净收益按 `PnL / 成交股数` 计算；持仓最大回撤按 closed trade group 的成交路径维护实际 open position，并引用 `market_minute_archives` 窗口 high/low 计算，汇总取范围内可用成交组的最大值。
 
 ## P1 Market Context Replay 合同
 

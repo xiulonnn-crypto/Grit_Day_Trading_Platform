@@ -179,9 +179,9 @@ def test_trade_group_evaluation_uses_minute_archive_without_mutating_fills(tmp_p
     assert drawdown["window_high"] == 10.9
     assert drawdown["window_low"] == 9.9
     assert drawdown["worst_price"] == 9.9
-    assert drawdown["max_drawdown_per_share"] == pytest.approx(0.166667)
-    assert drawdown["max_drawdown"] == pytest.approx(25.00005)
-    assert summary["max_single_day_drawdown"] == pytest.approx(25.00005)
+    assert drawdown["max_drawdown_per_share"] == pytest.approx(0.1)
+    assert drawdown["max_drawdown"] == pytest.approx(10.0)
+    assert summary["max_single_day_drawdown"] == pytest.approx(10.0)
     assert evaluation["model_version"] == "trade_eval_intraday_v1"
     assert evaluation["evaluation_status"] == "available"
     assert evaluation["grade"] in {"A", "B", "C", "D"}
@@ -287,6 +287,57 @@ def test_short_trade_group_position_drawdown_uses_window_high(tmp_path):
     assert drawdown["worst_price"] == 20.5
     assert drawdown["max_drawdown_per_share"] == 0.5
     assert drawdown["max_drawdown"] == 25.0
+
+
+def test_trade_group_position_drawdown_uses_open_position_path(tmp_path):
+    db_path = tmp_path / "scaled-short-drawdown.db"
+    raw = (
+        "Account\tSymbol\tSide\tOrderID\tExecID\tQty\tPrice\tTime\tStatus\n"
+        "acct-rt\tMU\tSLD\tO-1\tE-1\t10\t100.00\t2026-06-01T10:00:00\tFILLED\n"
+        "acct-rt\tMU\tSLD\tO-2\tE-2\t90\t95.00\t2026-06-01T10:05:00\tFILLED\n"
+        "acct-rt\tMU\tBOT\tO-3\tE-3\t100\t94.00\t2026-06-01T10:10:00\tFILLED\n"
+    ).encode()
+
+    with TestClient(create_app(db_path)) as client:
+        client.post("/api/imports/stp-txt", files={"file": ("scaled-short.tsv", raw, "text/plain")})
+
+    conn = connect(db_path)
+    try:
+        initialize_database(conn)
+        archive_market_minutes(
+            conn,
+            symbol="MU",
+            trade_date="2026-06-01",
+            source_fill_count=3,
+            force=True,
+            provider=FakeMarketDataProvider(
+                minute_bars={
+                    "MU": [
+                        MarketBar("2026-06-01T10:00:00", 100.0, 110.0, 99.0, 101.0, 1000),
+                        MarketBar("2026-06-01T10:05:00", 95.0, 96.0, 94.5, 95.5, 1200),
+                        MarketBar("2026-06-01T10:10:00", 94.0, 94.5, 93.5, 94.0, 1400),
+                    ]
+                }
+            ),
+        )
+    finally:
+        conn.close()
+
+    with TestClient(create_app(db_path)) as client:
+        group = client.get("/api/trade-groups?date=2026-06-01&symbol=MU").json()["items"][0]
+        summary = client.get("/api/review/daily-summary?date=2026-06-01&symbol=MU").json()
+
+    drawdown = group["position_drawdown"]
+    assert group["direction"] == "SHORT"
+    assert group["total_quantity"] == 100
+    assert group["avg_entry_price"] == 95.5
+    assert drawdown["status"] == "available"
+    assert drawdown["window_high"] == 110.0
+    assert drawdown["window_low"] == 93.5
+    assert drawdown["worst_price"] == 110.0
+    assert drawdown["max_drawdown_per_share"] == 10.0
+    assert drawdown["max_drawdown"] == 100.0
+    assert summary["max_single_day_drawdown"] == 100.0
 
 
 def test_trade_group_evaluation_does_not_score_failed_archives(tmp_path):

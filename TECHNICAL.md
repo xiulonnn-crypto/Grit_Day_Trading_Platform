@@ -105,7 +105,7 @@
 - 新增 `GET /api/trade-groups?date=YYYY-MM-DD&account=&symbol=`，从 committed `fills` read model 构建交易组，不新增持久化表。
 - 交易组按 `account_canonical + symbol`、成交时间和 fill id 顺序配对，支持多头、空头、加仓、部分平仓和未清仓状态。
 - Daily summary 的 `trade_group_count`、PnL、胜率、盈亏比、单笔期望值、每股净收益和持仓最大回撤复用 closed trade groups，避免 UI 分组和 KPI 口径漂移。
-- Replay 弹层只读取本地已归档 `market_minute_archives`，按开仓到清仓窗口自动缩放并保留前后缓冲，叠加组内所有成交点，并展示基于窗口分钟 high/low 的持仓最大回撤追溯；打开弹层不会自动触发行情 provider 拉取。
+- Replay 弹层只读取本地已归档 `market_minute_archives`，按开仓到清仓窗口自动缩放并保留前后缓冲，叠加组内所有成交点，并展示按组内成交路径和窗口分钟 high/low 追溯的持仓最大回撤；打开弹层不会自动触发行情 provider 拉取。
 - 智能评价采用 `trade_eval_intraday_v1` 规则模型，只读计算 VWAP 执行质量、趋势配合、成交量确认、MFE/MAE、清仓效率和 PnL 结果；持仓最大回撤是交易组 read model 字段，不由前端自行重算。
 - 交易复盘 tab 头部展示有记录以来汇总；随后按交易日和按标的两个下钻 tab 展示次级汇总，选择具体日期+标的后进入分钟蜡烛和交易组复盘模块。
 
@@ -157,7 +157,7 @@
 - 当前 import service 支持旧 parser 造成的零行 file-level 失败批次重解析。
 - 当前 daily summary 的交易股数使用每个账号和标的的 BUY/SELL 配对股数，不用单边成交行数量累加。
 - 当前成交 read-model 支持跨批重导去重：同一 fallback 成交签名只计算最新批次，同一文件内部重复 raw rows 仍逐行保留。
-- 当前 daily summary 的 PnL、胜率、盈亏比、单笔期望值和每股净收益按已平仓 round-trip 统计，持仓最大回撤按 closed trade group 的已归档分钟线 high/low 追溯统计；前端只展示 API read model，不自行重算核心 KPI。
+- 当前 daily summary 的 PnL、胜率、盈亏比、单笔期望值和每股净收益按已平仓 round-trip 统计，持仓最大回撤按 closed trade group 的成交路径和已归档分钟线 high/low 追溯统计；前端只展示 API read model，不自行重算核心 KPI。
 - 当前 P2 策略复盘只读取已归档分钟线，策略信号不会触发下单，也不会改写 STP 成交。
 - 当前策略配置保存初始本金和入场资金比例，默认初始本金为 100000、每次入场使用 20% 资金；策略 run、测试批次和优化候选的 PnL 以运行时参数快照计算资金口径。
 - 当前 `OCO_Immediate` 只作为 Institutional Liquidity Sweep 的历史出场建模模式，保存到策略参数、run artifact 和信号原因码，不向券商发送真实 OCO 订单。

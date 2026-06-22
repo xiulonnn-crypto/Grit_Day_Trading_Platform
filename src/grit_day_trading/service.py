@@ -892,31 +892,111 @@ def _trade_group_position_drawdown(
 
     window_high = max(float(bar["high"]) for bar in scoped)
     window_low = min(float(bar["low"]) for bar in scoped)
-    avg_entry = float(group["avg_entry_price"] or 0)
-    quantity = float(group["total_quantity"] or 0)
-    if avg_entry <= 0 or quantity <= 0:
+    path_drawdown = _trade_group_path_drawdown(group, scoped)
+    if path_drawdown is None:
         return base
-
-    if group["direction"] == "SHORT":
-        drawdown_per_share = max(window_high - avg_entry, 0.0)
-        worst_price = window_high
-    else:
-        drawdown_per_share = max(avg_entry - window_low, 0.0)
-        worst_price = window_low
 
     return {
         **base,
         "status": "available",
-        "max_drawdown": round(drawdown_per_share * quantity, 6),
-        "max_drawdown_per_share": round(drawdown_per_share, 6),
+        "max_drawdown": path_drawdown["max_drawdown"],
+        "max_drawdown_per_share": path_drawdown["max_drawdown_per_share"],
         "source": "market_minute_archives",
         "source_archive_id": archive["id"],
         "bars_hash": archive["bars_hash"],
         "bar_count": len(scoped),
         "window_high": round(window_high, 6),
         "window_low": round(window_low, 6),
-        "worst_price": round(worst_price, 6),
+        "worst_price": path_drawdown["worst_price"],
         "price_basis": "minute_high_low",
+    }
+
+
+def _trade_group_path_drawdown(group: dict[str, Any], bars: list[dict[str, Any]]) -> dict[str, float] | None:
+    direction = group["direction"]
+    entry_side = "BUY" if direction == "LONG" else "SELL"
+    exit_side = "SELL" if direction == "LONG" else "BUY"
+    ordered_fills = sorted(
+        [
+            (minute, str(fill.get("filled_at", "")), str(fill.get("fill_id", "")), fill)
+            for fill in group.get("fills", [])
+            if (minute := _clock_minute(str(fill.get("filled_at", "")))) is not None
+        ],
+        key=lambda item: (item[0], item[1], item[2]),
+    )
+    ordered_bars = sorted(
+        [(minute, bar) for bar in bars if (minute := _clock_minute(str(bar.get("timestamp", "")))) is not None],
+        key=lambda item: item[0],
+    )
+    if not ordered_fills or not ordered_bars:
+        return None
+
+    open_quantity = 0.0
+    entry_notional = 0.0
+    fill_index = 0
+    max_drawdown = -1.0
+    max_drawdown_per_share = 0.0
+    worst_price: float | None = None
+
+    def apply_fill(fill: dict[str, Any]) -> None:
+        nonlocal open_quantity, entry_notional
+        quantity = float(fill["quantity"])
+        price = float(fill["price"])
+        if quantity <= 0 or price <= 0:
+            return
+        if fill["side"] == entry_side:
+            entry_notional += quantity * price
+            open_quantity += quantity
+            return
+        if fill["side"] != exit_side or open_quantity <= 0:
+            return
+        close_quantity = min(quantity, open_quantity)
+        avg_entry = entry_notional / open_quantity if open_quantity > 0 else 0.0
+        entry_notional -= avg_entry * close_quantity
+        open_quantity -= close_quantity
+        if open_quantity <= 1e-9:
+            open_quantity = 0.0
+            entry_notional = 0.0
+
+    for bar_minute, bar in ordered_bars:
+        while fill_index < len(ordered_fills) and ordered_fills[fill_index][0] < bar_minute:
+            apply_fill(ordered_fills[fill_index][3])
+            fill_index += 1
+
+        same_minute_start = fill_index
+        while fill_index < len(ordered_fills) and ordered_fills[fill_index][0] == bar_minute:
+            fill_index += 1
+        same_minute_fills = [item[3] for item in ordered_fills[same_minute_start:fill_index]]
+        for fill in same_minute_fills:
+            if fill["side"] == entry_side:
+                apply_fill(fill)
+
+        high = _bar_number(bar, "high")
+        low = _bar_number(bar, "low")
+        if high is not None and low is not None and open_quantity > 0 and entry_notional > 0:
+            avg_entry = entry_notional / open_quantity
+            if direction == "SHORT":
+                adverse_price = high
+                drawdown_per_share = max(high - avg_entry, 0.0)
+            else:
+                adverse_price = low
+                drawdown_per_share = max(avg_entry - low, 0.0)
+            drawdown = drawdown_per_share * open_quantity
+            if drawdown > max_drawdown:
+                max_drawdown = drawdown
+                max_drawdown_per_share = drawdown_per_share
+                worst_price = adverse_price
+
+        for fill in same_minute_fills:
+            if fill["side"] == exit_side:
+                apply_fill(fill)
+
+    if max_drawdown < 0 or worst_price is None:
+        return None
+    return {
+        "max_drawdown": round(max_drawdown, 6),
+        "max_drawdown_per_share": round(max_drawdown_per_share, 6),
+        "worst_price": round(worst_price, 6),
     }
 
 
