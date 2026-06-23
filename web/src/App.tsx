@@ -2,7 +2,10 @@ import {
   Activity,
   AlertTriangle,
   BarChart3,
+  CalendarDays,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   CheckCircle2,
   CircleSlash,
   Clock3,
@@ -390,7 +393,6 @@ type StrategyConfigMode = "edit" | "create";
 type WorkspaceTab = "review" | "strategy" | "live";
 type LiveProvider = "futu" | "yahoo" | "fake";
 type ReviewDrillSurfaceTab = "data" | "loss";
-type ReviewDrillTab = "date" | "symbol";
 type StrategyFeedbackTone = "info" | "ok" | "warn" | "danger";
 type StrategyRunFeedback = {
   tone: StrategyFeedbackTone;
@@ -455,7 +457,7 @@ type LossReviewCategorySummary = {
 };
 type LossReviewSortMode = "time_desc" | "loss_desc";
 type LossReviewTimeFilterMode = "all" | "month" | "week" | "custom";
-type ProfitLossReviewMode = "profit" | "loss";
+type ProfitLossReviewMode = "all" | "profit" | "loss";
 type LossReviewTimeWindowKey =
   | "early_session"
   | "late_morning_transition"
@@ -502,6 +504,12 @@ type LossReviewMarketRegimeMatrix = {
   timeWindows: LossReviewTimeWindowDefinition[];
   topCell: LossReviewMarketRegimeCell | null;
 };
+type DataReviewCalendarDay = {
+  dateKey: string;
+  dayNumber: number;
+  isCurrentMonth: boolean;
+  summary: ReviewSummaryGroup | null;
+};
 
 const lossReviewUnreviewedKey = "unreviewed";
 const LOSS_REVIEW_PAGE_SIZE = 20;
@@ -513,9 +521,11 @@ const lossReviewTimeFilterLabels: Record<LossReviewTimeFilterMode, string> = {
   custom: "特定时间段"
 };
 const profitLossReviewModeLabels: Record<ProfitLossReviewMode, string> = {
+  all: "全部订单",
   profit: "仅看盈利单",
   loss: "仅看亏损单"
 };
+const dataReviewWeekdayLabels = ["一", "二", "三", "四", "五", "六", "日"];
 const lossReviewRegularTimeWindows: LossReviewTimeWindowDefinition[] = [
   { detail: "09:30-10:30", endMinute: 10 * 60 + 30, key: "early_session", label: "早盘高动能", startMinute: 9 * 60 + 30 },
   {
@@ -863,12 +873,25 @@ function isClosedProfitTradeGroup(group: TradeGroup) {
   return group.status === "closed" && group.pnl !== null && group.pnl > 0;
 }
 
-function isClosedProfitLossTradeGroup(group: TradeGroup) {
-  return isClosedProfitTradeGroup(group) || isClosedLossTradeGroup(group);
+function isClosedRealizedTradeGroup(group: TradeGroup) {
+  return group.status === "closed" && group.pnl !== null;
 }
 
 function profitLossReviewGroupLabel(mode: ProfitLossReviewMode) {
+  if (mode === "all") return "全部订单";
   return mode === "profit" ? "盈利单" : "亏损单";
+}
+
+function profitLossReviewSortLabel(mode: ProfitLossReviewMode) {
+  if (mode === "all") return "按盈亏绝对值倒序";
+  return mode === "profit" ? "按盈利金额倒序" : "按亏损金额倒序";
+}
+
+function profitLossReviewResultLabel(group: TradeGroup) {
+  if (group.pnl === null) return "未结算";
+  if (group.pnl > 0) return "盈利";
+  if (group.pnl < 0) return "亏损";
+  return "持平";
 }
 
 function tradeGroupReviewDate(group: TradeGroup) {
@@ -904,6 +927,38 @@ function monthStartDateKey(dateKey: string) {
 function monthEndDateKey(dateKey: string) {
   const date = dateFromDateKey(dateKey);
   return dateKeyFromDate(new Date(date.getFullYear(), date.getMonth() + 1, 0));
+}
+
+function shiftMonthDateKey(dateKey: string, monthOffset: number) {
+  const date = dateFromDateKey(dateKey);
+  return dateKeyFromDate(new Date(date.getFullYear(), date.getMonth() + monthOffset, 1));
+}
+
+function dataReviewCalendarMonthLabel(dateKey: string) {
+  const date = dateFromDateKey(dateKey);
+  return `${date.getFullYear()}年${String(date.getMonth() + 1).padStart(2, "0")}月`;
+}
+
+function buildDataReviewCalendarDays(
+  monthDateKey: string,
+  summaries: ReviewSummaryGroup[]
+): DataReviewCalendarDay[] {
+  const summaryByDate = new Map(summaries.map((summary) => [summary.group_key, summary]));
+  const monthStartKey = monthStartDateKey(monthDateKey);
+  const monthStart = dateFromDateKey(monthStartKey);
+  const leadingDays = (monthStart.getDay() + 6) % 7;
+  const gridStart = addDays(monthStart, -leadingDays);
+  const monthPrefix = monthStartKey.slice(0, 7);
+  return Array.from({ length: 42 }, (_, index) => {
+    const day = addDays(gridStart, index);
+    const dateKey = dateKeyFromDate(day);
+    return {
+      dateKey,
+      dayNumber: day.getDate(),
+      isCurrentMonth: dateKey.startsWith(monthPrefix),
+      summary: summaryByDate.get(dateKey) ?? null
+    };
+  });
 }
 
 function weekStartDateKey(dateKey: string) {
@@ -1300,8 +1355,10 @@ export default function App() {
   const [minuteArchives, setMinuteArchives] = useState<MarketMinuteArchive[]>([]);
   const [activeWorkspaceTab, setActiveWorkspaceTab] = useState<WorkspaceTab>("review");
   const [activeReviewDrillSurfaceTab, setActiveReviewDrillSurfaceTab] = useState<ReviewDrillSurfaceTab>("data");
-  const [activeReviewDrillTab, setActiveReviewDrillTab] = useState<ReviewDrillTab>("date");
   const [dataReviewTimeFilterMode, setDataReviewTimeFilterMode] = useState<LossReviewTimeFilterMode>("all");
+  const [dataReviewCalendarMonth, setDataReviewCalendarMonth] = useState(() =>
+    monthStartDateKey(getDefaultReviewDate())
+  );
   const [customDataReviewStartDate, setCustomDataReviewStartDate] = useState(monthStartDateKey(todayDateKey));
   const [customDataReviewEndDate, setCustomDataReviewEndDate] = useState(todayDateKey);
   const [selectedSymbol, setSelectedSymbol] = useState("");
@@ -1851,6 +1908,12 @@ export default function App() {
   useEffect(() => {
     setSelectedReplayGroup(null);
     void refresh();
+  }, [date]);
+
+  useEffect(() => {
+    if (/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      setDataReviewCalendarMonth(monthStartDateKey(date));
+    }
   }, [date]);
 
   useEffect(() => {
@@ -2528,15 +2591,6 @@ export default function App() {
     () => batches.find((batch) => batch.batch_id === selectedBatch) ?? null,
     [batches, selectedBatch]
   );
-  const selectedSymbolSummary = useMemo(
-    () => (selectedSymbol ? symbolSummaryGroups.find((group) => group.group_key === selectedSymbol) ?? null : null),
-    [selectedSymbol, symbolSummaryGroups]
-  );
-  const selectedDateSummary = useMemo(() => {
-    const grouped = dateSummaryGroups.find((group) => group.group_key === date) ?? null;
-    if (grouped) return grouped;
-    return summary?.date === date && summary.symbol === null ? summary : null;
-  }, [date, dateSummaryGroups, summary]);
   const dataReviewTimeRange = useMemo(
     () =>
       lossReviewTimeFilterRange(
@@ -2558,28 +2612,17 @@ export default function App() {
     () => buildReviewSummaryFromTradeGroups(dataReviewTimeFilteredTradeGroups),
     [dataReviewTimeFilteredTradeGroups]
   );
-  const dataReviewMarketRegimeMatrix = useMemo(
-    () => buildLossReviewMarketRegimeMatrix(dataReviewTimeFilteredTradeGroups, "all"),
-    [dataReviewTimeFilteredTradeGroups]
-  );
   const dataReviewDateSummaryGroups = useMemo(
     () => buildReviewSummaryGroupsFromTradeGroups(dataReviewTimeFilteredTradeGroups, "date"),
-    [dataReviewTimeFilteredTradeGroups]
-  );
-  const dataReviewSymbolSummaryGroups = useMemo(
-    () => buildReviewSummaryGroupsFromTradeGroups(dataReviewTimeFilteredTradeGroups, "symbol"),
     [dataReviewTimeFilteredTradeGroups]
   );
   const dataReviewSelectedDateSummary = useMemo(
     () => dataReviewDateSummaryGroups.find((group) => group.group_key === date) ?? null,
     [dataReviewDateSummaryGroups, date]
   );
-  const dataReviewSelectedSymbolSummary = useMemo(
-    () =>
-      selectedSymbol
-        ? dataReviewSymbolSummaryGroups.find((group) => group.group_key === selectedSymbol) ?? null
-        : null,
-    [dataReviewSymbolSummaryGroups, selectedSymbol]
+  const dataReviewCalendarDays = useMemo(
+    () => buildDataReviewCalendarDays(dataReviewCalendarMonth, dataReviewDateSummaryGroups),
+    [dataReviewCalendarMonth, dataReviewDateSummaryGroups]
   );
   const dataReviewVisibleDateSymbolBreakdown = useMemo(
     () =>
@@ -2589,25 +2632,12 @@ export default function App() {
       ),
     [dataReviewTimeFilteredTradeGroups, date]
   );
-  const dataReviewVisibleSymbolDateBreakdown = useMemo(
-    () =>
-      selectedSymbol
-        ? buildReviewSummaryGroupsFromTradeGroups(
-            dataReviewTimeFilteredTradeGroups.filter((group) => group.symbol === selectedSymbol),
-            "date"
-          )
-        : [],
-    [dataReviewTimeFilteredTradeGroups, selectedSymbol]
-  );
   const dataReviewTimeRangeLabel = lossReviewTimeRangeLabel(
     dataReviewTimeRange.startDate,
     dataReviewTimeRange.endDate,
     "全部订单"
   );
   const dataReviewSummaryNote = `${sourceLabel[dataReviewSummary.source]} · ${dataReviewTimeRangeLabel}`;
-  const activeDrillSummary = activeReviewDrillTab === "date" ? selectedDateSummary : selectedSymbolSummary;
-  const dataReviewActiveDrillSummary =
-    activeReviewDrillTab === "date" ? dataReviewSelectedDateSummary : dataReviewSelectedSymbolSummary;
   const dateSymbolBreakdownReady = Object.prototype.hasOwnProperty.call(dateSymbolBreakdownByDate, date);
   const visibleDateSymbolBreakdown = useMemo(
     () => dateSymbolBreakdownByDate[date] ?? [],
@@ -2618,7 +2648,7 @@ export default function App() {
     [selectedSymbol, symbolDateBreakdown]
   );
   const profitLossReviewTradeGroups = useMemo(
-    () => allTradeGroups.filter(isClosedProfitLossTradeGroup),
+    () => allTradeGroups.filter(isClosedRealizedTradeGroup),
     [allTradeGroups]
   );
   const scopedCurrentReviewSummary =
@@ -2781,14 +2811,15 @@ export default function App() {
             summary={dataReviewSummary}
           />
 
-          <LossReviewMarketRegimeMatrix
-            matrix={dataReviewMarketRegimeMatrix}
-            note="时间窗口采用 09:30-16:00 五大美股日内微观结构划分；这里统计当前时间范围内全部交易组。纵轴使用后端从本地分钟线归档计算的开仓 1min K 振幅 / 前 20 根 ATR；缺足够历史分钟线时进入缺 ATR 证据，不用美元亏损回退。"
-            readOnly
-            showTimeWindowPnlSummary
-            sourceLabel="全部订单"
-            summaryMode="pnl_extremes"
-            subtitle="按美股常规盘五大微观结构窗口 × 开仓 ATR Multiple 查看全部订单分布"
+          <DataReviewCalendar
+            calendarMonth={dataReviewCalendarMonth}
+            days={dataReviewCalendarDays}
+            onEnterReviewContext={enterReviewContext}
+            onMonthChange={setDataReviewCalendarMonth}
+            onSelectDate={setDate}
+            selectedDate={date}
+            selectedDateSummary={dataReviewSelectedDateSummary}
+            symbolBreakdown={dataReviewVisibleDateSymbolBreakdown}
           />
 
           <section className="kpis currentReviewKpis" aria-label="当前复盘模块指标">
@@ -2812,138 +2843,6 @@ export default function App() {
             <Metric label="盈亏比" value={formatProfitFactor(scopedCurrentReviewSummary)} />
             <Metric label="持仓最大回撤" value={formatNullable(scopedCurrentReviewSummary?.max_single_day_drawdown)} tone={(scopedCurrentReviewSummary?.max_single_day_drawdown ?? 0) > 0 ? "warn" : "neutral"} />
           </section>
-
-        <header className="dataReviewDrillHead">
-          <div>
-            <h2>
-              <Activity size={18} />
-              下钻复盘
-            </h2>
-            <p className="panelNote">先按交易日或标的查看次级汇总，再进入当前复盘模块</p>
-          </div>
-          <div className="reviewDrillTabs" role="group" aria-label="下钻方式">
-            <button
-              aria-pressed={activeReviewDrillTab === "date"}
-              className={activeReviewDrillTab === "date" ? "reviewDrillTab active" : "reviewDrillTab"}
-              onClick={() => setActiveReviewDrillTab("date")}
-              type="button"
-            >
-              按交易日
-            </button>
-            <button
-              aria-pressed={activeReviewDrillTab === "symbol"}
-              className={activeReviewDrillTab === "symbol" ? "reviewDrillTab active" : "reviewDrillTab"}
-              onClick={() => setActiveReviewDrillTab("symbol")}
-              type="button"
-            >
-              按标的
-            </button>
-          </div>
-        </header>
-
-        <div className="reviewDrillLayout">
-          <div className="reviewDrillPrimary" aria-label={activeReviewDrillTab === "date" ? "交易日列表" : "标的列表"}>
-            {activeReviewDrillTab === "date" ? (
-              dataReviewDateSummaryGroups.length > 0 ? (
-                dataReviewDateSummaryGroups.map((group) => (
-                  <button
-                    aria-pressed={group.group_key === date}
-                    className={group.group_key === date ? "drillPrimaryItem active" : "drillPrimaryItem"}
-                    key={group.group_key}
-                    onClick={() => setDate(group.group_key)}
-                    type="button"
-                  >
-                    <strong>{group.group_label}</strong>
-                    <small>{formatReviewGroupMeta(group)}</small>
-                  </button>
-                ))
-              ) : (
-                <EmptyState icon={<CircleSlash size={18} />} title="暂无交易日" detail="当前时间范围没有 committed 成交可用于日期下钻" />
-              )
-            ) : dataReviewSymbolSummaryGroups.length > 0 ? (
-              dataReviewSymbolSummaryGroups.map((group) => (
-                <button
-                  aria-pressed={group.group_key === selectedSymbol}
-                  className={group.group_key === selectedSymbol ? "drillPrimaryItem active" : "drillPrimaryItem"}
-                  key={group.group_key}
-                  onClick={() => setSelectedSymbol(group.group_key)}
-                  type="button"
-                >
-                  <strong>{group.group_label}</strong>
-                  <small>{formatReviewGroupMeta(group)}</small>
-                </button>
-              ))
-            ) : (
-              <EmptyState icon={<CircleSlash size={18} />} title="暂无标的" detail="当前时间范围没有 committed 成交可用于标的下钻" />
-            )}
-          </div>
-
-          <div className="reviewDrillDetail">
-            <div className="drillDetailHead">
-              <div>
-                <strong>
-                  {activeReviewDrillTab === "date"
-                    ? `${date} 日统计`
-                    : selectedSymbol
-                      ? `${selectedSymbol} 标的统计`
-                      : "未选择标的"}
-                </strong>
-                <small>{activeReviewDrillTab === "date" ? "选择标的进入复盘模块" : "选择交易日进入复盘模块"}</small>
-              </div>
-              <span className="sourcePill">
-                {activeReviewDrillTab === "date"
-                  ? formatInteger(dataReviewVisibleDateSymbolBreakdown.length)
-                  : formatInteger(dataReviewVisibleSymbolDateBreakdown.length)}
-                {activeReviewDrillTab === "date" ? " 个标的" : " 个交易日"}
-              </span>
-            </div>
-
-            <SummaryMiniFacts summary={dataReviewActiveDrillSummary} />
-
-            <div className="drillSecondaryList">
-              {activeReviewDrillTab === "date" ? (
-                dataReviewVisibleDateSymbolBreakdown.length > 0 ? (
-                  dataReviewVisibleDateSymbolBreakdown.map((group) => (
-                    <article
-                      className={group.group_key === selectedSymbol ? "drillSecondaryItem active" : "drillSecondaryItem"}
-                      key={group.group_key}
-                    >
-                      <div>
-                        <strong>{group.group_label}</strong>
-                        <small>{formatReviewGroupMeta(group)}</small>
-                      </div>
-                      <button className="linkButton" onClick={() => enterReviewContext(date, group.group_key)} type="button">
-                        <Play size={14} />
-                        进入复盘
-                      </button>
-                    </article>
-                  ))
-                ) : (
-                  <EmptyState icon={<CircleSlash size={18} />} title="该日没有标的" detail="当前时间范围或矩阵筛选下没有 committed 成交分组" />
-                )
-              ) : selectedSymbol ? (
-                dataReviewVisibleSymbolDateBreakdown.length > 0 ? (
-                  dataReviewVisibleSymbolDateBreakdown.map((group) => (
-                    <article className={group.group_key === date ? "drillSecondaryItem active" : "drillSecondaryItem"} key={group.group_key}>
-                      <div>
-                        <strong>{group.group_label}</strong>
-                        <small>{formatReviewGroupMeta(group)}</small>
-                      </div>
-                      <button className="linkButton" onClick={() => enterReviewContext(group.group_key, selectedSymbol)} type="button">
-                        <Play size={14} />
-                        进入复盘
-                      </button>
-                    </article>
-                  ))
-                ) : (
-                  <EmptyState icon={<CircleSlash size={18} />} title="该标的没有交易日" detail="当前时间范围或矩阵筛选下没有 committed 成交分组" />
-                )
-              ) : (
-                <EmptyState icon={<Clock3 size={18} />} title="等待选择标的" detail="从左侧选择一个标的后显示交易日汇总" />
-              )}
-            </div>
-          </div>
-        </div>
         </div>
           </>
         ) : (
@@ -7303,6 +7202,132 @@ function LossReviewMarketRegimeMatrix(props: {
   );
 }
 
+function DataReviewCalendar(props: {
+  calendarMonth: string;
+  days: DataReviewCalendarDay[];
+  onEnterReviewContext: (dateKey: string, symbol: string) => void;
+  onMonthChange: (monthDateKey: string) => void;
+  onSelectDate: (dateKey: string) => void;
+  selectedDate: string;
+  selectedDateSummary: ReviewSummaryGroup | null;
+  symbolBreakdown: ReviewSummaryGroup[];
+}) {
+  return (
+    <section className="dataReviewCalendarPanel" aria-label="数据下钻月日历">
+      <header className="dataReviewCalendarHeader">
+        <div>
+          <h3>
+            <CalendarDays size={17} />
+            月日历下钻
+          </h3>
+          <p className="panelNote">点击有订单的日期方块，右侧立即切到该日标的下钻</p>
+        </div>
+        <div className="dataReviewCalendarNav" aria-label="月份切换">
+          <button
+            aria-label="上个月"
+            className="smallButton iconOnly"
+            onClick={() => props.onMonthChange(shiftMonthDateKey(props.calendarMonth, -1))}
+            type="button"
+          >
+            <ChevronLeft size={15} />
+          </button>
+          <strong>{dataReviewCalendarMonthLabel(props.calendarMonth)}</strong>
+          <button
+            aria-label="下个月"
+            className="smallButton iconOnly"
+            onClick={() => props.onMonthChange(shiftMonthDateKey(props.calendarMonth, 1))}
+            type="button"
+          >
+            <ChevronRight size={15} />
+          </button>
+        </div>
+      </header>
+      <div className="dataReviewCalendarLayout">
+        <div className="dataReviewCalendarGrid" role="grid" aria-label="每日订单日历">
+          {dataReviewWeekdayLabels.map((label) => (
+            <div className="dataReviewCalendarWeekday" key={label}>
+              {label}
+            </div>
+          ))}
+          {props.days.map((day) => {
+            const isActive = day.dateKey === props.selectedDate;
+            const hasSummary = day.summary !== null;
+            const className = [
+              "dataReviewCalendarDay",
+              isActive ? "active" : "",
+              day.isCurrentMonth ? "" : "outside",
+              hasSummary ? "" : "empty"
+            ]
+              .filter(Boolean)
+              .join(" ");
+            return (
+              <button
+                aria-pressed={isActive}
+                className={className}
+                disabled={!hasSummary}
+                key={day.dateKey}
+                onClick={() => props.onSelectDate(day.dateKey)}
+                type="button"
+              >
+                <strong>{day.dayNumber}</strong>
+                {day.summary ? (
+                  <>
+                    <small>{formatInteger(day.summary.traded_quantity)} 股</small>
+                    <span className={summaryTone(day.summary.pnl)}>{formatPnl(day.summary.pnl)}</span>
+                  </>
+                ) : (
+                  <small>无订单</small>
+                )}
+              </button>
+            );
+          })}
+        </div>
+        <div className="dataReviewCalendarDetail">
+          <div className="drillDetailHead">
+            <div>
+              <strong>{props.selectedDate} 日统计</strong>
+              <small>选择标的进入当前复盘模块</small>
+            </div>
+            <span className="sourcePill">{formatInteger(props.symbolBreakdown.length)} 个标的</span>
+          </div>
+
+          <SummaryMiniFacts summary={props.selectedDateSummary} />
+
+          <div className="drillSecondaryList">
+            {props.symbolBreakdown.length > 0 ? (
+              props.symbolBreakdown.map((group) => (
+                <article
+                  className="drillSecondaryItem"
+                  key={group.group_key}
+                >
+                  <div>
+                    <strong>{group.group_label}</strong>
+                    <small>{formatReviewGroupMeta(group)}</small>
+                  </div>
+                  <button
+                    className="linkButton"
+                    onClick={() => props.onEnterReviewContext(props.selectedDate, group.group_key)}
+                    type="button"
+                  >
+                    <Play size={14} />
+                    进入复盘
+                  </button>
+                </article>
+              ))
+            ) : (
+              <EmptyState
+                icon={<CircleSlash size={18} />}
+                title="该日没有标的"
+                detail="当前时间范围没有 committed 成交可用于标的下钻"
+              />
+            )}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function LossReviewDrilldown(props: {
   onReplayTradeGroup: (group: TradeGroup) => Promise<void>;
   replayBusy: string | null;
@@ -7314,7 +7339,7 @@ function LossReviewDrilldown(props: {
   const [customLossReviewEndDate, setCustomLossReviewEndDate] = useState(todayDateKey);
   const [lossReviewPage, setLossReviewPage] = useState(1);
   const [lossReviewSortMode, setLossReviewSortMode] = useState<LossReviewSortMode>("time_desc");
-  const [profitLossReviewMode, setProfitLossReviewMode] = useState<ProfitLossReviewMode>("loss");
+  const [profitLossReviewMode, setProfitLossReviewMode] = useState<ProfitLossReviewMode>("all");
   const [selectedPrimaryReasonKeys, setSelectedPrimaryReasonKeys] = useState<string[]>([]);
   const [selectedSecondaryReasonKeys, setSelectedSecondaryReasonKeys] = useState<string[]>([]);
   const reviewGroupLabel = profitLossReviewGroupLabel(profitLossReviewMode);
@@ -7331,9 +7356,11 @@ function LossReviewDrilldown(props: {
   );
   const modeTradeGroups = useMemo(
     () =>
-      props.tradeGroups.filter((group) =>
-        profitLossReviewMode === "profit" ? isClosedProfitTradeGroup(group) : isClosedLossTradeGroup(group)
-      ),
+      profitLossReviewMode === "all"
+        ? props.tradeGroups
+        : props.tradeGroups.filter((group) =>
+            profitLossReviewMode === "profit" ? isClosedProfitTradeGroup(group) : isClosedLossTradeGroup(group)
+          ),
     [profitLossReviewMode, props.tradeGroups]
   );
   const timeFilteredTradeGroups = useMemo(
@@ -7348,7 +7375,7 @@ function LossReviewDrilldown(props: {
     [showReasonModules, timeFilteredTradeGroups]
   );
   const marketRegimeMatrix = useMemo(
-    () => buildLossReviewMarketRegimeMatrix(timeFilteredTradeGroups, profitLossReviewMode === "profit" ? "all" : "loss"),
+    () => buildLossReviewMarketRegimeMatrix(timeFilteredTradeGroups, profitLossReviewMode === "loss" ? "loss" : "all"),
     [profitLossReviewMode, timeFilteredTradeGroups]
   );
   const primaryFilteredTradeGroups = useMemo(
@@ -7444,7 +7471,7 @@ function LossReviewDrilldown(props: {
             <AlertTriangle size={18} />
             盈亏复盘
           </h2>
-          <p className="panelNote">默认查看亏损交易组；切到盈利单时只展示热力矩阵和订单明细</p>
+          <p className="panelNote">默认查看全部订单；也可只看盈利单或亏损单</p>
         </div>
         <span className="sourcePill">Review Journal</span>
       </header>
@@ -7484,7 +7511,7 @@ function LossReviewDrilldown(props: {
           </div>
         ) : null}
         <div className="profitLossReviewModeSwitch" role="radiogroup" aria-label="盈亏单筛选">
-          {(["profit", "loss"] as ProfitLossReviewMode[]).map((mode) => (
+          {(["all", "profit", "loss"] as ProfitLossReviewMode[]).map((mode) => (
             <label
               className={profitLossReviewMode === mode ? "profitLossReviewModeOption active" : "profitLossReviewModeOption"}
               key={mode}
@@ -7516,7 +7543,9 @@ function LossReviewDrilldown(props: {
           <dd>{showReasonModules ? formatInteger(timePendingTradeGroupCount) : "空"}</dd>
         </div>
         <div>
-          <dt>{profitLossReviewMode === "profit" ? "盈利合计" : "亏损合计"}</dt>
+          <dt>
+            {profitLossReviewMode === "all" ? "盈亏合计" : profitLossReviewMode === "profit" ? "盈利合计" : "亏损合计"}
+          </dt>
           <dd className={summaryTone(timeTotalReviewPnl)}>{formatPnl(timeTotalReviewPnl)}</dd>
         </div>
       </dl>
@@ -7528,7 +7557,14 @@ function LossReviewDrilldown(props: {
             readOnly
             sourceLabel={reviewGroupLabel}
             subtitle={`按美股常规盘五大微观结构窗口 × 开仓 ATR Multiple 查看${reviewGroupLabel}分布`}
-            summaryMode={profitLossReviewMode === "profit" ? "max_profit" : "max_loss"}
+            showTimeWindowPnlSummary={profitLossReviewMode === "all"}
+            summaryMode={
+              profitLossReviewMode === "all"
+                ? "pnl_extremes"
+                : profitLossReviewMode === "profit"
+                  ? "max_profit"
+                  : "max_loss"
+            }
             title={`${reviewGroupLabel}热力时间矩阵`}
           />
           <div className="lossReviewDrillLayout">
@@ -7584,7 +7620,7 @@ function LossReviewDrilldown(props: {
               </span>
             </div>
             <div className="lossReviewListToolbar">
-              <div className="lossReviewSortControl" role="group" aria-label="亏损单排序">
+              <div className="lossReviewSortControl" role="group" aria-label={`${reviewGroupLabel}排序`}>
                 <button
                   aria-pressed={lossReviewSortMode === "time_desc"}
                   className={lossReviewSortMode === "time_desc" ? "smallButton active" : "smallButton"}
@@ -7599,7 +7635,7 @@ function LossReviewDrilldown(props: {
                   onClick={() => setLossReviewSortMode("loss_desc")}
                   type="button"
                 >
-                  {profitLossReviewMode === "profit" ? "按盈利金额倒序" : "按亏损金额倒序"}
+                  {profitLossReviewSortLabel(profitLossReviewMode)}
                 </button>
               </div>
               <span className="toolbarMeta">20 笔/页</span>
@@ -7637,11 +7673,13 @@ function LossReviewDrilldown(props: {
                       <>
                         <div>
                           <dt>结果</dt>
-                          <dd>盈利</dd>
+                          <dd>{profitLossReviewResultLabel(group)}</dd>
                         </div>
                         <div>
                           <dt>复盘原因</dt>
-                          <dd>不适用</dd>
+                          <dd>
+                            {group.pnl !== null && group.pnl < 0 ? group.review?.reason_label ?? "待复盘" : "不适用"}
+                          </dd>
                         </div>
                       </>
                     )}
@@ -7665,7 +7703,7 @@ function LossReviewDrilldown(props: {
                 detail={showReasonModules ? "调整时间范围、一级原因或二级原因筛选后再查看列表" : "调整时间范围或切回亏损单后再查看列表"}
               />
             )}
-            <div className="lossReviewPagination" aria-label="亏损单分页">
+            <div className="lossReviewPagination" aria-label={`${reviewGroupLabel}分页`}>
               <button
                 className="smallButton"
                 disabled={safePage <= 1}

@@ -11,9 +11,11 @@ TYPES_SOURCE = (ROOT / "web" / "src" / "types.ts").read_text(encoding="utf-8")
 
 
 def test_review_drill_date_stats_use_selected_date_group_summary():
-    assert "const selectedDateSummary = useMemo" in APP_SOURCE
-    assert "dateSummaryGroups.find((group) => group.group_key === date)" in APP_SOURCE
-    assert '<SummaryMiniFacts summary={dataReviewActiveDrillSummary} />' in APP_SOURCE
+    assert "const dataReviewSelectedDateSummary = useMemo" in APP_SOURCE
+    assert "dataReviewDateSummaryGroups.find((group) => group.group_key === date)" in APP_SOURCE
+    assert "function DataReviewCalendar" in APP_SOURCE
+    assert "selectedDateSummary={dataReviewSelectedDateSummary}" in APP_SOURCE
+    assert "<SummaryMiniFacts summary={props.selectedDateSummary} />" in APP_SOURCE
     assert 'summary={activeReviewDrillTab === "date" ? summary : selectedSymbolSummary}' not in APP_SOURCE
 
 
@@ -35,7 +37,7 @@ def test_date_drill_uses_preloaded_symbol_breakdown_before_empty_state():
     assert "dateSymbolBreakdownReady" in APP_SOURCE
     assert "dateSymbolBreakdownByDate[date] ?? []" in APP_SOURCE
     assert '"读取中"' in APP_SOURCE
-    assert "dataReviewVisibleDateSymbolBreakdown.length > 0" in APP_SOURCE
+    assert "props.symbolBreakdown.length > 0" in APP_SOURCE
     assert 'title="该日没有标的"' in APP_SOURCE
 
 
@@ -261,14 +263,16 @@ def test_profit_loss_review_drill_tab_reads_profit_and_loss_trade_groups():
     assert "const [allTradeGroups, setAllTradeGroups] = useState<TradeGroup[]>([])" in APP_SOURCE
     assert "fetchTradeGroups(undefined, undefined, { ...requestOptions, includeDetails: false })" in APP_SOURCE
     assert "setAllTradeGroups(nextAllTradeGroups)" in APP_SOURCE
-    assert "type ProfitLossReviewMode = \"profit\" | \"loss\";" in APP_SOURCE
+    assert "type ProfitLossReviewMode = \"all\" | \"profit\" | \"loss\";" in APP_SOURCE
+    assert 'all: "全部订单"' in APP_SOURCE
     assert "profit: \"仅看盈利单\"" in APP_SOURCE
     assert "loss: \"仅看亏损单\"" in APP_SOURCE
     assert "function isClosedProfitTradeGroup" in APP_SOURCE
-    assert "function isClosedProfitLossTradeGroup" in APP_SOURCE
+    assert "function isClosedRealizedTradeGroup" in APP_SOURCE
     assert "const profitLossReviewTradeGroups = useMemo" in APP_SOURCE
-    assert "allTradeGroups.filter(isClosedProfitLossTradeGroup)" in APP_SOURCE
-    assert 'const [profitLossReviewMode, setProfitLossReviewMode] = useState<ProfitLossReviewMode>("loss")' in APP_SOURCE
+    assert "allTradeGroups.filter(isClosedRealizedTradeGroup)" in APP_SOURCE
+    assert 'const [profitLossReviewMode, setProfitLossReviewMode] = useState<ProfitLossReviewMode>("all")' in APP_SOURCE
+    assert 'profitLossReviewMode === "all"\n        ? props.tradeGroups' in APP_SOURCE
     assert "profitLossReviewMode === \"profit\" ? isClosedProfitTradeGroup(group) : isClosedLossTradeGroup(group)" in APP_SOURCE
     assert "showReasonModules ? buildLossReviewPrimaryReasonSummaries(timeFilteredTradeGroups) : []" in APP_SOURCE
     assert "showReasonModules ? buildLossReviewSecondaryReasonSummaries(primaryFilteredTradeGroups) : []" in APP_SOURCE
@@ -323,18 +327,20 @@ def test_profit_review_view_keeps_reason_module_empty():
     loss_body_end = APP_SOURCE.index('function EmptyState', loss_body_start)
     loss_body = APP_SOURCE[loss_body_start:loss_body_end]
 
-    assert 'const [profitLossReviewMode, setProfitLossReviewMode] = useState<ProfitLossReviewMode>("loss")' in loss_body
+    assert 'const [profitLossReviewMode, setProfitLossReviewMode] = useState<ProfitLossReviewMode>("all")' in loss_body
     assert 'role="radiogroup" aria-label="盈亏单筛选"' in loss_body
     assert 'name="profitLossReviewMode"' in loss_body
     assert "setProfitLossReviewMode(mode)" in loss_body
-    assert 'profitLossReviewMode === "profit" ? "max_profit" : "max_loss"' in loss_body
-    assert 'buildLossReviewMarketRegimeMatrix(timeFilteredTradeGroups, profitLossReviewMode === "profit" ? "all" : "loss")' in loss_body
+    assert '(["all", "profit", "loss"] as ProfitLossReviewMode[])' in loss_body
+    assert 'showTimeWindowPnlSummary={profitLossReviewMode === "all"}' in loss_body
+    assert 'profitLossReviewMode === "all"\n                ? "pnl_extremes"' in loss_body
+    assert 'buildLossReviewMarketRegimeMatrix(timeFilteredTradeGroups, profitLossReviewMode === "loss" ? "loss" : "all")' in loss_body
     assert 'showReasonModules ? (' in loss_body
     assert 'title="暂无原因分类"' in loss_body
     assert "盈利单不写入亏损原因，原因模块保持为空" in loss_body
-    assert 'profitLossReviewMode === "profit" ? "按盈利金额倒序" : "按亏损金额倒序"' in loss_body
+    assert "profitLossReviewSortLabel(profitLossReviewMode)" in loss_body
     assert "<dt>结果</dt>" in loss_body
-    assert "<dd>盈利</dd>" in loss_body
+    assert "<dd>{profitLossReviewResultLabel(group)}</dd>" in loss_body
 
 
 def test_loss_review_market_regime_matrix_uses_us_session_windows():
@@ -369,7 +375,7 @@ def test_loss_review_market_regime_matrix_uses_us_session_windows():
     assert "$1,500" not in APP_SOURCE
     assert "开仓 ATR Multiple" in APP_SOURCE
     assert "缺 ATR 证据" in APP_SOURCE
-    assert 'buildLossReviewMarketRegimeMatrix(timeFilteredTradeGroups, profitLossReviewMode === "profit" ? "all" : "loss")' in APP_SOURCE
+    assert 'buildLossReviewMarketRegimeMatrix(timeFilteredTradeGroups, profitLossReviewMode === "loss" ? "loss" : "all")' in APP_SOURCE
     assert "lossReviewMatchesSelectedRegimeCell(group, selectedMarketRegimeCell)" not in APP_SOURCE
     assert "selectedMarketRegimeCell" not in APP_SOURCE
     assert "toggleMarketRegimeCell" not in APP_SOURCE
@@ -391,9 +397,9 @@ def test_loss_review_market_regime_matrix_uses_us_session_windows():
     loss_body_start = APP_SOURCE.index('function LossReviewDrilldown(props: {')
     loss_body_end = APP_SOURCE.index('function EmptyState', loss_body_start)
     loss_body = APP_SOURCE[loss_body_start:loss_body_end]
-    assert 'summaryMode={profitLossReviewMode === "profit" ? "max_profit" : "max_loss"}' in loss_body
+    assert 'profitLossReviewMode === "all"\n                ? "pnl_extremes"' in loss_body
+    assert 'showTimeWindowPnlSummary={profitLossReviewMode === "all"}' in loss_body
     assert "readOnly" in loss_body
-    assert "showTimeWindowPnlSummary" not in loss_body
     assert "最大亏损区" in APP_SOURCE
     assert "最大盈利区" in APP_SOURCE
     assert "onToggleCell" not in APP_SOURCE
@@ -422,7 +428,7 @@ def test_loss_review_tab_does_not_render_data_drill_modules():
     assert "隔离行" in data_only_body
 
 
-def test_data_drill_orders_time_filter_metrics_matrix_before_detail():
+def test_data_drill_orders_time_filter_metrics_calendar_before_detail():
     assert "const [dataReviewTimeFilterMode, setDataReviewTimeFilterMode] = useState<LossReviewTimeFilterMode>(\"all\")" in APP_SOURCE
     assert "const dataReviewTimeFilteredTradeGroups = useMemo" in APP_SOURCE
     assert "lossReviewDateRangeIncludesGroup(group, dataReviewTimeRange.startDate, dataReviewTimeRange.endDate)" in APP_SOURCE
@@ -430,29 +436,39 @@ def test_data_drill_orders_time_filter_metrics_matrix_before_detail():
     assert "toggleDataMarketRegimeCell" not in APP_SOURCE
     assert "const dataReviewMatrixFilteredTradeGroups = useMemo" not in APP_SOURCE
     assert "buildReviewSummaryFromTradeGroups(dataReviewTimeFilteredTradeGroups)" in APP_SOURCE
-    assert "buildLossReviewMarketRegimeMatrix(dataReviewTimeFilteredTradeGroups, \"all\")" in APP_SOURCE
+    assert "buildLossReviewMarketRegimeMatrix(dataReviewTimeFilteredTradeGroups, \"all\")" not in APP_SOURCE
     assert "function DataReviewAtrEvidencePanel" not in APP_SOURCE
     assert "全部订单 ATR 证据" not in APP_SOURCE
     assert "formatTradeGroupRawLineEvidence" not in APP_SOURCE
     assert ".dataReviewAtrEvidencePanel" not in STYLES_SOURCE
     assert "buildReviewSummaryGroupsFromTradeGroups(dataReviewTimeFilteredTradeGroups, \"date\")" in APP_SOURCE
-    assert "buildReviewSummaryGroupsFromTradeGroups(dataReviewTimeFilteredTradeGroups, \"symbol\")" in APP_SOURCE
+    assert "buildDataReviewCalendarDays(dataReviewCalendarMonth, dataReviewDateSummaryGroups)" in APP_SOURCE
+    assert "function DataReviewCalendar" in APP_SOURCE
+    assert "dataReviewWeekdayLabels" in APP_SOURCE
     data_body_start = APP_SOURCE.index('<div className="dataReviewDrilldown">')
     data_body_end = APP_SOURCE.index('<section className="reviewWorkspace" aria-label="日内复盘工作区"', data_body_start)
     data_body = APP_SOURCE[data_body_start:data_body_end]
     assert data_body.index('aria-label="数据下钻全局时间筛选"') < data_body.index('className="kpis reviewDashboard dataReviewSummaryStrip"')
-    assert data_body.index('className="kpis reviewDashboard dataReviewSummaryStrip"') < data_body.index('<LossReviewMarketRegimeMatrix')
-    assert data_body.index('<LossReviewMarketRegimeMatrix') < data_body.index('<header className="dataReviewDrillHead">')
-    assert data_body.index('<LossReviewMarketRegimeMatrix') < data_body.index('<section className="kpis currentReviewKpis"')
-    assert 'sourceLabel="全部订单"' in data_body
+    assert data_body.index('className="kpis reviewDashboard dataReviewSummaryStrip"') < data_body.index("<DataReviewCalendar")
+    assert data_body.index("<DataReviewCalendar") < data_body.index('<section className="kpis currentReviewKpis"')
+    assert "<LossReviewMarketRegimeMatrix" not in data_body
+    assert 'aria-label="数据下钻月日历"' in APP_SOURCE
+    assert "点击有订单的日期方块" in APP_SOURCE
+    assert "<small>{formatInteger(day.summary.traded_quantity)} 股</small>" in APP_SOURCE
+    assert "<small>{formatInteger(day.summary.fill_count)} 单</small>" not in APP_SOURCE
+    assert "onSelectDate={setDate}" in data_body
+    assert "onEnterReviewContext={enterReviewContext}" in data_body
     assert 'concentrationLabel="订单集中区"' not in data_body
-    assert "readOnly" in data_body
-    assert "showTimeWindowPnlSummary" in data_body
-    assert 'summaryMode="pnl_extremes"' in data_body
+    assert "readOnly" not in data_body
+    assert "showTimeWindowPnlSummary" not in data_body
+    assert 'summaryMode="pnl_extremes"' not in data_body
     assert "最大盈利区" in APP_SOURCE
     assert "最大亏损区" in APP_SOURCE
     assert "X 轴汇总" in APP_SOURCE
     assert "收益合计" in APP_SOURCE
+    assert ".dataReviewCalendarPanel" in STYLES_SOURCE
+    assert ".dataReviewCalendarGrid" in STYLES_SOURCE
+    assert ".dataReviewCalendarDay" in STYLES_SOURCE
     assert "props.matrix.timeWindowSummaries.map" in APP_SOURCE
     assert 'onToggleCell={toggleDataMarketRegimeCell}' not in data_body
     assert 'selectedCell={selectedDataMarketRegimeCell}' not in data_body
