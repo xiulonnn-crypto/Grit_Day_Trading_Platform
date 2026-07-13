@@ -1,4 +1,5 @@
 import json
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -15,18 +16,28 @@ from grit_day_trading.strategy import (
     DEFAULT_BB_SQUEEZE_STRATEGY_ID,
     DEFAULT_LIQUIDITY_SWEEP_PARAMS,
     DEFAULT_LIQUIDITY_SWEEP_STRATEGY_ID,
+    DEFAULT_LAST_HOUR_MOMENTUM_PARAMS,
     DEFAULT_MOMENTUM_MEAN_REVERSION_PARAMS,
     DEFAULT_MOMENTUM_MEAN_REVERSION_STRATEGY_ID,
+    DEFAULT_OPENING_RANGE_BREAKOUT_PARAMS,
+    DEFAULT_OPENING_RANGE_RETEST_PARAMS,
     DEFAULT_RANGE_FADER_PARAMS,
     DEFAULT_RANGE_FADER_STRATEGY_ID,
     DEFAULT_TREND_RIDER_PARAMS,
     DEFAULT_TREND_RIDER_STRATEGY_ID,
+    DEFAULT_VWAP_OPENING_DRIVE_PARAMS,
+    DEFAULT_VWAP_TREND_PULLBACK_PARAMS,
+    LAST_HOUR_MOMENTUM_TEMPLATE_KEY,
     LIQUIDITY_SWEEP_TEMPLATE_KEY,
     MOMENTUM_MEAN_REVERSION_TEMPLATE_KEY,
+    OPENING_RANGE_BREAKOUT_TEMPLATE_KEY,
+    OPENING_RANGE_RETEST_TEMPLATE_KEY,
     RANGE_FADER_TEMPLATE_KEY,
     RANGE_FADER_TEMPLATE_VERSION,
     TREND_RIDER_TEMPLATE_KEY,
     TREND_RIDER_TEMPLATE_VERSION,
+    VWAP_OPENING_DRIVE_TEMPLATE_KEY,
+    VWAP_TREND_PULLBACK_TEMPLATE_KEY,
     _candidate_params_from_search_space,
     _default_optimization_search_space,
     _params_hash,
@@ -38,6 +49,7 @@ from grit_day_trading.strategy import (
     evaluate_momentum_mean_reversion,
     evaluate_one_minute_trend_rider,
     evaluate_one_minute_range_fader,
+    evaluate_research_intraday_strategy,
     list_strategy_configs,
     preview_live_strategy_signal,
     run_strategy_optimization,
@@ -48,6 +60,59 @@ from grit_day_trading.strategy import (
 
 
 SAMPLE_PATH = Path("tests/fixtures/stp_sample.tsv")
+
+
+@pytest.mark.parametrize(
+    ("template_key", "params"),
+    [
+        (OPENING_RANGE_BREAKOUT_TEMPLATE_KEY, DEFAULT_OPENING_RANGE_BREAKOUT_PARAMS),
+        (OPENING_RANGE_RETEST_TEMPLATE_KEY, DEFAULT_OPENING_RANGE_RETEST_PARAMS),
+        (VWAP_OPENING_DRIVE_TEMPLATE_KEY, DEFAULT_VWAP_OPENING_DRIVE_PARAMS),
+        (VWAP_TREND_PULLBACK_TEMPLATE_KEY, DEFAULT_VWAP_TREND_PULLBACK_PARAMS),
+        (LAST_HOUR_MOMENTUM_TEMPLATE_KEY, DEFAULT_LAST_HOUR_MOMENTUM_PARAMS),
+    ],
+)
+def test_research_intraday_templates_emit_one_closed_traceable_signal_group(template_key, params):
+    bars = _research_intraday_bars()
+
+    series, signals = evaluate_research_intraday_strategy(template_key, bars, params)
+
+    assert len(series) == len(bars)
+    assert [signal["action"] for signal in signals] == ["ENTRY_LONG", "EXIT_LONG"]
+    assert signals[0]["linked_entry_signal_index"] is None
+    assert signals[1]["linked_entry_signal_index"] == 0
+    assert signals[0]["stop_loss_price"] < signals[0]["price"] < signals[0]["take_profit_price"]
+    assert signals[1]["metrics"]["exit_fraction"] == 1.0
+
+
+def _research_intraday_bars() -> list[dict[str, float | str]]:
+    start = datetime(2026, 7, 10, 9, 30)
+    bars: list[dict[str, float | str]] = []
+    for minute in range(390):
+        open_price = 100.0 + 0.02 * minute
+        close = open_price + 0.01
+        high = close + 0.02
+        low = open_price - 0.02
+        if minute == 5:
+            close = 100.15
+            high = 100.18
+        elif minute == 15:
+            open_price, close, high, low = 100.30, 100.34, 100.36, 100.29
+        elif minute == 16:
+            open_price, close, high, low = 100.31, 100.36, 100.38, 100.30
+        elif minute == 30:
+            open_price, close, high, low = 100.55, 100.65, 100.67, 100.25
+        bars.append(
+            {
+                "timestamp": (start + timedelta(minutes=minute)).isoformat(),
+                "open": open_price,
+                "high": high,
+                "low": low,
+                "close": close,
+                "volume": 1000.0,
+            }
+        )
+    return bars
 
 
 def test_bb_squeeze_long_entry_and_atr_target_exit():
@@ -603,7 +668,9 @@ def test_liquidity_sweep_strategy_replay_persists_archive_and_preserves_fills(tm
             symbol="AAPL",
             trade_date="2026-06-01",
             source_fill_count=2,
-            provider=FakeMarketDataProvider(minute_bars={"AAPL": _liquidity_sweep_long_bars()}),
+            provider=FakeMarketDataProvider(
+                minute_bars={"AAPL": _with_source_fill_coverage(_liquidity_sweep_long_bars())}
+            ),
         )
         before_prices = [fill["price"] for fill in list_fills(conn, date="2026-06-01")]
 
@@ -636,7 +703,7 @@ def test_trend_rider_strategy_replay_persists_archive_and_preserves_fills(tmp_pa
             symbol="AAPL",
             trade_date="2026-06-01",
             source_fill_count=2,
-            provider=FakeMarketDataProvider(minute_bars={"AAPL": _trend_rider_long_bars()}),
+            provider=FakeMarketDataProvider(minute_bars={"AAPL": _with_source_fill_coverage(_trend_rider_long_bars())}),
         )
         before_prices = [fill["price"] for fill in list_fills(conn, date="2026-06-01")]
 
@@ -723,7 +790,9 @@ def test_momentum_mean_reversion_replay_requires_context_archives_and_preserves_
             symbol="AAPL",
             trade_date="2026-06-01",
             source_fill_count=2,
-            provider=FakeMarketDataProvider(minute_bars={"AAPL": _mean_reversion_long_bars()}),
+            provider=FakeMarketDataProvider(
+                minute_bars={"AAPL": _with_source_fill_coverage(_mean_reversion_long_bars())}
+            ),
         )
 
         missing_context = run_strategy_signal_replay(
@@ -839,6 +908,11 @@ def test_strategy_api_creates_enables_runs_and_surfaces_missing_archive(tmp_path
         "momentum_mean_reversion_v1",
         "one_minute_trend_rider_v1",
         "one_minute_range_fader_v1",
+        "five_minute_opening_range_breakout_v1",
+        "fifteen_minute_opening_range_retest_v1",
+        "vwap_opening_drive_v1",
+        "vwap_trend_pullback_v1",
+        "last_hour_intraday_momentum_v1",
     }
     assert {param["key"] for param in templates[0]["param_schema"]} >= {
         "exit_ema_period",
@@ -2156,6 +2230,27 @@ def _timed_bar(index, open_price, high, low, close, volume, *, start_hour=11, st
         "close": close,
         "volume": volume,
     }
+
+
+def _with_source_fill_coverage(bars):
+    covered = {bar["timestamp"] for bar in bars}
+    augmented = list(bars)
+    for timestamp in ("2026-06-01T09:31:00", "2026-06-01T10:15:00"):
+        if timestamp in covered:
+            continue
+        reference = bars[0]
+        close = float(reference["close"])
+        augmented.append(
+            {
+                "timestamp": timestamp,
+                "open": close,
+                "high": close,
+                "low": close,
+                "close": close,
+                "volume": 0,
+            }
+        )
+    return sorted(augmented, key=lambda bar: bar["timestamp"])
 
 
 def _bar(index, open_price, high, low, close, volume):

@@ -1,4 +1,5 @@
 import type {
+  AiStrategyRecommendations,
   DailySummary,
   FillRow,
   ImportBatch,
@@ -40,6 +41,7 @@ function apiLabel(pathname: string): string {
   if (pathname.includes("/api/market-data/minute-archives")) return "分钟线归档读取";
   if (pathname.includes("/api/watchlist")) return "Watchlist";
   if (pathname.includes("/api/strategy-templates")) return "策略模板读取";
+  if (pathname.includes("/api/ai-strategy-recommendations")) return "AI策略推荐读取";
   if (pathname.includes("/api/strategy-runs")) return "策略复盘读取";
   if (pathname.includes("/api/strategy-test-runs")) return "策略测试读取";
   if (pathname.includes("/api/strategy-optimizations")) return "策略优化读取";
@@ -407,6 +409,20 @@ export async function generateWatchlist(date: string, force = false): Promise<Wa
 export async function fetchStrategyTemplates(options: GetRequestOptions = {}): Promise<StrategyTemplate[]> {
   const payload = await readGetJson<{ items: StrategyTemplate[] }>("/api/strategy-templates", options);
   return payload.items;
+}
+
+export async function fetchAiStrategyRecommendations(
+  endDate: string,
+  symbols: string[],
+  options: GetRequestOptions = {}
+): Promise<AiStrategyRecommendations> {
+  const params = new URLSearchParams({
+    end_date: endDate,
+    symbols: symbols.join(","),
+    initial_capital: "100000",
+    window_calendar_days: "30"
+  });
+  return readGetJson<AiStrategyRecommendations>(`/api/ai-strategy-recommendations?${params.toString()}`, options);
 }
 
 export async function fetchStrategies(options: GetRequestOptions = {}): Promise<StrategyConfig[]> {

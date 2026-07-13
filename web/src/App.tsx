@@ -2,6 +2,7 @@ import {
   Activity,
   AlertTriangle,
   BarChart3,
+  BrainCircuit,
   CalendarDays,
   ChevronDown,
   ChevronLeft,
@@ -82,11 +83,13 @@ import type {
   StrategyTemplate,
   TradeGroup,
   TradeGroupFill,
+  TradeEvaluationRecommendation,
   TradeReviewReasonCategory,
   WatchlistRun,
   WatchlistRunStatus,
   YahooMinuteArchiveResult
 } from "./types";
+import { AiStrategyWorkspace } from "./AiStrategyWorkspace";
 import { getDefaultReviewDate } from "./tradingDate";
 import "./styles.css";
 
@@ -120,6 +123,7 @@ const watchlistStatusMeta: Record<WatchlistRunStatus, { label: string; tone: "in
 };
 
 const minuteCandleEdgeBufferBars = 10;
+const tradeReplayHalfHourWindowMinutes = 30;
 
 type LossReviewReasonOption = {
   code: string;
@@ -390,7 +394,13 @@ function isAbortError(err: unknown) {
 
 type StrategyParamValue = number | string;
 type StrategyConfigMode = "edit" | "create";
-type WorkspaceTab = "review" | "strategy" | "live";
+type WorkspaceTab = "review" | "strategy" | "ai_strategy" | "live";
+
+function initialWorkspaceTab(): WorkspaceTab {
+  if (typeof window === "undefined") return "review";
+  const marker = new URLSearchParams(window.location.search).get("grit_ui") ?? "";
+  return marker.startsWith("ai-strategy-recommendation-") ? "ai_strategy" : "review";
+}
 type LiveProvider = "futu" | "yahoo" | "fake";
 type ReviewDrillSurfaceTab = "data" | "loss";
 type StrategyFeedbackTone = "info" | "ok" | "warn" | "danger";
@@ -1353,7 +1363,7 @@ export default function App() {
   const [strategyTestDayArchive, setStrategyTestDayArchive] = useState<MarketMinuteArchive | null>(null);
   const [strategyTestDayDetailBusy, setStrategyTestDayDetailBusy] = useState(false);
   const [minuteArchives, setMinuteArchives] = useState<MarketMinuteArchive[]>([]);
-  const [activeWorkspaceTab, setActiveWorkspaceTab] = useState<WorkspaceTab>("review");
+  const [activeWorkspaceTab, setActiveWorkspaceTab] = useState<WorkspaceTab>(initialWorkspaceTab);
   const [activeReviewDrillSurfaceTab, setActiveReviewDrillSurfaceTab] = useState<ReviewDrillSurfaceTab>("data");
   const [dataReviewTimeFilterMode, setDataReviewTimeFilterMode] = useState<LossReviewTimeFilterMode>("all");
   const [dataReviewCalendarMonth, setDataReviewCalendarMonth] = useState(() =>
@@ -1436,15 +1446,20 @@ export default function App() {
         : symbolScopedTradeGroups,
     [showLossOnlyTradeGroups, symbolScopedTradeGroups]
   );
+  const displayedTradeGroupFills = useMemo(
+    () => displayedTradeGroups.flatMap((group) => group.fills),
+    [displayedTradeGroups]
+  );
   const displayedChartFills = useMemo(() => {
-    if (!showLossOnlyTradeGroups) return displayedFills;
+    const chartFillReadModel = displayedFills.length > 0 ? displayedFills : displayedTradeGroupFills;
+    if (!showLossOnlyTradeGroups) return chartFillReadModel;
     const groupScopes = displayedTradeGroups.map((group) => ({
       accountCanonical: group.account_canonical,
       rawLineNumbers: new Set(group.raw_line_numbers),
       sourceBatchIds: new Set(group.source_batch_ids),
       symbol: group.symbol
     }));
-    return displayedFills.filter((fill) =>
+    return chartFillReadModel.filter((fill) =>
       groupScopes.some(
         (scope) =>
           scope.accountCanonical === fill.account_canonical &&
@@ -1453,7 +1468,7 @@ export default function App() {
           scope.rawLineNumbers.has(fill.raw_line_number)
       )
     );
-  }, [displayedFills, displayedTradeGroups, showLossOnlyTradeGroups]);
+  }, [displayedFills, displayedTradeGroupFills, displayedTradeGroups, showLossOnlyTradeGroups]);
   const selectedArchive = useMemo(
     () =>
       minuteArchives.find((archive) => archive.symbol === selectedSymbol && archive.trade_date === date) ??
@@ -2188,8 +2203,15 @@ export default function App() {
     setArchiveBusy(true);
     setError(null);
     try {
-      setMinuteArchives(await fetchMinuteArchives(date, selectedSymbol, "yahoo"));
-      setTradeGroups(await fetchTradeGroups(date));
+      await archiveYahooMinuteData(date, true, selectedSymbol, 1);
+      const [nextArchives, nextFills, nextTradeGroups] = await Promise.all([
+        fetchMinuteArchives(date, selectedSymbol, "yahoo"),
+        fetchFills(date, undefined),
+        fetchTradeGroups(date)
+      ]);
+      setMinuteArchives(nextArchives);
+      setFills(nextFills);
+      setTradeGroups(nextTradeGroups);
     } catch (err) {
       setError(err instanceof Error ? err.message : "本地分钟线归档读取失败");
     } finally {
@@ -2719,6 +2741,15 @@ export default function App() {
         >
           <SlidersHorizontal size={16} />
           策略测试
+        </button>
+        <button
+          aria-pressed={activeWorkspaceTab === "ai_strategy"}
+          className={activeWorkspaceTab === "ai_strategy" ? "workspaceTab active" : "workspaceTab"}
+          onClick={() => setActiveWorkspaceTab("ai_strategy")}
+          type="button"
+        >
+          <BrainCircuit size={16} />
+          AI策略
         </button>
         <button
           aria-pressed={activeWorkspaceTab === "live"}
@@ -3375,6 +3406,17 @@ export default function App() {
           strategyTestDayRun={strategyTestDayRun}
           strategyTestBusy={strategyTestBusy}
           onToggleFullDayStrategyBars={setShowFullDayStrategyBars}
+        />
+      ) : activeWorkspaceTab === "ai_strategy" ? (
+        <AiStrategyWorkspace
+          date={date}
+          onDateChange={setDate}
+          onOpenStrategyTest={(strategyId) => {
+            setSelectedStrategyId(strategyId);
+            setActiveWorkspaceTab("strategy");
+          }}
+          onSymbolChange={onStrategySymbolInputChange}
+          symbolInput={strategySymbolInput || primaryStrategySymbol || "MU"}
         />
       ) : (
         <LiveTradingWorkspace
@@ -5816,9 +5858,21 @@ function TradeReplayModal(props: {
   onClose: () => void;
   onSave: (reasonCategory: TradeReviewReasonCategory, reasonCode: string, note: string) => void;
 }) {
+  const [showHalfHourReplayWindow, setShowHalfHourReplayWindow] = useState(false);
   const evaluation = props.group.evaluation;
   const archiveStatus = props.archive ? marketStatusMeta[props.archive.data_status] : null;
   const canReviewLoss = props.group.status === "closed" && props.group.pnl !== null && props.group.pnl < 0;
+  const evaluationRecommendations =
+    evaluation.evaluation_status === "available"
+      ? (evaluation.recommendations?.length ? evaluation.recommendations : fallbackTradeEvaluationRecommendations(props.group))
+      : [];
+  useEffect(() => {
+    setShowHalfHourReplayWindow(false);
+  }, [props.group.trade_group_id]);
+  const replayScope = tradeGroupScope(
+    props.group,
+    showHalfHourReplayWindow ? tradeReplayHalfHourWindowMinutes : minuteCandleEdgeBufferBars
+  );
   return (
     <div
       className="modalBackdrop"
@@ -5854,22 +5908,32 @@ function TradeReplayModal(props: {
             <section className="replayChartPane">
               {props.archive && props.archive.bars.length > 0 ? (
                 <>
-                  <div className="chartMeta">
-                    <span>{props.archive.provider.toUpperCase()}</span>
-                    <span>Bars {formatInteger(props.archive.bar_count)}</span>
-                    <span>VWAP {formatNullable(props.archive.vwap)}</span>
-                    <span>High {formatNullable(props.archive.day_high)}</span>
-                    <span>Low {formatNullable(props.archive.day_low)}</span>
-                    <span>Volume {formatInteger(props.archive.volume_context.total_volume)}</span>
-                    <span className="monoWrap">hash {shortHash(props.archive.bars_hash)}</span>
+                  <div className="replayChartToolbar">
+                    <div className="chartMeta" aria-label="Replay 分钟线摘要">
+                      <span>{props.archive.provider.toUpperCase()}</span>
+                      <span>Bars {formatInteger(props.archive.bar_count)}</span>
+                      <span>VWAP {formatNullable(props.archive.vwap)}</span>
+                      <span>High {formatNullable(props.archive.day_high)}</span>
+                      <span>Low {formatNullable(props.archive.day_low)}</span>
+                      <span>Volume {formatInteger(props.archive.volume_context.total_volume)}</span>
+                      <span className="monoWrap">hash {shortHash(props.archive.bars_hash)}</span>
+                    </div>
+                    <label className="toggleControl replayWindowToggle" title="开平仓前后各半小时">
+                      <input
+                        checked={showHalfHourReplayWindow}
+                        onChange={(event) => setShowHalfHourReplayWindow(event.currentTarget.checked)}
+                        type="checkbox"
+                      />
+                      <span>查看半小时</span>
+                    </label>
                   </div>
-                <MinuteCandleChart
-                  archive={props.archive}
-                  fills={props.group.fills}
-                  scope={tradeGroupScope(props.group, minuteCandleEdgeBufferBars)}
-                  showReplayEma20
-                  tradeMarkerVariant="replay"
-                />
+                  <MinuteCandleChart
+                    archive={props.archive}
+                    fills={props.group.fills}
+                    scope={replayScope}
+                    showReplayEma20
+                    tradeMarkerVariant="replay"
+                  />
                   {props.archive.failure_reason ? (
                     <div className="statusReason">
                       <AlertTriangle size={16} />
@@ -5941,6 +6005,9 @@ function TradeReplayModal(props: {
                   <strong>{evaluation.score === null ? "N/A" : decimalFormatter.format(evaluation.score)}</strong>
                 </div>
                 <p>{evaluation.summary}</p>
+                {evaluationRecommendations.length > 0 ? (
+                  <TradeEvaluationRecommendations recommendations={evaluationRecommendations} />
+                ) : null}
                 <small>{evaluation.model_version}</small>
                 {evaluation.strengths.length > 0 ? (
                   <div className="tagList">
@@ -5981,6 +6048,19 @@ function TradeReplayModal(props: {
           </div>
         </div>
       </section>
+    </div>
+  );
+}
+
+function TradeEvaluationRecommendations(props: { recommendations: TradeEvaluationRecommendation[] }) {
+  return (
+    <div className="tradeEvaluationRecommendations" aria-label="交易评分后续操作建议">
+      {props.recommendations.map((item) => (
+        <div key={item.label}>
+          <strong>{item.label}</strong>
+          <span>{item.detail}</span>
+        </div>
+      ))}
     </div>
   );
 }
@@ -6261,9 +6341,10 @@ function MinuteCandleChart(props: {
       })
     : allBars;
   const bars = scopedBars.length > 0 ? scopedBars : allBars;
-  const scopeStartLabel = fillScope ? formatMinuteOfDay(fillScope.startMinute) : bars[0] ? formatClock(bars[0].timestamp) : "";
-  const scopeEndLabel = fillScope
-    ? formatMinuteOfDay(fillScope.endMinute)
+  const visibleScope = scopedBars.length > 0 ? fillScope : null;
+  const scopeStartLabel = visibleScope ? formatMinuteOfDay(visibleScope.startMinute) : bars[0] ? formatClock(bars[0].timestamp) : "";
+  const scopeEndLabel = visibleScope
+    ? formatMinuteOfDay(visibleScope.endMinute)
     : bars[bars.length - 1]
       ? formatClock(bars[bars.length - 1].timestamp)
       : "";
@@ -6291,9 +6372,23 @@ function MinuteCandleChart(props: {
   );
   const replayEma20Points = props.showReplayEma20 ? buildEma20OverlayPoints(allBars, bars) : [];
   const replayEma20Values = replayEma20Points.map((point) => point.value);
-  const strategySignalExecutionPrices = visibleStrategySignals.map((signal) => signal.price);
-  const fillPrices = props.fills.map((fill) => fill.price);
-  const primaryPriceValues = stableChartPrimaryPrices(bars, [...fillPrices, ...strategySignalExecutionPrices]);
+  const fillMarkerAnchors = showTradeMarkers
+    ? props.fills
+        .map((fill) => {
+          const index = nearestBarIndex(fill.filled_at, bars);
+          return index < 0 ? null : { fill, index };
+        })
+        .filter((marker): marker is { fill: ChartFill; index: number } => marker !== null)
+    : [];
+  const strategyMarkerAnchors = visibleStrategySignals
+    .map((signal) => {
+      const index = nearestBarIndex(signal.timestamp, bars);
+      return index < 0 ? null : { signal, index };
+    })
+    .filter((marker): marker is { signal: StrategySignal; index: number } => marker !== null);
+  const visibleFillPrices = fillMarkerAnchors.map(({ fill }) => fill.price);
+  const visibleStrategySignalPrices = strategyMarkerAnchors.map(({ signal }) => signal.price);
+  const primaryPriceValues = stableChartPrimaryPrices(bars, [...visibleFillPrices, ...visibleStrategySignalPrices]);
   const auxiliaryPriceValues = finitePriceValues([props.archive.vwap, ...strategyPriceValues, ...replayEma20Values]);
   const priceDomainValues = [
     ...primaryPriceValues,
@@ -6308,20 +6403,18 @@ function MinuteCandleChart(props: {
   const xForIndex = (index: number) =>
     margin.left + (bars.length <= 1 ? plotWidth / 2 : (index / (bars.length - 1)) * plotWidth);
   const yForPrice = (price: number) => margin.top + ((maxPrice - price) / priceRange) * plotHeight;
-  const markers = showTradeMarkers
-    ? props.fills
-        .map((fill) => {
-          const index = nearestBarIndex(fill.filled_at, bars);
-          return index < 0 ? null : { fill, index, x: xForIndex(index), y: yForPrice(fill.price) };
-        })
-        .filter((marker): marker is { fill: ChartFill; index: number; x: number; y: number } => marker !== null)
-    : [];
-  const strategyMarkers = visibleStrategySignals
-    .map((signal) => {
-      const index = nearestBarIndex(signal.timestamp, bars);
-      return index < 0 ? null : { signal, index, x: xForIndex(index), y: yForPrice(signal.price) };
-    })
-    .filter((marker): marker is { signal: StrategySignal; index: number; x: number; y: number } => marker !== null);
+  const markers = fillMarkerAnchors.map(({ fill, index }) => ({
+    fill,
+    index,
+    x: xForIndex(index),
+    y: yForPrice(fill.price)
+  }));
+  const strategyMarkers = strategyMarkerAnchors.map(({ signal, index }) => ({
+    signal,
+    index,
+    x: xForIndex(index),
+    y: yForPrice(signal.price)
+  }));
   const strategySignalCountLabel =
     strategySignals.length === strategyMarkers.length
       ? `${formatInteger(strategySignals.length)} 个策略信号`
@@ -6566,7 +6659,15 @@ function MinuteCandleChart(props: {
         <span>
           显示 {scopeStartLabel}-{scopeEndLabel} · {formatInteger(bars.length)} / {formatInteger(allBars.length)} 根分钟线
         </span>
-        {showTradeMarkers ? <span>{formatInteger(markers.length)} 个成交标记</span> : <span>成交标记已隐藏</span>}
+        {showTradeMarkers ? (
+          <span>
+            {markers.length === props.fills.length
+              ? `${formatInteger(markers.length)} 个成交标记`
+              : `${formatInteger(markers.length)} / ${formatInteger(props.fills.length)} 个可见成交标记`}
+          </span>
+        ) : (
+          <span>成交标记已隐藏</span>
+        )}
         {props.strategyRun && allowStrategySignalDetails ? (
           <button
             className="legendCountButton"
@@ -7863,6 +7964,26 @@ function formatEvaluationGrade(evaluation: TradeGroup["evaluation"]) {
   return evaluation.grade ? `${evaluation.grade} 级` : "N/A";
 }
 
+function fallbackTradeEvaluationRecommendations(group: TradeGroup): TradeEvaluationRecommendation[] {
+  const pnl = group.pnl ?? 0;
+  if (pnl > 0) {
+    return [
+      { label: "后续开仓建议", detail: "保留本次有效确认条件，避免追高或追低。" },
+      { label: "后续平仓建议", detail: "沿用分批止盈和移动止损，减少盈利回吐。" }
+    ];
+  }
+  if (pnl < 0) {
+    return [
+      { label: "后续开仓建议", detail: "等待 VWAP、关键价位和放量确认后再入场。" },
+      { label: "后续平仓建议", detail: "跌破入场 K 低点或预设止损时先减仓或止损，盈利后按目标分批锁定。" }
+    ];
+  }
+  return [
+    { label: "后续开仓建议", detail: "只在盈亏比清晰且量价确认时入场。" },
+    { label: "后续平仓建议", detail: "价格迟迟不按预期推进时缩短持仓或按时间止损退出。" }
+  ];
+}
+
 function evaluationTone(status: TradeGroup["evaluation"]["evaluation_status"], grade: TradeGroup["evaluation"]["grade"]) {
   if (status !== "available") return "warn";
   if (grade === "A" || grade === "B") return "ok";
@@ -8125,6 +8246,7 @@ function nearestBarIndex(filledAt: string, bars: MarketMinuteArchive["bars"]) {
   if (bars.length === 0) return -1;
   const target = clockMinute(filledAt);
   if (target === null) return -1;
+  const maxMarkerBarDistanceMinutes = 1;
   let bestIndex = -1;
   let bestDistance = Number.POSITIVE_INFINITY;
   bars.forEach((bar, index) => {
@@ -8136,7 +8258,7 @@ function nearestBarIndex(filledAt: string, bars: MarketMinuteArchive["bars"]) {
       bestIndex = index;
     }
   });
-  return bestIndex;
+  return bestDistance <= maxMarkerBarDistanceMinutes ? bestIndex : -1;
 }
 
 function isFiniteNumber(value: number | null | undefined): value is number {

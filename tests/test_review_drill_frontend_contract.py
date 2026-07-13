@@ -4,6 +4,7 @@ import re
 
 ROOT = Path(__file__).resolve().parents[1]
 APP_SOURCE = (ROOT / "web" / "src" / "App.tsx").read_text(encoding="utf-8")
+AI_STRATEGY_SOURCE = (ROOT / "web" / "src" / "AiStrategyWorkspace.tsx").read_text(encoding="utf-8")
 API_SOURCE = (ROOT / "web" / "src" / "api.ts").read_text(encoding="utf-8")
 MAIN_SOURCE = (ROOT / "web" / "src" / "main.tsx").read_text(encoding="utf-8")
 STYLES_SOURCE = (ROOT / "web" / "src" / "styles.css").read_text(encoding="utf-8")
@@ -202,6 +203,21 @@ def test_trade_replay_view_reads_local_archives_without_provider_archive():
     assert "fetchTradeGroups(tradeDate, undefined, { includeDetails: true })" in body
     assert "onRefreshReviewMinuteArchives" in APP_SOURCE
     assert "刷新本地分钟线" in APP_SOURCE
+
+
+def test_review_minute_archive_refresh_force_archives_before_reloading_read_model():
+    match = re.search(
+        r"async function onRefreshReviewMinuteArchives\(\) \{(?P<body>.*?)\n  \}",
+        APP_SOURCE,
+        flags=re.DOTALL,
+    )
+    assert match is not None
+    body = match.group("body")
+    assert "await archiveYahooMinuteData(date, true, selectedSymbol, 1);" in body
+    assert body.index("archiveYahooMinuteData") < body.index("fetchMinuteArchives(")
+    assert "fetchFills(date, undefined)" in body
+    assert body.index("fetchMinuteArchives(") < body.index("fetchFills(")
+    assert body.index("fetchFills(") < body.index("fetchTradeGroups(")
 
 
 def test_trade_replay_modal_keeps_header_fixed_and_backdrop_closes():
@@ -479,7 +495,10 @@ def test_data_drill_orders_time_filter_metrics_calendar_before_detail():
 
 def test_loss_only_filter_also_scopes_main_chart_trade_markers():
     assert "const displayedChartFills = useMemo(() => {" in APP_SOURCE
-    assert "if (!showLossOnlyTradeGroups) return displayedFills;" in APP_SOURCE
+    assert "const displayedTradeGroupFills = useMemo" in APP_SOURCE
+    assert "displayedTradeGroups.flatMap((group) => group.fills)" in APP_SOURCE
+    assert "const chartFillReadModel = displayedFills.length > 0 ? displayedFills : displayedTradeGroupFills;" in APP_SOURCE
+    assert "if (!showLossOnlyTradeGroups) return chartFillReadModel;" in APP_SOURCE
     assert "const groupScopes = displayedTradeGroups.map((group) => ({" in APP_SOURCE
     assert "sourceBatchIds: new Set(group.source_batch_ids)" in APP_SOURCE
     assert "rawLineNumbers: new Set(group.raw_line_numbers)" in APP_SOURCE
@@ -674,7 +693,7 @@ def test_strategy_test_review_has_overview_grouping_and_day_drilldown():
 
 
 def test_live_trading_tab_uses_backend_signal_preview_without_frontend_indicator_math():
-    assert 'type WorkspaceTab = "review" | "strategy" | "live";' in APP_SOURCE
+    assert 'type WorkspaceTab = "review" | "strategy" | "ai_strategy" | "live";' in APP_SOURCE
     assert "实时交易" in APP_SOURCE
     assert "function LiveTradingWorkspace" in APP_SOURCE
     assert "LegacyLiveTradingWorkspace" not in APP_SOURCE
@@ -717,6 +736,35 @@ def test_live_trading_tab_uses_backend_signal_preview_without_frontend_indicator
     assert 'provider: "futu" | "yahoo" | "fake" = "yahoo"' in API_SOURCE
     assert "/api/strategies/${encodeURIComponent(strategyId)}/live-signal" in API_SOURCE
     assert ".liveTradingWorkspace" in STYLES_SOURCE
+
+
+def test_ai_strategy_tab_is_read_only_and_uses_backend_recommendation_model():
+    assert "AI策略" in APP_SOURCE
+    assert 'activeWorkspaceTab === "ai_strategy"' in APP_SOURCE
+    assert "<AiStrategyWorkspace" in APP_SOURCE
+    assert "setSelectedStrategyId(strategyId)" in APP_SOURCE
+    assert 'setActiveWorkspaceTab("strategy")' in APP_SOURCE
+    assert "fetchAiStrategyRecommendations" in API_SOURCE
+    assert "/api/ai-strategy-recommendations" in API_SOURCE
+    assert 'marker.startsWith("ai-strategy-recommendation-") ? "ai_strategy" : "review"' in APP_SOURCE
+    assert "export interface AiStrategyRecommendations" in TYPES_SOURCE
+    assert "盈利期望 Top 5" in AI_STRATEGY_SOURCE
+    assert "尚未通过本地归档验证" in AI_STRATEGY_SOURCE
+    assert "本地回放是样本内历史结果，未计佣金与滑点，不代表未来盈利" in AI_STRATEGY_SOURCE
+    assert "去策略测试" in AI_STRATEGY_SOURCE
+    assert "runStrategyTestBatch" not in AI_STRATEGY_SOURCE
+    assert "runStrategyReplay" not in AI_STRATEGY_SOURCE
+    assert "updateStrategy" not in AI_STRATEGY_SOURCE
+    assert "applyStrategyOptimizationCandidate" not in AI_STRATEGY_SOURCE
+    assert "expected_pnl_per_closed_trade" in AI_STRATEGY_SOURCE
+    assert "窗口总 PnL" in AI_STRATEGY_SOURCE
+    assert "排除日期" in AI_STRATEGY_SOURCE
+    assert "catalog_note" in AI_STRATEGY_SOURCE
+    assert "recommended_param_items" in AI_STRATEGY_SOURCE
+    assert 'const hasComparableEvidence = props.item.evidence_status === "backtested"' in AI_STRATEGY_SOURCE
+    assert 'hasComparableEvidence ? formatCurrency(props.item.expectation.expected_pnl_per_closed_trade)' in AI_STRATEGY_SOURCE
+    assert ".aiStrategyLayout" in STYLES_SOURCE
+    assert "grid-template-columns: minmax(330px, 0.36fr) minmax(0, 0.64fr);" in STYLES_SOURCE
 
 
 def test_live_signal_panel_only_shows_order_details():

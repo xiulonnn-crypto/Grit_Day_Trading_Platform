@@ -186,6 +186,7 @@ def test_trade_group_evaluation_uses_minute_archive_without_mutating_fills(tmp_p
     assert evaluation["evaluation_status"] == "available"
     assert evaluation["grade"] in {"A", "B", "C", "D"}
     assert isinstance(evaluation["score"], float)
+    assert [item["label"] for item in evaluation["recommendations"]] == ["后续开仓建议", "后续平仓建议"]
     assert {factor["name"] for factor in evaluation["factors"]} == {
         "vwap_execution",
         "momentum_alignment",
@@ -195,6 +196,46 @@ def test_trade_group_evaluation_uses_minute_archive_without_mutating_fills(tmp_p
         "pnl_result",
     }
     assert [fill["price"] for fill in fills] == [10.0, 10.2, 10.5, 10.8]
+
+
+def test_losing_trade_group_evaluation_summary_recommends_open_and_close_actions(tmp_path):
+    db_path = tmp_path / "loss-trade-eval.db"
+
+    with TestClient(create_app(db_path)) as client:
+        client.post("/api/imports/stp-txt", files={"file": ("loss.tsv", _losing_trade_group_fixture(), "text/plain")})
+
+    conn = connect(db_path)
+    try:
+        initialize_database(conn)
+        archive_market_minutes(
+            conn,
+            symbol="AMD",
+            trade_date="2026-06-01",
+            source_fill_count=2,
+            force=True,
+            provider=FakeMarketDataProvider(
+                minute_bars={
+                    "AMD": [
+                        MarketBar("2026-06-01T09:30:00", 12.0, 12.1, 11.8, 11.9, 1000),
+                        MarketBar("2026-06-01T09:45:00", 11.8, 11.9, 10.9, 11.0, 1500),
+                    ]
+                }
+            ),
+        )
+    finally:
+        conn.close()
+
+    with TestClient(create_app(db_path)) as client:
+        group = client.get("/api/trade-groups?date=2026-06-01&symbol=AMD").json()["items"][0]
+
+    summary = group["evaluation"]["summary"]
+    assert group["evaluation"]["evaluation_status"] == "available"
+    assert "多头交易已实现亏损" in summary
+    assert "重点复盘入场位置、止损和量能确认" in summary
+    assert group["evaluation"]["recommendations"] == [
+        {"label": "后续开仓建议", "detail": "等待 VWAP、关键价位和放量确认后再入场。"},
+        {"label": "后续平仓建议", "detail": "跌破入场 K 低点或预设止损时先减仓或止损，盈利后按目标分批锁定。"},
+    ]
 
 
 def test_trade_group_entry_atr_multiple_uses_previous_20_minute_bars(tmp_path):

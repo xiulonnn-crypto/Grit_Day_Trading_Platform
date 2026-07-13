@@ -17,6 +17,7 @@ YAHOO_ARCHIVE_PROVIDER = "yahoo"
 MARKET_MINUTE_ARCHIVE_VERSION = "market_minute_archive_v1"
 REGULAR_SESSION_START = "04:00:00"
 REGULAR_SESSION_END = "20:00:00"
+SOURCE_FILL_MARKER_TOLERANCE_MINUTES = 1
 
 
 def archive_yahoo_minutes_for_committed_fills(
@@ -248,13 +249,21 @@ def archive_market_minutes(
 
     selected_provider = provider or resolve_provider(provider_key)
     response = selected_provider.fetch_minute_bars(canonical_symbol, requested_start, requested_end)
+    source_fill_times = _source_fill_times(conn, trade_date=trade_date, symbol=canonical_symbol)
     bars_json = _bars_json(response.bars)
     bars_hash = _sha256_text(bars_json)
     payload_hash = _sha256_text(bars_json if response.bars else (response.error_code or response.status))
     data_status = _data_status(response)
+    source_fill_window_covered = _bars_cover_source_fill_times(response.bars, source_fill_times)
+    if data_status == "available" and not source_fill_window_covered:
+        data_status = "partial"
     metrics = _bar_metrics(response.bars) if response.bars else {"vwap": None, "day_high": None, "day_low": None}
     volume_context = _volume_context(response.bars, requested_start, requested_end)
-    failure_reason = _failure_reason(response, data_status)
+    failure_reason = _failure_reason(
+        response,
+        data_status,
+        source_fill_window_covered=source_fill_window_covered,
+    )
     created_at = _now()
 
     with conn:
@@ -415,6 +424,15 @@ def _source_fill_count(conn: sqlite3.Connection, *, trade_date: str, symbol: str
     return sum(1 for fill in list_fills(conn, date=trade_date) if str(fill["symbol"]).strip().upper() == canonical_symbol)
 
 
+def _source_fill_times(conn: sqlite3.Connection, *, trade_date: str, symbol: str) -> list[str]:
+    canonical_symbol = symbol.strip().upper()
+    return [
+        str(fill["filled_at"])
+        for fill in list_fills(conn, date=trade_date)
+        if str(fill["symbol"]).strip().upper() == canonical_symbol
+    ]
+
+
 def _canonical_symbols(symbols: list[str] | tuple[str, ...]) -> list[str]:
     canonical: list[str] = []
     seen: set[str] = set()
@@ -477,11 +495,18 @@ def _data_status(response: MinuteBarResponse) -> str:
     return "available"
 
 
-def _failure_reason(response: MinuteBarResponse, data_status: str) -> str | None:
+def _failure_reason(
+    response: MinuteBarResponse,
+    data_status: str,
+    *,
+    source_fill_window_covered: bool = True,
+) -> str | None:
     if data_status == "available":
         return None
     if response.error_code:
         return response.error_code
+    if data_status == "partial" and not source_fill_window_covered:
+        return "source_fill_window_not_covered"
     if data_status == "partial":
         return "partial_provider_window"
     if data_status == "missing":
@@ -521,6 +546,41 @@ def _volume_context(bars: list[MarketBar], requested_start: str, requested_end: 
         "total_volume": round(total_volume, 6),
         "avg_bar_volume": round(avg_bar_volume, 6),
     }
+
+
+def _bars_cover_source_fill_times(bars: list[MarketBar], source_fill_times: list[str]) -> bool:
+    if not source_fill_times:
+        return True
+    bar_minutes = [
+        minute
+        for minute in (_clock_minute(bar.timestamp) for bar in bars)
+        if minute is not None
+    ]
+    if not bar_minutes:
+        return False
+    for fill_time in source_fill_times:
+        target = _clock_minute(fill_time)
+        if target is None:
+            return False
+        if min(abs(minute - target) for minute in bar_minutes) > SOURCE_FILL_MARKER_TOLERANCE_MINUTES:
+            return False
+    return True
+
+
+def _clock_minute(value: str) -> int | None:
+    if "T" not in value:
+        return None
+    time_part = value.split("T", 1)[1]
+    if len(time_part) < 5 or time_part[2] != ":":
+        return None
+    try:
+        hour = int(time_part[:2])
+        minute = int(time_part[3:5])
+    except ValueError:
+        return None
+    if hour < 0 or hour > 23 or minute < 0 or minute > 59:
+        return None
+    return hour * 60 + minute
 
 
 def _bars_json(bars: list[MarketBar]) -> str:

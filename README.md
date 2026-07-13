@@ -13,9 +13,10 @@
 ## 最新实时交易监控更新
 - 「实时交易」工作区支持标的下拉多选，行情源默认 Yahoo；点击「开启监控」后每 30 秒按所选策略和标的读取最新实时分钟线，并展示后端只读 BUY/SELL/HOLD 信号、原因码、最新策略版本和证据 hash。
 
-## P2 交易策略配置与历史信号复盘
+## P2 交易策略配置、AI 推荐与历史信号复盘
 
-- 复盘台顶层包含「交易复盘」「策略测试」和「实时交易」三个工作区；交易复盘只保留成交证据、分钟线、买卖点、Watchlist、交易组和批次证据，策略研究集中到策略测试，实时交易只做只读信号预览。
+- 复盘台顶层包含「交易复盘」「策略测试」「AI策略」和「实时交易」四个工作区；交易复盘只保留成交证据、分钟线、买卖点、Watchlist、交易组和批次证据，策略测试集中配置与历史测试，AI策略只读展示 Top 5 推荐，实时交易只做只读信号预览。
+- 「AI策略」v2 以 100,000 USD 本金和单次 20% 入场资金为固定比较口径，推荐 5 分钟开盘区间突破、15 分钟开盘区间突破回踩、VWAP 开盘驱动、VWAP 趋势回踩和尾盘半小时动量五个新模板；同口径本地证据达标时展示每笔闭合信号期望 PnL、窗口总 PnL、胜率、Profit Factor、最大回撤、完成日和排除日，旧五模板仅保留历史追溯。
 - 复盘台新增「实时交易」工作区，可下拉选择策略和标的，用 Futu、Yahoo 或 Fake provider 的实时分钟线生成只读 BUY/SELL/HOLD 信号、下单原因和证据 hash，并展示最新策略版本号；该工作区不自动下单，也不修改 STP 成交事实。
 - 交易复盘工作区头部展示有记录以来的 committed fills 汇总，并支持按交易日或按标的下钻；选择具体日期+标的后进入分钟蜡烛和交易组复盘模块，成交组会展示按成交路径和分钟线最值追溯的持仓最大回撤。
 - 策略测试工作区按「策略配置」「策略测试」「测试复盘（最近30天）」「策略优化」组织；测试复盘先展示策略整体指标，再按日期或按标的汇总下钻到单日复盘，避免把成交复盘和参数研究混在同一个操作面板。
@@ -162,8 +163,11 @@ Grit Day Trading Platform 是个人日内交易闭环 Web 系统。首版目标�
 - [index.html](./index.html)：仓库根目录静态入口页，用于确认当前阶段、事实源边界，并静态切换查看「数据下钻」和「盈亏复盘」两个模块。
 - [scripts/archive-yahoo-minute-data.py](./scripts/archive-yahoo-minute-data.py)：从已提交成交目标准备 Yahoo 1 分钟线归档。
 - [scripts/archive-local-minute-db.py](./scripts/archive-local-minute-db.py)：按本地研究标的组准备 Yahoo 1 分钟线归档。
+- [scripts/run-ai-strategy-benchmark.py](./scripts/run-ai-strategy-benchmark.py)：显式运行 AI策略 v2 五模板的同口径本地历史回放并输出摘要报告；GET 推荐接口不会自动触发该脚本。
 - [docs/p0_acceptance.md](./docs/p0_acceptance.md)：P0 DB/API/UI read-model 一致性和验收证据。
 - [designs/2026-06-03-review-desk-layout/spec.md](./designs/2026-06-03-review-desk-layout/spec.md)：复盘台主图优先、盘前工作栏和导入证据区布局规格。
+- [designs/2026-07-14-ai-strategy-tab/spec.md](./designs/2026-07-14-ai-strategy-tab/spec.md)：AI策略 Top 5 榜单、详情台、窄屏堆叠和证据状态设计规格。
+- [designs/2026-07-14-ai-strategy-tab/traceability-matrix.md](./designs/2026-07-14-ai-strategy-tab/traceability-matrix.md)：AI策略 v2 从需求、实现、自动化测试到桌面/移动端运行截图的追踪矩阵。
 
 ## P0 API
 
@@ -178,6 +182,7 @@ Grit Day Trading Platform 是个人日内交易闭环 Web 系统。首版目标�
 
 ## P2 API
 
+- `GET /api/ai-strategy-recommendations?end_date=YYYY-MM-DD&symbols=MU,NVDA&initial_capital=100000&window_calendar_days=30`：读取版本化 Top 5 推荐目录、研究或本地排名、建议参数、策略逻辑、资本模型、证据状态和来源；不触发策略测试，不返回逐日结果。
 - `GET /api/strategy-templates`：查看可添加的策略模板和默认参数。
 - `GET /api/strategies`：查看当前策略配置。
 - `POST /api/strategies`：新增模板策略实例。
@@ -197,7 +202,7 @@ Grit Day Trading Platform 是个人日内交易闭环 Web 系统。首版目标�
 
 ## 登录快捷方式
 
-Windows 下可双击根目录的 `Login-Grit-DayTrading.cmd` 进入本地复盘台。它会检查 Python、npm、复盘汇总 API、P2 必需 API 路由、策略 run 详情路由、亏损复盘保存路由和策略模板，优先复用默认后端和前端端口，并自动打开浏览器；如果默认后端端口上已有旧服务但缺少当前合同，会自动切到备用后端和前端端口启动，并通过前端代理复查 OpenAPI 合同，避免复盘页连到旧后端后加载大 payload 或打开失效 fallback 页面。
+Windows 下可双击根目录的 `Login-Grit-DayTrading.cmd` 进入本地复盘台。它会检查 Python、npm、复盘汇总 API、AI策略推荐 API、`ai_strategy_catalog_v2` 健康 sentinel、P2 必需 API 路由、策略 run 详情路由、亏损复盘保存路由和新策略模板，优先复用默认后端和前端端口，并自动打开 AI策略 v2；如果默认后端端口上已有旧服务但缺少当前合同，会自动切到备用后端和前端端口启动，并通过前端代理复查 OpenAPI 合同。
 
 如果备用后端已监听但复盘 API 返回 500，启动器会按后端运行态失败处理，并打印相关端口 owner PID；通常需要先关闭占用默认后端端口的旧进程，再重新运行启动入口。
 

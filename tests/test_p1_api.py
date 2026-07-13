@@ -19,6 +19,8 @@ def test_healthz_advertises_p1_runtime_routes(tmp_path):
     payload = health.json()
     assert payload["status"] == "ok"
     assert payload["live_signal_contract"] == "live_order_quantity_reason_tags_v1"
+    assert payload["trade_eval_contract"] == "trade_eval_recommendation_v1"
+    assert payload["ai_strategy_catalog"] == "ai_strategy_catalog_v2"
     assert "/api/market-data/minute-archives" in payload["required_routes"]
     assert "/api/market-data/yahoo-minute-archive" in payload["required_routes"]
     assert "/api/trade-groups/{trade_group_id}/review" in payload["required_routes"]
@@ -125,6 +127,7 @@ def test_yahoo_minute_archive_api_archives_and_lists_committed_fill_symbols(tmp_
             "AAPL": [
                 MarketBar("2026-06-01T09:30:00", 99.5, 101.0, 99.0, 100.0, 100),
                 MarketBar("2026-06-01T09:31:00", 100.5, 103.0, 100.0, 102.0, 300),
+                MarketBar("2026-06-01T10:15:00", 101.5, 103.0, 101.0, 103.0, 0),
             ]
         }
     )

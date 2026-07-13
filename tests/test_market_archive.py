@@ -23,6 +23,7 @@ def test_archive_yahoo_minutes_groups_committed_fill_symbols_by_trade_date(tmp_p
             "AAPL": [
                 MarketBar("2026-06-01T09:30:00", 99.5, 101.0, 99.0, 100.0, 100),
                 MarketBar("2026-06-01T09:31:00", 100.5, 103.0, 100.0, 102.0, 300),
+                MarketBar("2026-06-01T10:15:00", 101.5, 103.0, 101.0, 103.0, 0),
             ]
         }
     )
@@ -45,7 +46,7 @@ def test_archive_yahoo_minutes_groups_committed_fill_symbols_by_trade_date(tmp_p
         assert archive["requested_end"] == "2026-06-01T20:00:00"
         assert archive["source_fill_count"] == 2
         assert archive["data_status"] == "available"
-        assert archive["bar_count"] == 2
+        assert archive["bar_count"] == 3
         assert archive["vwap"] == 101.5
         assert archive["day_high"] == 103.0
         assert archive["day_low"] == 99.0
@@ -59,11 +60,44 @@ def test_archive_yahoo_minutes_groups_committed_fill_symbols_by_trade_date(tmp_p
         conn.close()
 
 
+def test_archive_yahoo_minutes_marks_source_fill_window_gaps_as_partial(tmp_path):
+    conn = _seed_db(tmp_path)
+    provider = FakeMarketDataProvider(
+        minute_bars={
+            "AAPL": [
+                MarketBar("2026-06-01T04:00:00", 99.5, 101.0, 99.0, 100.0, 100),
+                MarketBar("2026-06-01T08:38:00", 100.5, 103.0, 100.0, 102.0, 300),
+            ]
+        }
+    )
+    try:
+        summary = archive_yahoo_minutes_for_committed_fills(
+            conn,
+            trade_date="2026-06-01",
+            provider=provider,
+        )
+
+        archive = summary["items"][0]
+        assert summary["available_count"] == 0
+        assert summary["non_available_count"] == 1
+        assert archive["data_status"] == "partial"
+        assert archive["failure_reason"] == "source_fill_window_not_covered"
+        assert archive["source_fill_count"] == 2
+        assert archive["bar_count"] == 2
+        attempt = conn.execute("SELECT * FROM market_data_provider_attempts").fetchone()
+        assert attempt["status"] == "partial"
+    finally:
+        conn.close()
+
+
 def test_archive_yahoo_minutes_includes_enabled_momentum_context_symbols(tmp_path):
     conn = _seed_db(tmp_path)
     provider = FakeMarketDataProvider(
         minute_bars={
-            "AAPL": [MarketBar("2026-06-01T11:00:00", 99.5, 101.0, 99.0, 100.0, 100)],
+            "AAPL": [
+                MarketBar("2026-06-01T09:31:00", 99.5, 101.0, 99.0, 100.0, 100),
+                MarketBar("2026-06-01T10:15:00", 99.5, 101.0, 99.0, 100.0, 100),
+            ],
             "QQQ": [MarketBar("2026-06-01T11:00:00", 400.0, 401.0, 399.0, 400.5, 1000)],
             "SMH": [MarketBar("2026-06-01T11:00:00", 250.0, 251.0, 249.0, 250.5, 1000)],
         }

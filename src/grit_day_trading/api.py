@@ -8,6 +8,7 @@ from fastapi import Depends, FastAPI, File, HTTPException, Path as ApiPath, Quer
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
+from .ai_strategy import AI_STRATEGY_CATALOG_VERSION, get_ai_strategy_recommendations
 from .market_archive import (
     archive_yahoo_minutes_for_committed_fills,
     archive_yahoo_minutes_for_import_batch,
@@ -59,10 +60,12 @@ REQUIRED_API_ROUTES = (
     "/api/market-data/minute-archives",
     "/api/market-data/yahoo-minute-archive",
     "/api/strategy-templates",
+    "/api/ai-strategy-recommendations",
     "/api/strategies/{strategy_id}/live-signal",
     "/api/trade-groups/{trade_group_id}/review",
 )
 LIVE_SIGNAL_CONTRACT_VERSION = "live_order_quantity_reason_tags_v1"
+TRADE_EVALUATION_CONTRACT_VERSION = "trade_eval_recommendation_v1"
 
 
 class MarketContextReplayRequest(BaseModel):
@@ -172,6 +175,8 @@ def create_app(db_path: str | Path | None = None) -> FastAPI:
             "version": app.version,
             "required_routes": list(REQUIRED_API_ROUTES),
             "live_signal_contract": LIVE_SIGNAL_CONTRACT_VERSION,
+            "trade_eval_contract": TRADE_EVALUATION_CONTRACT_VERSION,
+            "ai_strategy_catalog": AI_STRATEGY_CATALOG_VERSION,
         }
 
     @app.post("/api/imports/stp-txt")
@@ -337,6 +342,27 @@ def create_app(db_path: str | Path | None = None) -> FastAPI:
     @app.get("/api/strategy-templates")
     def strategy_templates():
         return {"items": get_strategy_templates()}
+
+    @app.get("/api/ai-strategy-recommendations")
+    def ai_strategy_recommendations(
+        end_date: Annotated[str, Query(pattern=r"^\d{4}-\d{2}-\d{2}$")],
+        symbols: Annotated[str, Query(min_length=1, max_length=340)] = "MU",
+        initial_capital: Annotated[float, Query(ge=100000.0, le=100000.0)] = 100000.0,
+        window_calendar_days: Annotated[int, Query(ge=1, le=30)] = 30,
+        conn=Depends(get_conn),
+    ):
+        try:
+            return get_ai_strategy_recommendations(
+                conn,
+                end_date=end_date,
+                symbols=symbols,
+                initial_capital=initial_capital,
+                window_calendar_days=window_calendar_days,
+            )
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc).strip("'")) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     @app.get("/api/strategies")
     def strategies(conn=Depends(get_conn)):

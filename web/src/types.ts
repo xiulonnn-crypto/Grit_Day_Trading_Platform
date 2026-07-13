@@ -80,12 +80,18 @@ export interface TradeEvaluationFactor {
   detail: string;
 }
 
+export interface TradeEvaluationRecommendation {
+  label: string;
+  detail: string;
+}
+
 export interface TradeEvaluation {
   model_version: "trade_eval_intraday_v1";
   evaluation_status: "available" | "insufficient_market_data" | "not_applicable_open_trade";
   score: number | null;
   grade: "A" | "B" | "C" | "D" | null;
   summary: string;
+  recommendations?: TradeEvaluationRecommendation[];
   strengths: string[];
   risks: string[];
   factors: TradeEvaluationFactor[];
@@ -333,7 +339,12 @@ export interface StrategyTemplate {
     | "institutional_liquidity_sweep_v1"
     | "momentum_mean_reversion_v1"
     | "one_minute_trend_rider_v1"
-    | "one_minute_range_fader_v1";
+    | "one_minute_range_fader_v1"
+    | "five_minute_opening_range_breakout_v1"
+    | "fifteen_minute_opening_range_retest_v1"
+    | "vwap_opening_drive_v1"
+    | "vwap_trend_pullback_v1"
+    | "last_hour_intraday_momentum_v1";
   template_version: string;
   name: string;
   description: string;
@@ -713,4 +724,107 @@ export interface StrategyOptimizationRun {
     template_key: string;
   };
   candidates: StrategyOptimizationCandidate[];
+}
+
+export type AiStrategyRankingBasis = "research_prior" | "local_backtest";
+export type AiStrategyEvidenceStatus = "research_only" | "partial" | "backtested";
+
+export interface AiStrategySource {
+  title: string;
+  url: string;
+  kind: "research" | "methodology" | "risk" | string;
+}
+
+export interface AiStrategyRecommendationItem {
+  rank: number;
+  research_rank: number;
+  strategy_id: string;
+  strategy_name: string;
+  template_key: StrategyTemplate["template_key"];
+  template_version: string;
+  research_family: string;
+  summary: string;
+  evidence_status: AiStrategyEvidenceStatus;
+  current_config_alignment: {
+    matches_recommended_params: boolean;
+    current_params_hash: string;
+    recommended_params_hash: string;
+  };
+  expectation: {
+    status: AiStrategyEvidenceStatus;
+    expected_pnl_per_closed_trade: number | null;
+    total_pnl: number | null;
+    win_rate: number | null;
+    profit_factor: number | null;
+    max_drawdown: number | null;
+    available_day_count: number;
+    completed_day_count: number;
+    closed_group_count: number;
+    excluded_day_count: number;
+    excluded_day_reasons: string[];
+    coverage_ratio: number;
+    params_hash: string;
+    matching_batch_ids: string[];
+    archive_scope_hashes: string[];
+    failure_reasons: string[];
+    metric_aggregation: "single_symbol" | "independent_symbol_sum";
+  };
+  capital: {
+    initial_capital: number;
+    entry_capital_ratio: number;
+    position_notional: number;
+    concurrency_modeled: false;
+    note: string;
+  };
+  logic: {
+    entry: string[];
+    exit: string[];
+    take_profit: string[];
+    stop_loss: string[];
+  };
+  recommended_instruments: Array<{
+    profile: string;
+    examples: string[];
+    reason: string;
+  }>;
+  recommended_params: Record<string, number | string>;
+  recommended_param_items: Array<{
+    key: string;
+    label: string;
+    value: number | string;
+  }>;
+  parameter_highlights: string[];
+  recommended_params_hash: string;
+  recommendation_reasons: string[];
+  sources: AiStrategySource[];
+  deep_link: {
+    workspace: "strategy";
+    strategy_id: string;
+  };
+}
+
+export interface AiStrategyRecommendations {
+  catalog_version: "ai_strategy_catalog_v2" | string;
+  ranking_version: "profit_expectation_v2" | string;
+  ranking_basis: AiStrategyRankingBasis;
+  evidence_status: "verified" | "partial" | "insufficient";
+  end_date: string;
+  symbols: string[];
+  initial_capital: number;
+  entry_capital_ratio: number;
+  position_notional: number;
+  window_calendar_days: number;
+  recommendation_key: string;
+  ranking_qualification: {
+    minimum_completed_days_per_strategy: number;
+    minimum_closed_groups_per_strategy: number;
+    requires_all_five_strategies: boolean;
+    requires_matching_params: boolean;
+    allows_excluded_non_available_days: boolean;
+    metric_aggregation: string;
+  };
+  retired_catalog_template_keys: string[];
+  catalog_note: string;
+  disclaimer: string;
+  items: AiStrategyRecommendationItem[];
 }

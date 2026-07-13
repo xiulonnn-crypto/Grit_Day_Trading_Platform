@@ -55,6 +55,18 @@
 - Momentum Mean Reversion failure contract: 缺目标标的、QQQ 或 SMH 任一已归档分钟线时保存 `missing_archive`；任一归档不是 `available` 时保存 `non_available_archive`，不能用缺失动能过滤渲染成功信号。
 - Boundary: 策略信号只做复盘和提示，不能修改 STP TXT 成交事实，不能触发自动下单；被动止盈和 `OCO_Immediate` 只在历史 run 中按 high/low 触达建模为出场信号，不向券商或 STP 发送真实限价单。
 
+## P2 AI Strategy Recommendation 事实源
+
+- Canonical sources: `ai_strategy_catalog_v2` 固化 5 分钟开盘区间突破、15 分钟开盘区间突破回踩、VWAP 开盘驱动、VWAP 趋势回踩和尾盘半小时动量五个新模板的研究顺序、策略逻辑、建议参数、品种画像、资本模型和来源；`strategy_configs` 提供当前用户配置；本地验证只读取已保存的 `market_minute_archives` 及其派生策略测试证据。v1 旧五模板和历史 artifact 保留追溯，但不参与 v2 推荐排名。
+- Read model: `GET /api/ai-strategy-recommendations` 返回 Top 5 摘要、目录与排名版本、研究或本地排序依据、建议参数 hash、策略逻辑、推荐理由、证据状态、聚合指标、来源和只读「去策略测试」上下文；不返回逐日结果。
+- Artifact sources: 现有 `strategy_test_batches`、`strategy_test_day_results`、strategy run、`params_hash`、`bars_hash`、`indicator_hash`、`archive_scope_hash` 和资本参数是本地排名证据；推荐结果不新增持久化表，也不覆盖历史 artifact。
+- Ranking gate: 只有五个策略在相同截止日、最近 30 个自然日、相同 canonical symbol 集合、100,000 USD 本金和 20% 单次入场口径下，各自所有标的均有匹配批次、至少 10 个完成归档交易日、至少 10 个闭合信号，且批次和当前配置的 `params_hash` 都与建议参数一致时，整个榜单才切换为本地排序；窗口内 `non_available_archive` 日期必须保留失败 artifact、不得生成信号或收益，在五策略共享相同 archive scope 且其余门槛达标时作为明确排除日展示，不阻止可比排序。
+- Local ranking: 按每笔闭合信号期望 PnL 降序、profit factor 降序、max drawdown 升序、闭合信号数降序、研究排名升序；多标的总 PnL 和闭合信号数求和，win rate 按闭合信号加权，profit factor 取最保守的可用值，max drawdown 取最差标的值，不复用优化 candidate composite score。
+- Evidence and failure contract: 零归档、完成日或闭合信号不足、参数 hash 过期、null profit factor、引擎失败或 archive scope 不一致时返回 `research_only`、`partial` 或 `insufficient`，相应盈利期望字段保持为空，不得渲染伪造收益；明确排除的非可用日期数量和原因必须随 read model 返回。回放收益是样本内历史结果，不计佣金、滑点或多策略并发资金占用。
+- Idempotency key: `catalog_version + ranking_version + end_date + canonical symbols + capital + window + template versions + recommended params hashes + matching batch/archive evidence` 的稳定 hash；symbol 顺序和重复输入先 canonicalize。
+- Version boundary: 本切片不涉及 STP parser 或 field mapper，相关版本保持不变；策略模板版本、参数 hash 和历史 artifact version 继续随原记录保存。
+- Action boundary: 「去策略测试」只切换工作区并带入策略、日期和标的，不触发 POST、不自动运行测试、不套用参数、不下单，也不修改 STP 成交事实或 Review Journal。
+
 ## P1 Yahoo 离线分钟线归档事实源
 
 - Canonical source: `market_minute_archives`。基础目标集合来自已提交 `fills` 的 `trade_date + symbol`；STP TXT 上传成功后会按本批 committed fills 的 `source_batch_id` 推导日期和标的并补缺本地归档；启用 Momentum Mean Reversion 时，同日 QQQ/SMH 作为策略上下文目标加入手工/批量归档队列；外部数据源来自 Yahoo Finance 1 分钟线响应。
@@ -71,9 +83,10 @@
 
 - Canonical source: 交易组只从 committed `fills` read model 构建。STP TXT 的成交时间、价格、数量、方向和证据行仍是交易事实源。
 - Read model: `GET /api/trade-groups?date=YYYY-MM-DD&account=&symbol=&include_details=false` 按 `account_canonical + symbol` 和成交时间把仓位从开仓到清仓配成交易组，首屏可返回不含组内 fills 和评价因子明细的轻量列表；`date` 可省略以返回全部日期的轻量交易组，供数据下钻月日历和盈亏复盘读取。数据下钻的时间筛选、统计指标、月日历日格和选中日标的列表都是从轻量 trade group read model 派生的前端只读投影；点击日格只更新当前复盘日期，不写入行情归档、交易组或 Review Journal。盈亏复盘按「全部订单 / 仅看盈利单 / 仅看亏损单」单选投影同一轻量 read model，默认全部订单视图；热力时间矩阵按美股常规盘五大微观结构窗口和 `position_drawdown.entry_atr_multiple` 分桶只读展示当前单选和时间范围内的订单分布，全部订单视图展示最大盈利区、最大亏损区和每个时间窗口的收益合计，盈利视图展示最大盈利区，亏损视图展示最大亏损区；缺 ATR 证据行仅在存在对应订单时展示，矩阵格不筛选订单列表。盈利和全部视图不展示原因分类，也不写 Review Journal；亏损视图可用原因分类筛选列表。replay 详情使用 `include_details=true` 读取完整 fills、已实现 PnL、持仓最大回撤、开仓 ATR Multiple 和评分证据。`GET /api/review/summary` 与 `GET /api/review/summary-groups` 只聚合 committed fills 和轻量 closed trade groups，用于全局、日期和标的下钻汇总，并返回单笔期望值、每股净收益和持仓最大回撤。复盘摘要不得触发完整交易评价模型；完整评价只属于交易列表和 replay 详情。
+- Replay window: Trade Replay 弹层默认按开仓到清仓首尾各 10 分钟显示本地归档分钟线；勾选「查看半小时」只扩大可见图表窗口到开平仓前后各 30 分钟，不触发行情归档、不改变 `bars_hash` 或成交事实。
 - Artifact source: 交易 replay 弹层只读取本地 `market_minute_archives.bars_json` 和 `bars_hash` 作为行情图表来源，打开弹层不会自动触发 provider 拉取；持仓最大回撤按组内成交时间维护实际 open position 与均价，只用开仓到清仓窗口内的分钟 high/low、archive id 和 bars hash 追溯不利波动；评分只读取 archive 中的 VWAP、当日高低、成交量上下文和 provider 状态。
 - Idempotency key: `trade_group_id = tg_ + sha256(trade_group_v1 + account + symbol + direction + open/close time + hashed fill idempotency signatures)`。API 不暴露原始 fill idempotency key。
-- Evaluation model: `trade_eval_intraday_v1` 是只读规则评分模型。评分维度包括 VWAP 执行质量、趋势配合、成交量确认、MFE/MAE、清仓效率和 PnL 结果。
+- Evaluation model: `trade_eval_intraday_v1` 是只读规则评分模型。评分维度包括 VWAP 执行质量、趋势配合、成交量确认、MFE/MAE、清仓效率和 PnL 结果；评分 read model 还返回结构化 `recommendations`，用于展示后续开仓和平仓建议，不修改成交事实。
 - Failure contract: `provider_failed`、`missing`、`timezone_conflict` 或无 bars 时，持仓最大回撤和评价返回 `insufficient_market_data`，不能生成正常评分或成功图表；open group 返回 `not_applicable_open_trade`。
 - Drilldown failure contract: 没有 committed fills 时，全局汇总返回 0、分组列表为空；UI 不渲染假日期、假标的或成功复盘。
 - Boundary: Trade Group 是 read model，不新增持久化表，不回写 `fills`，不覆盖 parser version、field mapper version 或原始证据链。
@@ -132,6 +145,7 @@ Web 应用负责上传、解析、证据账本展示、市场上下文复盘和�
 | Strategy Config History | `strategy_config_history` | 策略配置历史和回退入口 | previous/next template version、previous/next params hash、previous/next params JSON、change reason、candidate id、source history id | 历史 run 不被当前配置变更覆盖；缺参数快照不得回退 |
 | Strategy Signal | `strategy_signal_runs` + `strategy_signals` | 策略复盘图层 | source archive、bars hash、indicator hash、reason codes、metrics | 缺归档或缺分钟线不得画假信号 |
 | Strategy Test Batch | `strategy_test_batches` + `strategy_test_day_results` | 策略测试工作区 | archive scope hash、params hash、逐日 strategy run | 最近 30 天自然日窗口内无本地归档显示 `insufficient_archive_coverage` |
+| AI Strategy Recommendation | `ai_strategy_catalog_v2` + `strategy_configs` + matching strategy test artifacts | `/api/ai-strategy-recommendations` Top 5 摘要 | catalog/ranking version、recommended params hash、matching batch/archive evidence、排除日证据、recommendation key | 任一策略证据不可比时整体保留研究顺序；非可用日期必须显式排除且不得生成收益 |
 | Strategy Optimization | `strategy_optimization_runs` + `strategy_optimization_candidates` | 策略优化候选列表 | symbol scope、search space hash、candidate params hash、逐 symbol/day 结果 JSON | 无合格候选或覆盖不足不得自动套用参数 |
 | Review Journal | `trade_reviews` | 标签和复盘结论 | 标签、错误分类、结论、更新时间 | 主观结论不得覆盖成交 |
 

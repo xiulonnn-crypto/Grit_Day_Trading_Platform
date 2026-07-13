@@ -789,6 +789,7 @@ def _evaluate_trade_group(conn: sqlite3.Connection, group: dict[str, Any]) -> di
         "score": None,
         "grade": None,
         "summary": "未清仓交易不生成系统评价。" if group["status"] != "closed" else "缺少可用分钟线，暂不生成系统评价。",
+        "recommendations": [],
         "strengths": [],
         "risks": [],
         "factors": [],
@@ -814,6 +815,7 @@ def _evaluate_trade_group(conn: sqlite3.Connection, group: dict[str, Any]) -> di
         "score": score,
         "grade": grade,
         "summary": _trade_evaluation_summary(group, grade),
+        "recommendations": _trade_evaluation_recommendations(group),
         "strengths": strengths[:3],
         "risks": risks[:3],
         "factors": factors,
@@ -1188,6 +1190,24 @@ def _trade_evaluation_summary(group: dict[str, Any], grade: str) -> str:
     if pnl < 0:
         return f"{direction}交易已实现亏损，综合评分 {grade}，重点复盘入场位置、止损和量能确认。"
     return f"{direction}交易接近持平，综合评分 {grade}，重点复盘机会成本和出场纪律。"
+
+
+def _trade_evaluation_recommendations(group: dict[str, Any]) -> list[dict[str, str]]:
+    pnl = float(group["pnl"] or 0)
+    if pnl > 0:
+        return [
+            {"label": "后续开仓建议", "detail": "保留本次有效确认条件，避免追高或追低。"},
+            {"label": "后续平仓建议", "detail": "沿用分批止盈和移动止损，减少盈利回吐。"},
+        ]
+    if pnl < 0:
+        return [
+            {"label": "后续开仓建议", "detail": "等待 VWAP、关键价位和放量确认后再入场。"},
+            {"label": "后续平仓建议", "detail": "跌破入场 K 低点或预设止损时先减仓或止损，盈利后按目标分批锁定。"},
+        ]
+    return [
+        {"label": "后续开仓建议", "detail": "只在盈亏比清晰且量价确认时入场。"},
+        {"label": "后续平仓建议", "detail": "价格迟迟不按预期推进时缩短持仓或按时间止损退出。"},
+    ]
 
 
 def _closed_round_trip_pnls(fills: list[dict[str, Any]]) -> list[float]:

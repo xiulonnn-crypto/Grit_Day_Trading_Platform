@@ -13,14 +13,17 @@ set "REQUESTED_FRONTEND_PORT=%GRIT_FRONTEND_PORT%"
 set "USING_FALLBACK_PORTS=0"
 call :update_urls
 set "REQUIRED_BACKEND_ROUTE=/api/strategy-test-runs"
+set "REQUIRED_AI_STRATEGY_ROUTE=/api/ai-strategy-recommendations"
 set "REQUIRED_STRATEGY_RUN_DETAIL_ROUTE=/api/strategy-runs/{run_id}"
 set "REQUIRED_LIVE_SIGNAL_ROUTE=/api/strategies/{strategy_id}/live-signal"
 set "REQUIRED_REVIEW_ROUTE=/api/review/summary"
 set "REQUIRED_TRADE_REVIEW_ROUTE=/api/trade-groups/{trade_group_id}/review"
-set "REQUIRED_STRATEGY_TEMPLATE=one_minute_range_fader_v1"
+set "REQUIRED_STRATEGY_TEMPLATE=five_minute_opening_range_breakout_v1"
 set "REQUIRED_LIVE_SIGNAL_CONTRACT=live_order_quantity_reason_tags_v1"
-set "REQUIRED_FRONTEND_MARKER=LossReviewPanel"
-set "FRONTEND_CACHE_BUSTER=loss-review-inline-v1"
+set "REQUIRED_TRADE_EVAL_CONTRACT=trade_eval_recommendation_v1"
+set "REQUIRED_AI_STRATEGY_CATALOG=ai_strategy_catalog_v2"
+set "REQUIRED_FRONTEND_MARKER=AiStrategyWorkspace"
+set "FRONTEND_CACHE_BUSTER=ai-strategy-recommendation-v2"
 
 pushd "%ROOT%" >nul
 
@@ -148,7 +151,7 @@ set "GRIT_FRONTEND_PORT=%SELECTED_PORT%"
 exit /b 0
 
 :is_backend_ready
-powershell -NoProfile -ExecutionPolicy Bypass -Command "try { $h = Invoke-RestMethod -Uri '%BACKEND_URL%/api/healthz' -TimeoutSec 2; if ($h.status -ne 'ok') { exit 1 }; if ($h.live_signal_contract -ne '%REQUIRED_LIVE_SIGNAL_CONTRACT%') { exit 1 }; $o = Invoke-RestMethod -Uri '%BACKEND_URL%/openapi.json' -TimeoutSec 2; $paths = $o.paths.PSObject.Properties.Name; if (-not ($paths -contains '%REQUIRED_BACKEND_ROUTE%')) { exit 1 }; if (-not ($paths -contains '%REQUIRED_STRATEGY_RUN_DETAIL_ROUTE%')) { exit 1 }; if (-not ($paths -contains '%REQUIRED_LIVE_SIGNAL_ROUTE%')) { exit 1 }; if (-not ($paths -contains '%REQUIRED_REVIEW_ROUTE%')) { exit 1 }; if (-not ($paths -contains '%REQUIRED_TRADE_REVIEW_ROUTE%')) { exit 1 }; $t = Invoke-RestMethod -Uri '%BACKEND_URL%/api/strategy-templates' -TimeoutSec 2; if (($t.items | ForEach-Object { $_.template_key }) -contains '%REQUIRED_STRATEGY_TEMPLATE%') { exit 0 }; exit 1 } catch { exit 1 }"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "try { $h = Invoke-RestMethod -Uri '%BACKEND_URL%/api/healthz' -TimeoutSec 2; if ($h.status -ne 'ok') { exit 1 }; if ($h.live_signal_contract -ne '%REQUIRED_LIVE_SIGNAL_CONTRACT%') { exit 1 }; if ($h.trade_eval_contract -ne '%REQUIRED_TRADE_EVAL_CONTRACT%') { exit 1 }; if ($h.ai_strategy_catalog -ne '%REQUIRED_AI_STRATEGY_CATALOG%') { exit 1 }; $o = Invoke-RestMethod -Uri '%BACKEND_URL%/openapi.json' -TimeoutSec 2; $paths = $o.paths.PSObject.Properties.Name; if (-not ($paths -contains '%REQUIRED_BACKEND_ROUTE%')) { exit 1 }; if (-not ($paths -contains '%REQUIRED_AI_STRATEGY_ROUTE%')) { exit 1 }; if (-not ($paths -contains '%REQUIRED_STRATEGY_RUN_DETAIL_ROUTE%')) { exit 1 }; if (-not ($paths -contains '%REQUIRED_LIVE_SIGNAL_ROUTE%')) { exit 1 }; if (-not ($paths -contains '%REQUIRED_REVIEW_ROUTE%')) { exit 1 }; if (-not ($paths -contains '%REQUIRED_TRADE_REVIEW_ROUTE%')) { exit 1 }; $t = Invoke-RestMethod -Uri '%BACKEND_URL%/api/strategy-templates' -TimeoutSec 2; if (($t.items | ForEach-Object { $_.template_key }) -contains '%REQUIRED_STRATEGY_TEMPLATE%') { exit 0 }; exit 1 } catch { exit 1 }"
 exit /b %ERRORLEVEL%
 
 :is_backend_running
@@ -156,7 +159,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command "try { $r = Invoke-RestMe
 exit /b %ERRORLEVEL%
 
 :is_frontend_ready
-powershell -NoProfile -ExecutionPolicy Bypass -Command "try { $r = Invoke-WebRequest -UseBasicParsing -Uri '%FRONTEND_URL%/' -TimeoutSec 2; if ($r.StatusCode -ne 200) { exit 1 }; $app = Invoke-WebRequest -UseBasicParsing -Uri '%FRONTEND_URL%/src/App.tsx' -TimeoutSec 2; if (-not $app.Content.Contains('%REQUIRED_FRONTEND_MARKER%')) { exit 1 }; $h = Invoke-RestMethod -Uri '%FRONTEND_URL%/api/healthz' -TimeoutSec 2; if ($h.status -ne 'ok' -or $h.live_signal_contract -ne '%REQUIRED_LIVE_SIGNAL_CONTRACT%') { exit 1 }; $o = Invoke-RestMethod -Uri '%FRONTEND_URL%/openapi.json' -TimeoutSec 2; $paths = $o.paths.PSObject.Properties.Name; if (-not ($paths -contains '%REQUIRED_BACKEND_ROUTE%')) { exit 1 }; if (-not ($paths -contains '%REQUIRED_STRATEGY_RUN_DETAIL_ROUTE%')) { exit 1 }; if (-not ($paths -contains '%REQUIRED_LIVE_SIGNAL_ROUTE%')) { exit 1 }; if (-not ($paths -contains '%REQUIRED_REVIEW_ROUTE%')) { exit 1 }; if (-not ($paths -contains '%REQUIRED_TRADE_REVIEW_ROUTE%')) { exit 1 }; exit 0 } catch { exit 1 }"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "try { $r = Invoke-WebRequest -UseBasicParsing -Uri '%FRONTEND_URL%/' -TimeoutSec 2; if ($r.StatusCode -ne 200) { exit 1 }; $app = Invoke-WebRequest -UseBasicParsing -Uri '%FRONTEND_URL%/src/App.tsx' -TimeoutSec 2; if (-not $app.Content.Contains('%REQUIRED_FRONTEND_MARKER%')) { exit 1 }; $h = Invoke-RestMethod -Uri '%FRONTEND_URL%/api/healthz' -TimeoutSec 2; if ($h.status -ne 'ok' -or $h.live_signal_contract -ne '%REQUIRED_LIVE_SIGNAL_CONTRACT%' -or $h.trade_eval_contract -ne '%REQUIRED_TRADE_EVAL_CONTRACT%' -or $h.ai_strategy_catalog -ne '%REQUIRED_AI_STRATEGY_CATALOG%') { exit 1 }; $o = Invoke-RestMethod -Uri '%FRONTEND_URL%/openapi.json' -TimeoutSec 2; $paths = $o.paths.PSObject.Properties.Name; if (-not ($paths -contains '%REQUIRED_BACKEND_ROUTE%')) { exit 1 }; if (-not ($paths -contains '%REQUIRED_AI_STRATEGY_ROUTE%')) { exit 1 }; if (-not ($paths -contains '%REQUIRED_STRATEGY_RUN_DETAIL_ROUTE%')) { exit 1 }; if (-not ($paths -contains '%REQUIRED_LIVE_SIGNAL_ROUTE%')) { exit 1 }; if (-not ($paths -contains '%REQUIRED_REVIEW_ROUTE%')) { exit 1 }; if (-not ($paths -contains '%REQUIRED_TRADE_REVIEW_ROUTE%')) { exit 1 }; exit 0 } catch { exit 1 }"
 exit /b %ERRORLEVEL%
 
 :is_backend_review_ready
@@ -171,11 +174,11 @@ exit /b 0
 for /L %%I in (1,1,40) do (
   call :is_backend_ready
   if not errorlevel 1 (
-    timeout /t 2 /nobreak >nul
+    call :sleep_seconds 2
     call :is_backend_ready
     if not errorlevel 1 exit /b 0
   )
-  timeout /t 1 /nobreak >nul
+  call :sleep_seconds 1
 )
 exit /b 1
 
@@ -183,13 +186,17 @@ exit /b 1
 for /L %%I in (1,1,40) do (
   call :is_frontend_ready
   if not errorlevel 1 (
-    timeout /t 2 /nobreak >nul
+    call :sleep_seconds 2
     call :is_frontend_ready
     if not errorlevel 1 exit /b 0
   )
-  timeout /t 1 /nobreak >nul
+  call :sleep_seconds 1
 )
 exit /b 1
+
+:sleep_seconds
+powershell -NoProfile -ExecutionPolicy Bypass -Command "Start-Sleep -Seconds %~1" >nul 2>nul
+exit /b 0
 
 :backend_failed
 echo [Grit][ERROR] Backend did not become ready on %BACKEND_URL%.
@@ -214,7 +221,7 @@ echo [Grit][ERROR] Set GRIT_BACKEND_PORT and GRIT_FRONTEND_PORT to free ports, t
 goto failed
 
 :backend_incompatible
-echo [Grit][ERROR] Backend is responding on %BACKEND_URL% but is missing required route %REQUIRED_BACKEND_ROUTE% / %REQUIRED_STRATEGY_RUN_DETAIL_ROUTE% / %REQUIRED_LIVE_SIGNAL_ROUTE% / %REQUIRED_REVIEW_ROUTE% / %REQUIRED_TRADE_REVIEW_ROUTE% or strategy template %REQUIRED_STRATEGY_TEMPLATE%.
+echo [Grit][ERROR] Backend is responding on %BACKEND_URL% but is missing a required route, contract %REQUIRED_TRADE_EVAL_CONTRACT%, AI catalog %REQUIRED_AI_STRATEGY_CATALOG%, or strategy template %REQUIRED_STRATEGY_TEMPLATE%.
 echo [Grit][ERROR] A stale backend process is likely occupying port %GRIT_BACKEND_PORT%.
 call :print_port_owner %GRIT_BACKEND_PORT%
 echo [Grit][ERROR] Run Login-Grit-DayTrading.cmd without --check to auto-start on fallback ports, or close the old process and retry.

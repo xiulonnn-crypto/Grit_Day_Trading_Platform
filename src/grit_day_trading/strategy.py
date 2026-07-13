@@ -37,6 +37,26 @@ RANGE_FADER_LEGACY_DISPLAY_NAMES = {
     "1分钟区间边缘狙击策略",
     "PA-1min边缘狙击反转策略",
 }
+OPENING_RANGE_BREAKOUT_TEMPLATE_KEY = "five_minute_opening_range_breakout_v1"
+OPENING_RANGE_BREAKOUT_TEMPLATE_VERSION = "five_minute_opening_range_breakout_v1.0"
+OPENING_RANGE_BREAKOUT_ENGINE_VERSION = "strategy_indicator_engine_opening_range_breakout_v1"
+DEFAULT_OPENING_RANGE_BREAKOUT_STRATEGY_ID = "strategy_opening_range_breakout_default"
+OPENING_RANGE_RETEST_TEMPLATE_KEY = "fifteen_minute_opening_range_retest_v1"
+OPENING_RANGE_RETEST_TEMPLATE_VERSION = "fifteen_minute_opening_range_retest_v1.0"
+OPENING_RANGE_RETEST_ENGINE_VERSION = "strategy_indicator_engine_opening_range_retest_v1"
+DEFAULT_OPENING_RANGE_RETEST_STRATEGY_ID = "strategy_opening_range_retest_default"
+VWAP_OPENING_DRIVE_TEMPLATE_KEY = "vwap_opening_drive_v1"
+VWAP_OPENING_DRIVE_TEMPLATE_VERSION = "vwap_opening_drive_v1.0"
+VWAP_OPENING_DRIVE_ENGINE_VERSION = "strategy_indicator_engine_vwap_opening_drive_v1"
+DEFAULT_VWAP_OPENING_DRIVE_STRATEGY_ID = "strategy_vwap_opening_drive_default"
+VWAP_TREND_PULLBACK_TEMPLATE_KEY = "vwap_trend_pullback_v1"
+VWAP_TREND_PULLBACK_TEMPLATE_VERSION = "vwap_trend_pullback_v1.0"
+VWAP_TREND_PULLBACK_ENGINE_VERSION = "strategy_indicator_engine_vwap_trend_pullback_v1"
+DEFAULT_VWAP_TREND_PULLBACK_STRATEGY_ID = "strategy_vwap_trend_pullback_default"
+LAST_HOUR_MOMENTUM_TEMPLATE_KEY = "last_hour_intraday_momentum_v1"
+LAST_HOUR_MOMENTUM_TEMPLATE_VERSION = "last_hour_intraday_momentum_v1.0"
+LAST_HOUR_MOMENTUM_ENGINE_VERSION = "strategy_indicator_engine_last_hour_momentum_v1"
+DEFAULT_LAST_HOUR_MOMENTUM_STRATEGY_ID = "strategy_last_hour_momentum_default"
 MOMENTUM_CONTEXT_SYMBOLS = ("QQQ", "SMH")
 DEFAULT_INITIAL_CAPITAL = 100000.0
 DEFAULT_ENTRY_CAPITAL_RATIO = 0.2
@@ -138,6 +158,70 @@ DEFAULT_RANGE_FADER_PARAMS: dict[str, float | int] = {
     "first_target_exit_fraction": 0.5,
     "max_holding_bars": 30,
     "min_range_height": 0.2,
+}
+
+DEFAULT_OPENING_RANGE_BREAKOUT_PARAMS: dict[str, float | int] = {
+    **DEFAULT_CAPITAL_PARAMS,
+    "opening_range_minutes": 5,
+    "entry_end_minute": 90,
+    "volume_average_period": 20,
+    "min_relative_volume": 0.7,
+    "atr_period": 14,
+    "atr_stop_multiplier": 0.8,
+    "risk_reward": 1.6,
+    "exit_minute": 120,
+    "min_risk_dollars": 0.05,
+}
+
+DEFAULT_OPENING_RANGE_RETEST_PARAMS: dict[str, float | int] = {
+    **DEFAULT_CAPITAL_PARAMS,
+    "opening_range_minutes": 15,
+    "entry_end_minute": 150,
+    "retest_window_bars": 20,
+    "retest_tolerance_atr": 0.15,
+    "atr_period": 14,
+    "atr_stop_multiplier": 0.8,
+    "risk_reward": 1.8,
+    "exit_minute": 180,
+    "min_risk_dollars": 0.05,
+}
+
+DEFAULT_VWAP_OPENING_DRIVE_PARAMS: dict[str, float | int] = {
+    **DEFAULT_CAPITAL_PARAMS,
+    "signal_minute": 30,
+    "signal_window_minutes": 5,
+    "min_first_half_hour_return": 0.0005,
+    "atr_period": 14,
+    "atr_stop_multiplier": 1.0,
+    "risk_reward": 1.5,
+    "exit_minute": 180,
+    "min_risk_dollars": 0.05,
+}
+
+DEFAULT_VWAP_TREND_PULLBACK_PARAMS: dict[str, float | int] = {
+    **DEFAULT_CAPITAL_PARAMS,
+    "entry_start_minute": 30,
+    "entry_end_minute": 240,
+    "ema_period": 20,
+    "ema_slope_lookback": 5,
+    "vwap_touch_atr": 0.15,
+    "atr_period": 14,
+    "atr_stop_multiplier": 0.8,
+    "risk_reward": 1.5,
+    "max_holding_minutes": 60,
+    "min_risk_dollars": 0.05,
+}
+
+DEFAULT_LAST_HOUR_MOMENTUM_PARAMS: dict[str, float | int] = {
+    **DEFAULT_CAPITAL_PARAMS,
+    "entry_minute": 315,
+    "entry_window_minutes": 5,
+    "min_first_half_hour_return": 0.0005,
+    "atr_period": 14,
+    "atr_stop_multiplier": 0.8,
+    "risk_reward": 1.2,
+    "exit_minute": 385,
+    "min_risk_dollars": 0.05,
 }
 
 RUN_STATUSES = {
@@ -300,6 +384,100 @@ def get_strategy_templates() -> list[dict[str, Any]]:
                 {"key": "min_range_height", "label": "最小区间高度", "type": "number", "min": 0.0, "max": 100.0},
             ],
         },
+        {
+            "template_key": OPENING_RANGE_BREAKOUT_TEMPLATE_KEY,
+            "template_version": OPENING_RANGE_BREAKOUT_TEMPLATE_VERSION,
+            "name": "5分钟开盘区间突破策略",
+            "description": "用首 5 分钟区间、VWAP 和相对成交量确认早盘方向突破，并以 ATR 统一风险。",
+            "default_params": dict(DEFAULT_OPENING_RANGE_BREAKOUT_PARAMS),
+            "param_schema": [
+                *CAPITAL_PARAM_SCHEMA,
+                {"key": "opening_range_minutes", "label": "开盘区间分钟", "type": "integer", "min": 3, "max": 30},
+                {"key": "entry_end_minute", "label": "最晚入场分钟", "type": "integer", "min": 15, "max": 240},
+                {"key": "volume_average_period", "label": "均量周期", "type": "integer", "min": 2, "max": 100},
+                {"key": "min_relative_volume", "label": "最小相对成交量", "type": "number", "min": 0.1, "max": 10.0},
+                {"key": "atr_period", "label": "ATR 周期", "type": "integer", "min": 2, "max": 60},
+                {"key": "atr_stop_multiplier", "label": "ATR 止损倍数", "type": "number", "min": 0.1, "max": 10.0},
+                {"key": "risk_reward", "label": "盈亏比目标", "type": "number", "min": 0.5, "max": 10.0},
+                {"key": "exit_minute", "label": "强制出场分钟", "type": "integer", "min": 30, "max": 390},
+                {"key": "min_risk_dollars", "label": "最小每股风险", "type": "number", "min": 0.01, "max": 10.0},
+            ],
+        },
+        {
+            "template_key": OPENING_RANGE_RETEST_TEMPLATE_KEY,
+            "template_version": OPENING_RANGE_RETEST_TEMPLATE_VERSION,
+            "name": "15分钟开盘区间突破回踩策略",
+            "description": "先确认 15 分钟开盘区间突破，再等待破位位回踩并重新收回，避免追击第一根突破 K。",
+            "default_params": dict(DEFAULT_OPENING_RANGE_RETEST_PARAMS),
+            "param_schema": [
+                *CAPITAL_PARAM_SCHEMA,
+                {"key": "opening_range_minutes", "label": "开盘区间分钟", "type": "integer", "min": 5, "max": 60},
+                {"key": "entry_end_minute", "label": "最晚入场分钟", "type": "integer", "min": 30, "max": 300},
+                {"key": "retest_window_bars", "label": "回踩等待 K 数", "type": "integer", "min": 2, "max": 60},
+                {"key": "retest_tolerance_atr", "label": "回踩 ATR 容差", "type": "number", "min": 0.0, "max": 2.0},
+                {"key": "atr_period", "label": "ATR 周期", "type": "integer", "min": 2, "max": 60},
+                {"key": "atr_stop_multiplier", "label": "ATR 止损倍数", "type": "number", "min": 0.1, "max": 10.0},
+                {"key": "risk_reward", "label": "盈亏比目标", "type": "number", "min": 0.5, "max": 10.0},
+                {"key": "exit_minute", "label": "强制出场分钟", "type": "integer", "min": 45, "max": 390},
+                {"key": "min_risk_dollars", "label": "最小每股风险", "type": "number", "min": 0.01, "max": 10.0},
+            ],
+        },
+        {
+            "template_key": VWAP_OPENING_DRIVE_TEMPLATE_KEY,
+            "template_version": VWAP_OPENING_DRIVE_TEMPLATE_VERSION,
+            "name": "VWAP 开盘驱动延续策略",
+            "description": "在首半小时形成明确方向后，只在价格仍位于 VWAP 同侧时参与开盘驱动延续。",
+            "default_params": dict(DEFAULT_VWAP_OPENING_DRIVE_PARAMS),
+            "param_schema": [
+                *CAPITAL_PARAM_SCHEMA,
+                {"key": "signal_minute", "label": "入场观察分钟", "type": "integer", "min": 30, "max": 240},
+                {"key": "signal_window_minutes", "label": "入场窗口分钟", "type": "integer", "min": 1, "max": 30},
+                {"key": "min_first_half_hour_return", "label": "首半小时最小涨跌幅", "type": "number", "min": 0.0, "max": 0.1},
+                {"key": "atr_period", "label": "ATR 周期", "type": "integer", "min": 2, "max": 60},
+                {"key": "atr_stop_multiplier", "label": "ATR 止损倍数", "type": "number", "min": 0.1, "max": 10.0},
+                {"key": "risk_reward", "label": "盈亏比目标", "type": "number", "min": 0.5, "max": 10.0},
+                {"key": "exit_minute", "label": "强制出场分钟", "type": "integer", "min": 60, "max": 390},
+                {"key": "min_risk_dollars", "label": "最小每股风险", "type": "number", "min": 0.01, "max": 10.0},
+            ],
+        },
+        {
+            "template_key": VWAP_TREND_PULLBACK_TEMPLATE_KEY,
+            "template_version": VWAP_TREND_PULLBACK_TEMPLATE_VERSION,
+            "name": "VWAP 趋势回踩策略",
+            "description": "用 EMA20 斜率确认日内趋势，在价格触及 VWAP 后重新收回趋势方向时入场。",
+            "default_params": dict(DEFAULT_VWAP_TREND_PULLBACK_PARAMS),
+            "param_schema": [
+                *CAPITAL_PARAM_SCHEMA,
+                {"key": "entry_start_minute", "label": "最早入场分钟", "type": "integer", "min": 15, "max": 240},
+                {"key": "entry_end_minute", "label": "最晚入场分钟", "type": "integer", "min": 30, "max": 360},
+                {"key": "ema_period", "label": "趋势 EMA 周期", "type": "integer", "min": 5, "max": 100},
+                {"key": "ema_slope_lookback", "label": "EMA 斜率窗口", "type": "integer", "min": 1, "max": 30},
+                {"key": "vwap_touch_atr", "label": "VWAP 触及 ATR 容差", "type": "number", "min": 0.0, "max": 2.0},
+                {"key": "atr_period", "label": "ATR 周期", "type": "integer", "min": 2, "max": 60},
+                {"key": "atr_stop_multiplier", "label": "ATR 止损倍数", "type": "number", "min": 0.1, "max": 10.0},
+                {"key": "risk_reward", "label": "盈亏比目标", "type": "number", "min": 0.5, "max": 10.0},
+                {"key": "max_holding_minutes", "label": "最长持仓分钟", "type": "integer", "min": 5, "max": 240},
+                {"key": "min_risk_dollars", "label": "最小每股风险", "type": "number", "min": 0.01, "max": 10.0},
+            ],
+        },
+        {
+            "template_key": LAST_HOUR_MOMENTUM_TEMPLATE_KEY,
+            "template_version": LAST_HOUR_MOMENTUM_TEMPLATE_VERSION,
+            "name": "尾盘半小时动量策略",
+            "description": "用首半小时收益方向预测尾盘，在 14:45 后建立同向仓位并在收盘前退出。",
+            "default_params": dict(DEFAULT_LAST_HOUR_MOMENTUM_PARAMS),
+            "param_schema": [
+                *CAPITAL_PARAM_SCHEMA,
+                {"key": "entry_minute", "label": "入场分钟", "type": "integer", "min": 270, "max": 360},
+                {"key": "entry_window_minutes", "label": "入场窗口分钟", "type": "integer", "min": 1, "max": 30},
+                {"key": "min_first_half_hour_return", "label": "首半小时最小涨跌幅", "type": "number", "min": 0.0, "max": 0.1},
+                {"key": "atr_period", "label": "ATR 周期", "type": "integer", "min": 2, "max": 60},
+                {"key": "atr_stop_multiplier", "label": "ATR 止损倍数", "type": "number", "min": 0.1, "max": 10.0},
+                {"key": "risk_reward", "label": "盈亏比目标", "type": "number", "min": 0.5, "max": 10.0},
+                {"key": "exit_minute", "label": "收盘前出场分钟", "type": "integer", "min": 330, "max": 390},
+                {"key": "min_risk_dollars", "label": "最小每股风险", "type": "number", "min": 0.01, "max": 10.0},
+            ],
+        },
     ]
 
 
@@ -388,6 +566,16 @@ def _default_strategy_id(template_key: str) -> str:
         return DEFAULT_TREND_RIDER_STRATEGY_ID
     if template_key == RANGE_FADER_TEMPLATE_KEY:
         return DEFAULT_RANGE_FADER_STRATEGY_ID
+    if template_key == OPENING_RANGE_BREAKOUT_TEMPLATE_KEY:
+        return DEFAULT_OPENING_RANGE_BREAKOUT_STRATEGY_ID
+    if template_key == OPENING_RANGE_RETEST_TEMPLATE_KEY:
+        return DEFAULT_OPENING_RANGE_RETEST_STRATEGY_ID
+    if template_key == VWAP_OPENING_DRIVE_TEMPLATE_KEY:
+        return DEFAULT_VWAP_OPENING_DRIVE_STRATEGY_ID
+    if template_key == VWAP_TREND_PULLBACK_TEMPLATE_KEY:
+        return DEFAULT_VWAP_TREND_PULLBACK_STRATEGY_ID
+    if template_key == LAST_HOUR_MOMENTUM_TEMPLATE_KEY:
+        return DEFAULT_LAST_HOUR_MOMENTUM_STRATEGY_ID
     raise ValueError("unsupported_strategy_template")
 
 
@@ -1536,6 +1724,72 @@ def evaluate_one_minute_range_fader(
     return indicator_series, signals
 
 
+def evaluate_research_intraday_strategy(
+    template_key: str,
+    bars: list[dict[str, Any]],
+    params: dict[str, Any] | None = None,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    defaults_by_template = {
+        OPENING_RANGE_BREAKOUT_TEMPLATE_KEY: DEFAULT_OPENING_RANGE_BREAKOUT_PARAMS,
+        OPENING_RANGE_RETEST_TEMPLATE_KEY: DEFAULT_OPENING_RANGE_RETEST_PARAMS,
+        VWAP_OPENING_DRIVE_TEMPLATE_KEY: DEFAULT_VWAP_OPENING_DRIVE_PARAMS,
+        VWAP_TREND_PULLBACK_TEMPLATE_KEY: DEFAULT_VWAP_TREND_PULLBACK_PARAMS,
+        LAST_HOUR_MOMENTUM_TEMPLATE_KEY: DEFAULT_LAST_HOUR_MOMENTUM_PARAMS,
+    }
+    defaults = defaults_by_template.get(template_key)
+    if defaults is None:
+        raise ValueError("unsupported_strategy_template")
+    normalized = _normalize_params(params or defaults, template_key=template_key)
+    indicator_series = _research_intraday_indicator_series(bars, normalized)
+    signals: list[dict[str, Any]] = []
+    position: dict[str, Any] | None = None
+    state: dict[str, Any] = {"traded": False}
+
+    for index, bar in enumerate(bars):
+        indicators = indicator_series[index]
+        if position:
+            exit_signal = _research_intraday_exit_signal(
+                index,
+                bar,
+                indicators,
+                position,
+                is_last_bar=index == len(bars) - 1,
+            )
+            if exit_signal:
+                exit_signal["linked_entry_signal_index"] = position["entry_signal_index"]
+                signals.append(exit_signal)
+                position = None
+            continue
+        if state["traded"]:
+            continue
+        entry = _research_intraday_entry_signal(
+            template_key,
+            index,
+            bar,
+            bars,
+            indicator_series,
+            normalized,
+            state,
+        )
+        if entry:
+            entry["linked_entry_signal_index"] = None
+            state["traded"] = True
+            position = {
+                "side": entry["side"],
+                "entry_price": entry["price"],
+                "stop_loss_price": entry["stop_loss_price"],
+                "take_profit_price": entry["take_profit_price"],
+                "entry_signal_index": len(signals),
+                "entry_bar_index": entry["bar_index"],
+                "entry_session_minute": entry["metrics"]["session_minute"],
+                "exit_minute": entry["metrics"]["exit_minute"],
+                "template_key": template_key,
+            }
+            signals.append(entry)
+
+    return indicator_series, signals
+
+
 def _evaluate_strategy(
     template_key: str,
     bars: list[dict[str, Any]],
@@ -1553,7 +1807,346 @@ def _evaluate_strategy(
         return evaluate_one_minute_trend_rider(bars, params)
     if template_key == RANGE_FADER_TEMPLATE_KEY:
         return evaluate_one_minute_range_fader(bars, params)
+    if template_key in {
+        OPENING_RANGE_BREAKOUT_TEMPLATE_KEY,
+        OPENING_RANGE_RETEST_TEMPLATE_KEY,
+        VWAP_OPENING_DRIVE_TEMPLATE_KEY,
+        VWAP_TREND_PULLBACK_TEMPLATE_KEY,
+        LAST_HOUR_MOMENTUM_TEMPLATE_KEY,
+    }:
+        return evaluate_research_intraday_strategy(template_key, bars, params)
     raise ValueError("unsupported_strategy_template")
+
+
+def _research_intraday_indicator_series(
+    bars: list[dict[str, Any]],
+    params: dict[str, Any],
+) -> list[dict[str, Any]]:
+    atr_period = int(params.get("atr_period", 14))
+    ema_period = int(params.get("ema_period", 20))
+    ema_slope_lookback = int(params.get("ema_slope_lookback", 5))
+    volume_average_period = int(params.get("volume_average_period", 20))
+    opening_range_minutes = int(params.get("opening_range_minutes", 5))
+    ema_alpha = 2.0 / (ema_period + 1.0)
+    previous_close: float | None = None
+    ema_value: float | None = None
+    ema_values: list[float] = []
+    true_ranges: list[float] = []
+    regular_volumes: list[float] = []
+    cumulative_price_volume = 0.0
+    cumulative_volume = 0.0
+    opening_range_high: float | None = None
+    opening_range_low: float | None = None
+    session_high: float | None = None
+    session_low: float | None = None
+    session_open: float | None = None
+    first_half_hour_close: float | None = None
+    result: list[dict[str, Any]] = []
+
+    for bar in bars:
+        session_minute = _regular_session_minute(str(bar["timestamp"]))
+        if session_minute is None:
+            result.append(
+                {
+                    "session_minute": None,
+                    "vwap": None,
+                    "ema": None,
+                    "ema_slope": None,
+                    "atr": None,
+                    "avg_volume": None,
+                    "relative_volume": None,
+                    "opening_range_high": opening_range_high,
+                    "opening_range_low": opening_range_low,
+                    "session_high_before": session_high,
+                    "session_low_before": session_low,
+                    "first_half_hour_return": None,
+                }
+            )
+            continue
+
+        open_price = float(bar["open"])
+        high = float(bar["high"])
+        low = float(bar["low"])
+        close = float(bar["close"])
+        volume = float(bar["volume"])
+        if session_open is None:
+            session_open = open_price
+        session_high_before = session_high
+        session_low_before = session_low
+        true_range = max(
+            high - low,
+            abs(high - previous_close) if previous_close is not None else high - low,
+            abs(low - previous_close) if previous_close is not None else high - low,
+        )
+        true_ranges.append(true_range)
+        atr = sum(true_ranges[-atr_period:]) / min(len(true_ranges), atr_period)
+        ema_value = close if ema_value is None else ema_alpha * close + (1.0 - ema_alpha) * ema_value
+        ema_values.append(ema_value)
+        ema_slope = (
+            ema_value - ema_values[-ema_slope_lookback - 1]
+            if len(ema_values) > ema_slope_lookback
+            else None
+        )
+        average_volume = (
+            sum(regular_volumes[-volume_average_period:]) / min(len(regular_volumes), volume_average_period)
+            if regular_volumes
+            else None
+        )
+        relative_volume = volume / average_volume if average_volume and average_volume > 0 else None
+        regular_volumes.append(volume)
+        typical_price = (high + low + close) / 3.0
+        cumulative_price_volume += typical_price * volume
+        cumulative_volume += volume
+        vwap = cumulative_price_volume / cumulative_volume if cumulative_volume > 0 else close
+        if session_minute < opening_range_minutes:
+            opening_range_high = high if opening_range_high is None else max(opening_range_high, high)
+            opening_range_low = low if opening_range_low is None else min(opening_range_low, low)
+        session_high = high if session_high is None else max(session_high, high)
+        session_low = low if session_low is None else min(session_low, low)
+        if session_minute >= 29 and first_half_hour_close is None:
+            first_half_hour_close = close
+        first_half_hour_return = (
+            first_half_hour_close / session_open - 1.0
+            if first_half_hour_close is not None and session_open
+            else None
+        )
+        result.append(
+            {
+                "session_minute": session_minute,
+                "vwap": vwap,
+                "ema": ema_value,
+                "ema_slope": ema_slope,
+                "atr": atr,
+                "avg_volume": average_volume,
+                "relative_volume": relative_volume,
+                "opening_range_high": opening_range_high,
+                "opening_range_low": opening_range_low,
+                "session_high_before": session_high_before,
+                "session_low_before": session_low_before,
+                "first_half_hour_return": first_half_hour_return,
+            }
+        )
+        previous_close = close
+    return result
+
+
+def _research_intraday_entry_signal(
+    template_key: str,
+    index: int,
+    bar: dict[str, Any],
+    bars: list[dict[str, Any]],
+    indicator_series: list[dict[str, Any]],
+    params: dict[str, Any],
+    state: dict[str, Any],
+) -> dict[str, Any] | None:
+    indicators = indicator_series[index]
+    session_minute = indicators.get("session_minute")
+    atr = indicators.get("atr")
+    vwap = indicators.get("vwap")
+    if session_minute is None or atr is None or vwap is None:
+        return None
+    session_minute = int(session_minute)
+    open_price = float(bar["open"])
+    high = float(bar["high"])
+    low = float(bar["low"])
+    close = float(bar["close"])
+    direction = 0
+    reason_codes: list[str] = []
+
+    if template_key == OPENING_RANGE_BREAKOUT_TEMPLATE_KEY:
+        opening_minutes = int(params["opening_range_minutes"])
+        if session_minute < opening_minutes or session_minute > int(params["entry_end_minute"]):
+            return None
+        relative_volume = indicators.get("relative_volume")
+        opening_high = indicators.get("opening_range_high")
+        opening_low = indicators.get("opening_range_low")
+        if relative_volume is None or float(relative_volume) < float(params["min_relative_volume"]):
+            return None
+        if opening_high is not None and close > float(opening_high) and close > float(vwap):
+            direction = 1
+        elif opening_low is not None and close < float(opening_low) and close < float(vwap):
+            direction = -1
+        reason_codes = ["opening_range_breakout", "vwap_direction_confirmed", "relative_volume_confirmed"]
+    elif template_key == OPENING_RANGE_RETEST_TEMPLATE_KEY:
+        opening_minutes = int(params["opening_range_minutes"])
+        if session_minute < opening_minutes or session_minute > int(params["entry_end_minute"]):
+            return None
+        opening_high = indicators.get("opening_range_high")
+        opening_low = indicators.get("opening_range_low")
+        if opening_high is None or opening_low is None:
+            return None
+        pending_direction = state.get("pending_direction")
+        if pending_direction is None and not state.get("retest_complete"):
+            if close > float(opening_high) and close > float(vwap):
+                state["pending_direction"] = 1
+                state["pending_expiry_index"] = index + int(params["retest_window_bars"])
+            elif close < float(opening_low) and close < float(vwap):
+                state["pending_direction"] = -1
+                state["pending_expiry_index"] = index + int(params["retest_window_bars"])
+            return None
+        if pending_direction is None:
+            return None
+        if index > int(state["pending_expiry_index"]):
+            state["pending_direction"] = None
+            state["retest_complete"] = True
+            return None
+        tolerance = float(params["retest_tolerance_atr"]) * float(atr)
+        if (
+            pending_direction == 1
+            and low <= float(opening_high) + tolerance
+            and close >= float(opening_high)
+            and close > open_price
+        ):
+            direction = 1
+        elif (
+            pending_direction == -1
+            and high >= float(opening_low) - tolerance
+            and close <= float(opening_low)
+            and close < open_price
+        ):
+            direction = -1
+        reason_codes = ["opening_range_breakout_confirmed", "opening_range_retest_held", "vwap_direction_confirmed"]
+    elif template_key == VWAP_OPENING_DRIVE_TEMPLATE_KEY:
+        start = int(params["signal_minute"])
+        if session_minute < start or session_minute > start + int(params["signal_window_minutes"]):
+            return None
+        first_return = indicators.get("first_half_hour_return")
+        threshold = float(params["min_first_half_hour_return"])
+        if first_return is not None and float(first_return) >= threshold and close > float(vwap):
+            direction = 1
+        elif first_return is not None and float(first_return) <= -threshold and close < float(vwap):
+            direction = -1
+        reason_codes = ["first_half_hour_direction_confirmed", "vwap_opening_drive_confirmed"]
+    elif template_key == VWAP_TREND_PULLBACK_TEMPLATE_KEY:
+        if session_minute < int(params["entry_start_minute"]) or session_minute > int(params["entry_end_minute"]):
+            return None
+        ema_slope = indicators.get("ema_slope")
+        if ema_slope is None:
+            return None
+        tolerance = float(params["vwap_touch_atr"]) * float(atr)
+        if float(ema_slope) > 0 and close > float(vwap) and low <= float(vwap) + tolerance and close > open_price:
+            direction = 1
+        elif float(ema_slope) < 0 and close < float(vwap) and high >= float(vwap) - tolerance and close < open_price:
+            direction = -1
+        reason_codes = ["ema_trend_confirmed", "vwap_pullback_reclaimed"]
+    else:
+        start = int(params["entry_minute"])
+        if session_minute < start or session_minute > start + int(params["entry_window_minutes"]):
+            return None
+        first_return = indicators.get("first_half_hour_return")
+        threshold = float(params["min_first_half_hour_return"])
+        if first_return is not None and float(first_return) >= threshold:
+            direction = 1
+        elif first_return is not None and float(first_return) <= -threshold:
+            direction = -1
+        reason_codes = ["first_half_hour_predictor_confirmed", "last_hour_momentum_entry"]
+
+    if direction == 0:
+        return None
+    risk = max(float(params["atr_stop_multiplier"]) * float(atr), float(params["min_risk_dollars"]))
+    stop_loss = close - direction * risk
+    take_profit = close + direction * float(params["risk_reward"]) * risk
+    exit_minute = (
+        min(session_minute + int(params["max_holding_minutes"]), 390)
+        if template_key == VWAP_TREND_PULLBACK_TEMPLATE_KEY
+        else int(params["exit_minute"])
+    )
+    return _signal(
+        timestamp=str(bar["timestamp"]),
+        bar_index=index,
+        side="LONG" if direction == 1 else "SHORT",
+        action="ENTRY_LONG" if direction == 1 else "ENTRY_SHORT",
+        price=close,
+        stop_loss_price=stop_loss,
+        take_profit_price=take_profit,
+        reason_codes=reason_codes,
+        metrics={
+            "session_minute": session_minute,
+            "vwap": vwap,
+            "ema": indicators.get("ema"),
+            "ema_slope": indicators.get("ema_slope"),
+            "atr": atr,
+            "relative_volume": indicators.get("relative_volume"),
+            "opening_range_high": indicators.get("opening_range_high"),
+            "opening_range_low": indicators.get("opening_range_low"),
+            "first_half_hour_return": indicators.get("first_half_hour_return"),
+            "risk_per_share": risk,
+            "risk_reward": params["risk_reward"],
+            "exit_minute": exit_minute,
+            "exit_fraction": 1.0,
+        },
+    )
+
+
+def _research_intraday_exit_signal(
+    index: int,
+    bar: dict[str, Any],
+    indicators: dict[str, Any],
+    position: dict[str, Any],
+    *,
+    is_last_bar: bool,
+) -> dict[str, Any] | None:
+    side = str(position["side"])
+    entry_price = float(position["entry_price"])
+    stop_loss = float(position["stop_loss_price"])
+    take_profit = float(position["take_profit_price"])
+    high = float(bar["high"])
+    low = float(bar["low"])
+    close = float(bar["close"])
+    session_minute = indicators.get("session_minute")
+    exit_price: float | None = None
+    reasons: list[str] = []
+    if side == "LONG" and low <= stop_loss:
+        exit_price = stop_loss
+        reasons = ["atr_stop_loss_hit"]
+    elif side == "SHORT" and high >= stop_loss:
+        exit_price = stop_loss
+        reasons = ["atr_stop_loss_hit"]
+    elif side == "LONG" and high >= take_profit:
+        exit_price = take_profit
+        reasons = ["risk_reward_target_hit"]
+    elif side == "SHORT" and low <= take_profit:
+        exit_price = take_profit
+        reasons = ["risk_reward_target_hit"]
+    elif session_minute is not None and int(session_minute) >= int(position["exit_minute"]):
+        exit_price = close
+        reasons = ["strategy_time_exit"]
+    elif is_last_bar:
+        exit_price = close
+        reasons = ["archive_end_exit"]
+    if exit_price is None:
+        return None
+    pnl_per_share = exit_price - entry_price if side == "LONG" else entry_price - exit_price
+    return _signal(
+        timestamp=str(bar["timestamp"]),
+        bar_index=index,
+        side=side,
+        action="EXIT_LONG" if side == "LONG" else "EXIT_SHORT",
+        price=exit_price,
+        stop_loss_price=stop_loss,
+        take_profit_price=take_profit,
+        reason_codes=reasons,
+        metrics={
+            "entry_price": entry_price,
+            "exit_price": exit_price,
+            "pnl_per_share": pnl_per_share,
+            "exit_fraction": 1.0,
+            "session_minute": session_minute,
+            "vwap": indicators.get("vwap"),
+            "atr": indicators.get("atr"),
+        },
+    )
+
+
+def _regular_session_minute(timestamp: str) -> int | None:
+    try:
+        parsed = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    minute = parsed.hour * 60 + parsed.minute - (9 * 60 + 30)
+    if minute < 0 or minute > 390:
+        return None
+    return minute
 
 
 def _entry_signal(
@@ -5157,6 +5750,41 @@ def _default_optimization_search_space(template_key: str) -> dict[str, list[Any]
             "reversal_shadow_ratio": [0.35, 0.45, 0.55, 0.65],
             "first_target_exit_fraction": [0.35, 0.5, 0.65],
         }
+    if template_key == OPENING_RANGE_BREAKOUT_TEMPLATE_KEY:
+        return {
+            "opening_range_minutes": [3, 5, 10, 15],
+            "min_relative_volume": [0.5, 0.7, 1.0, 1.25],
+            "atr_stop_multiplier": [0.6, 0.8, 1.0, 1.2],
+            "risk_reward": [1.2, 1.6, 2.0, 2.5],
+        }
+    if template_key == OPENING_RANGE_RETEST_TEMPLATE_KEY:
+        return {
+            "opening_range_minutes": [10, 15, 20, 30],
+            "retest_window_bars": [10, 20, 30, 45],
+            "retest_tolerance_atr": [0.05, 0.15, 0.25, 0.4],
+            "risk_reward": [1.2, 1.5, 1.8, 2.2],
+        }
+    if template_key == VWAP_OPENING_DRIVE_TEMPLATE_KEY:
+        return {
+            "signal_minute": [30, 45, 60, 90],
+            "min_first_half_hour_return": [0.0002, 0.0005, 0.001, 0.002],
+            "atr_stop_multiplier": [0.8, 1.0, 1.2, 1.5],
+            "risk_reward": [1.2, 1.5, 1.8, 2.0],
+        }
+    if template_key == VWAP_TREND_PULLBACK_TEMPLATE_KEY:
+        return {
+            "vwap_touch_atr": [0.05, 0.15, 0.25, 0.4],
+            "ema_slope_lookback": [3, 5, 8, 13],
+            "atr_stop_multiplier": [0.6, 0.8, 1.0, 1.2],
+            "risk_reward": [1.2, 1.5, 1.8, 2.0],
+        }
+    if template_key == LAST_HOUR_MOMENTUM_TEMPLATE_KEY:
+        return {
+            "entry_minute": [300, 315, 330, 345],
+            "min_first_half_hour_return": [0.0002, 0.0005, 0.001, 0.002],
+            "atr_stop_multiplier": [0.6, 0.8, 1.0, 1.2],
+            "risk_reward": [0.8, 1.0, 1.2, 1.5],
+        }
     raise ValueError("unsupported_strategy_template")
 
 
@@ -5333,6 +5961,16 @@ def _engine_version_for_template(template_key: str) -> str:
         return TREND_RIDER_ENGINE_VERSION
     if template_key == RANGE_FADER_TEMPLATE_KEY:
         return RANGE_FADER_ENGINE_VERSION
+    if template_key == OPENING_RANGE_BREAKOUT_TEMPLATE_KEY:
+        return OPENING_RANGE_BREAKOUT_ENGINE_VERSION
+    if template_key == OPENING_RANGE_RETEST_TEMPLATE_KEY:
+        return OPENING_RANGE_RETEST_ENGINE_VERSION
+    if template_key == VWAP_OPENING_DRIVE_TEMPLATE_KEY:
+        return VWAP_OPENING_DRIVE_ENGINE_VERSION
+    if template_key == VWAP_TREND_PULLBACK_TEMPLATE_KEY:
+        return VWAP_TREND_PULLBACK_ENGINE_VERSION
+    if template_key == LAST_HOUR_MOMENTUM_TEMPLATE_KEY:
+        return LAST_HOUR_MOMENTUM_ENGINE_VERSION
     raise ValueError("unsupported_strategy_template")
 
 
@@ -5345,6 +5983,14 @@ def _normalize_params(params: dict[str, Any], *, template_key: str = BB_SQUEEZE_
         return _normalize_trend_rider_params(params)
     if template_key == RANGE_FADER_TEMPLATE_KEY:
         return _normalize_range_fader_params(params)
+    if template_key in {
+        OPENING_RANGE_BREAKOUT_TEMPLATE_KEY,
+        OPENING_RANGE_RETEST_TEMPLATE_KEY,
+        VWAP_OPENING_DRIVE_TEMPLATE_KEY,
+        VWAP_TREND_PULLBACK_TEMPLATE_KEY,
+        LAST_HOUR_MOMENTUM_TEMPLATE_KEY,
+    }:
+        return _normalize_research_intraday_params(params, template_key=template_key)
     if template_key != BB_SQUEEZE_TEMPLATE_KEY:
         raise ValueError("unsupported_strategy_template")
     return _normalize_bb_squeeze_params(params)
@@ -5531,6 +6177,93 @@ def _normalize_range_fader_params(params: dict[str, Any]) -> dict[str, float | i
     return normalized
 
 
+def _normalize_research_intraday_params(
+    params: dict[str, Any],
+    *,
+    template_key: str,
+) -> dict[str, float | int]:
+    defaults_by_template = {
+        OPENING_RANGE_BREAKOUT_TEMPLATE_KEY: DEFAULT_OPENING_RANGE_BREAKOUT_PARAMS,
+        OPENING_RANGE_RETEST_TEMPLATE_KEY: DEFAULT_OPENING_RANGE_RETEST_PARAMS,
+        VWAP_OPENING_DRIVE_TEMPLATE_KEY: DEFAULT_VWAP_OPENING_DRIVE_PARAMS,
+        VWAP_TREND_PULLBACK_TEMPLATE_KEY: DEFAULT_VWAP_TREND_PULLBACK_PARAMS,
+        LAST_HOUR_MOMENTUM_TEMPLATE_KEY: DEFAULT_LAST_HOUR_MOMENTUM_PARAMS,
+    }
+    defaults = defaults_by_template.get(template_key)
+    if defaults is None:
+        raise ValueError("unsupported_strategy_template")
+    merged = {**defaults, **dict(params)}
+    common: dict[str, float | int] = {
+        **_normalize_capital_params(merged),
+        "atr_period": _bounded_int(merged["atr_period"], 2, 60, "atr_period"),
+        "atr_stop_multiplier": _bounded_float(merged["atr_stop_multiplier"], 0.1, 10.0, "atr_stop_multiplier"),
+        "risk_reward": _bounded_float(merged["risk_reward"], 0.5, 10.0, "risk_reward"),
+        "min_risk_dollars": _bounded_float(merged["min_risk_dollars"], 0.01, 10.0, "min_risk_dollars"),
+    }
+    if template_key == OPENING_RANGE_BREAKOUT_TEMPLATE_KEY:
+        normalized = {
+            **common,
+            "opening_range_minutes": _bounded_int(merged["opening_range_minutes"], 3, 30, "opening_range_minutes"),
+            "entry_end_minute": _bounded_int(merged["entry_end_minute"], 15, 240, "entry_end_minute"),
+            "volume_average_period": _bounded_int(merged["volume_average_period"], 2, 100, "volume_average_period"),
+            "min_relative_volume": _bounded_float(merged["min_relative_volume"], 0.1, 10.0, "min_relative_volume"),
+            "exit_minute": _bounded_int(merged["exit_minute"], 30, 390, "exit_minute"),
+        }
+        if normalized["opening_range_minutes"] >= normalized["entry_end_minute"] or normalized["entry_end_minute"] >= normalized["exit_minute"]:
+            raise ValueError("strategy_param_out_of_range:time_window")
+        return normalized
+    if template_key == OPENING_RANGE_RETEST_TEMPLATE_KEY:
+        normalized = {
+            **common,
+            "opening_range_minutes": _bounded_int(merged["opening_range_minutes"], 5, 60, "opening_range_minutes"),
+            "entry_end_minute": _bounded_int(merged["entry_end_minute"], 30, 300, "entry_end_minute"),
+            "retest_window_bars": _bounded_int(merged["retest_window_bars"], 2, 60, "retest_window_bars"),
+            "retest_tolerance_atr": _bounded_float(merged["retest_tolerance_atr"], 0.0, 2.0, "retest_tolerance_atr"),
+            "exit_minute": _bounded_int(merged["exit_minute"], 45, 390, "exit_minute"),
+        }
+        if normalized["opening_range_minutes"] >= normalized["entry_end_minute"] or normalized["entry_end_minute"] >= normalized["exit_minute"]:
+            raise ValueError("strategy_param_out_of_range:time_window")
+        return normalized
+    if template_key == VWAP_OPENING_DRIVE_TEMPLATE_KEY:
+        normalized = {
+            **common,
+            "signal_minute": _bounded_int(merged["signal_minute"], 30, 240, "signal_minute"),
+            "signal_window_minutes": _bounded_int(merged["signal_window_minutes"], 1, 30, "signal_window_minutes"),
+            "min_first_half_hour_return": _bounded_float(
+                merged["min_first_half_hour_return"], 0.0, 0.1, "min_first_half_hour_return"
+            ),
+            "exit_minute": _bounded_int(merged["exit_minute"], 60, 390, "exit_minute"),
+        }
+        if normalized["signal_minute"] + normalized["signal_window_minutes"] >= normalized["exit_minute"]:
+            raise ValueError("strategy_param_out_of_range:time_window")
+        return normalized
+    if template_key == VWAP_TREND_PULLBACK_TEMPLATE_KEY:
+        normalized = {
+            **common,
+            "entry_start_minute": _bounded_int(merged["entry_start_minute"], 15, 240, "entry_start_minute"),
+            "entry_end_minute": _bounded_int(merged["entry_end_minute"], 30, 360, "entry_end_minute"),
+            "ema_period": _bounded_int(merged["ema_period"], 5, 100, "ema_period"),
+            "ema_slope_lookback": _bounded_int(merged["ema_slope_lookback"], 1, 30, "ema_slope_lookback"),
+            "vwap_touch_atr": _bounded_float(merged["vwap_touch_atr"], 0.0, 2.0, "vwap_touch_atr"),
+            "max_holding_minutes": _bounded_int(merged["max_holding_minutes"], 5, 240, "max_holding_minutes"),
+        }
+        if normalized["entry_start_minute"] >= normalized["entry_end_minute"]:
+            raise ValueError("strategy_param_out_of_range:time_window")
+        return normalized
+    normalized = {
+        **common,
+        "entry_minute": _bounded_int(merged["entry_minute"], 270, 360, "entry_minute"),
+        "entry_window_minutes": _bounded_int(merged["entry_window_minutes"], 1, 30, "entry_window_minutes"),
+        "min_first_half_hour_return": _bounded_float(
+            merged["min_first_half_hour_return"], 0.0, 0.1, "min_first_half_hour_return"
+        ),
+        "exit_minute": _bounded_int(merged["exit_minute"], 330, 390, "exit_minute"),
+    }
+    if normalized["entry_minute"] + normalized["entry_window_minutes"] >= normalized["exit_minute"]:
+        raise ValueError("strategy_param_out_of_range:time_window")
+    return normalized
+
+
 def _momentum_context_symbols(params: dict[str, Any]) -> tuple[str, str]:
     if str(params.get("momentum_context", "QQQ_SMH")) != "QQQ_SMH":
         raise ValueError("strategy_param_out_of_range:momentum_context")
@@ -5583,6 +6316,20 @@ def _minimum_required_bars(params: dict[str, Any], *, template_key: str = BB_SQU
         return max(
             int(params["range_lookback_bars"]) + 2,
             int(params["ema_period"]) + int(params["ema_slope_lookback"]) + 1,
+        )
+    if template_key in {
+        OPENING_RANGE_BREAKOUT_TEMPLATE_KEY,
+        OPENING_RANGE_RETEST_TEMPLATE_KEY,
+        VWAP_OPENING_DRIVE_TEMPLATE_KEY,
+        VWAP_TREND_PULLBACK_TEMPLATE_KEY,
+        LAST_HOUR_MOMENTUM_TEMPLATE_KEY,
+    }:
+        return max(
+            int(params.get("atr_period", 14)) + 1,
+            int(params.get("volume_average_period", 2)) + 1,
+            int(params.get("ema_period", 2)) + int(params.get("ema_slope_lookback", 1)),
+            int(params.get("opening_range_minutes", 5)) + 1,
+            30,
         )
     return max(
         int(params["bb_period"]),

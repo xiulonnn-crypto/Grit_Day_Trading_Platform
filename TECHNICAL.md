@@ -71,12 +71,12 @@
 范围：
 
 - 新增 `strategy_configs`、`strategy_signal_runs` 和 `strategy_signals` 存储合同。
-- 新增策略模板 registry，当前内置 `bb_squeeze_breakout_v1`、`institutional_liquidity_sweep_v1`、`momentum_mean_reversion_v1`、`one_minute_trend_rider_v1` 和 `one_minute_range_fader_v1`，并分别 seed 默认禁用配置。
+- 策略模板 registry 当前保留五个历史模板，并新增 `five_minute_opening_range_breakout_v1`、`fifteen_minute_opening_range_retest_v1`、`vwap_opening_drive_v1`、`vwap_trend_pullback_v1` 和 `last_hour_intraday_momentum_v1`；十个模板均 seed 默认禁用配置，旧模板只退出 AI v2 推荐目录，不删除历史配置或 run。
 - 新增策略 API：模板、配置、启停、参数保存、历史 run 和 run 查询。
 - 新增策略测试 API：截至日期最近 30 天（自然日）本地归档窗口的 test batch、逐日结果、优化 run、候选参数和稳定性排序。
 - 新增策略配置历史合同：模板 registry 升级、手工参数保存、显式套用优化候选和历史回退时保存前后模板版本、前后参数 hash、参数 JSON 快照、候选来源、来源历史记录和变更原因。
 - 策略计算只读取 `market_minute_archives`，不自动归档分钟线，不修改 STP 成交事实。
-- 顶层 UI 拆为「交易复盘」「策略测试」和「实时交易」三个 tab；交易复盘保留成交证据与买卖点，策略测试集中展示配置、单日测试、30 天测试复盘和策略优化，实时交易只展示只读下单信号预览。
+- 顶层 UI 拆为「交易复盘」「策略测试」「AI策略」和「实时交易」四个 tab；交易复盘保留成交证据与买卖点，策略测试集中展示配置、单日测试、30 天测试复盘和策略优化，AI策略展示只读 Top 5 推荐，实时交易只展示只读下单信号预览。
 - 策略测试页允许手工输入研究标的，并显式拉取该标的最近 30 天（自然日）分钟线归档；该数据准备动作独立于策略 run。
 - 策略测试页允许用逗号或空格输入标的组；多标的扫描会逐标的运行数据准备和 30 天测试，每个 symbol 仍保存独立 test batch；策略优化按输入标的组保存一个全局 optimization run、组合 archive scope 和候选证据。
 - 测试复盘模块先展示策略整体指标总览，再提供按日期（默认）和按标的两个汇总维度；汇总行只下钻到对应 symbol/day 的单日复盘。
@@ -96,6 +96,27 @@
 - 策略配置页展示版本记录；点击回退只恢复历史参数快照并新增 `history_rollback` 记录，不覆盖历史 strategy run、test batch 或 optimization candidate artifact。
 - STP committed fills 的价格、数量、时间和证据字段不被策略 run 修改。
 
+## 当前 P2 切片：AI策略 Top 5 推荐
+
+目标：用版本化研究目录和本地策略测试 artifact，为五个新策略模板提供确定性、可解释、只读的 Top 5 推荐；盈利期望只表示每笔闭合信号的样本内历史回放期望 PnL。
+
+范围：
+
+- `ai_strategy_catalog_v2` 和 `GET /api/ai-strategy-recommendations` 统一返回五个新模板的研究顺序、策略逻辑、建议参数、品种画像、100,000 USD / 20% 资本模型、推荐理由和来源；v1 旧目录仅保留历史追溯。
+- 默认使用研究顺序；仅当五个策略在相同日期、最近 30 个自然日、相同标的集合、相同资本和建议参数 hash 下都满足至少 10 个完成归档交易日与 10 个闭合信号时，整体切换为本地回放排序。`non_available_archive` 日期保留逐日失败 artifact，在共享 scope 且其余门槛达标时作为明确排除日，不生成信号或收益。
+- 本地排序依次比较每笔闭合信号期望 PnL、profit factor、max drawdown、闭合信号数和研究排名，不使用优化候选 composite score。
+- 前端采用桌面端左侧榜单、右侧详情台，窄屏上下堆叠；所有指标、参数 label、证据状态和来源都读取后端 read model。
+- 「去策略测试」只把策略、截止日期和标的带入现有策略测试工作区，不发起 POST，不自动应用参数。
+
+验收：
+
+- 100,000 USD 本金和 20% 单次入场稳定换算为 20,000 USD 名义仓位，并提示多标的并发资金占用尚未建模。
+- 零归档、样本不足、参数 hash 过期、archive scope 不一致、null profit factor 或单策略引擎失败都保留研究排名，不显示伪造盈利期望；非可用日期数量和原因必须展示。
+- response 不包含逐日大对象；相同输入与证据生成稳定 recommendation key。
+- 本切片不新增推荐持久化表；GET 推荐接口不运行策略、不修改配置、不触发自动下单。
+- 显式 benchmark 脚本只读取本地归档并写入现有测试 artifact；当前 MU 30 自然日样本得到 18 个完成日和至少 10 个闭合信号/策略，五策略达到 `verified`。这些结果未计佣金、滑点与组合并发资本，不代表未来盈利。
+- benchmark 报告保存 `job_id`、`source_job_id`、`artifact_id`、策略数、结果数、稳定 `hash`、批次 id、archive scope hash 和 recommendation key，UI/API/DB 口径可追溯且不把首屏预览当成全量结果。
+
 ## 当前 P1 切片：Trade Replay Groups
 
 目标：成交记录从单笔 fill 改为“每一次开仓至清仓”的交易组，并在 replay 弹层中展示该次交易的分钟蜡烛图、成交量、关键指标和可审计智能评价。
@@ -105,8 +126,8 @@
 - 新增 `GET /api/trade-groups?date=YYYY-MM-DD&account=&symbol=`，从 committed `fills` read model 构建交易组，不新增持久化表。
 - 交易组按 `account_canonical + symbol`、成交时间和 fill id 顺序配对，支持多头、空头、加仓、部分平仓和未清仓状态。
 - Daily summary 的 `trade_group_count`、PnL、胜率、盈亏比、单笔期望值、每股净收益和持仓最大回撤复用 closed trade groups，避免 UI 分组和 KPI 口径漂移。
-- Replay 弹层只读取本地已归档 `market_minute_archives`，按开仓到清仓窗口自动缩放并保留前后缓冲，叠加组内所有成交点，并展示按组内成交路径和窗口分钟 high/low 追溯的持仓最大回撤；打开弹层不会自动触发行情 provider 拉取。
-- 智能评价采用 `trade_eval_intraday_v1` 规则模型，只读计算 VWAP 执行质量、趋势配合、成交量确认、MFE/MAE、清仓效率和 PnL 结果；持仓最大回撤是交易组 read model 字段，不由前端自行重算。
+- Replay 弹层只读取本地已归档 `market_minute_archives`，默认按开仓到清仓窗口自动缩放并保留首尾各 10 分钟；勾选「查看半小时」时只把可见蜡烛图窗口扩大到开平仓前后各 30 分钟，叠加组内所有成交点，并展示按组内成交路径和窗口分钟 high/low 追溯的持仓最大回撤；打开弹层不会自动触发行情 provider 拉取。
+- 智能评价采用 `trade_eval_intraday_v1` 规则模型，只读计算 VWAP 执行质量、趋势配合、成交量确认、MFE/MAE、清仓效率和 PnL 结果；评分 payload 以结构化 `recommendations` 返回后续开仓和平仓建议；持仓最大回撤是交易组 read model 字段，不由前端自行重算。
 - 交易复盘 tab 头部展示有记录以来汇总；随后按交易日和按标的两个下钻 tab 展示次级汇总，选择具体日期+标的后进入分钟蜡烛和交易组复盘模块。
 
 验收：
@@ -115,6 +136,7 @@
 - `trade_group_id` 只暴露 hash 后 ID，不暴露原始 fill idempotency key。
 - 缺分钟线、provider failure、时区冲突或无 bars 时，持仓最大回撤和评价必须返回 `insufficient_market_data`，不能生成正常评分。
 - Replay 弹层不能用行情数据改写成交价格、数量或时间。
+- 「查看半小时」只改变 Trade Replay 可见分钟线范围；缺归档、provider failure 或无 bars 时仍显示不可用状态，不渲染成功图。
 - 无 committed fills 时，全局汇总为 0、日期/标的下钻为空，UI 不展示假日期、假标的或成功复盘。
 - 文档和 changelog 必须同步 P1 事实源、read model、artifact source 和负向路径。
 
@@ -266,6 +288,7 @@ PUT  /api/watchlist/{date}
 ### Strategy Replay
 
 ```text
+GET   /api/ai-strategy-recommendations?end_date=YYYY-MM-DD&symbols=MU,NVDA&initial_capital=100000&window_calendar_days=30
 GET   /api/strategy-templates
 GET   /api/strategies
 POST  /api/strategies
@@ -464,7 +487,7 @@ npm.cmd --prefix web run typecheck
 npm.cmd --prefix web run build
 ```
 
-当前 Python 集成测试覆盖 P0、P1 和 P2，包含 parser、storage contract、import API、market context、watchlist、strategy replay 和 DB/API/UI read-model 一致性。
+当前 Python 集成测试覆盖 P0、P1 和 P2，包含 parser、storage contract、import API、market context、watchlist、strategy replay、AI策略推荐和 DB/API/UI read-model 一致性。
 
 ## 本地登录入口
 
@@ -474,7 +497,7 @@ npm.cmd --prefix web run build
 - 前端默认端口：`5173`。
 - 后端备用端口从 `8011` 起选择，前端备用端口从 `5183` 起选择。
 - 前端 API 代理默认指向当前选中的后端端口；只有用户显式设置 `VITE_API_PROXY` 时才保留外部指定值。
-- 启动前会验证后端 `healthz`、复盘汇总 API、P2 必需 API 路由、`GET /api/strategy-runs/{run_id}` 详情路由、亏损复盘保存路由和策略模板；前端 ready 还必须通过 Vite 代理读取 `/openapi.json` 并命中同一合同，同时在短暂可用后复查一次。如果默认端口上是旧后端，正常启动会自动切到备用后端和前端端口，避免前端连到会返回旧版大 payload、404 或短命 fallback 页面。
+- 启动前会验证后端 `healthz`、`trade_eval_recommendation_v1` 评分建议合同、`ai_strategy_catalog_v2` 目录 sentinel、复盘汇总 API、AI策略推荐 API、P2 必需 API 路由、`GET /api/strategy-runs/{run_id}` 详情路由、亏损复盘保存路由和新策略模板；前端 ready 还必须通过 Vite 代理读取 `/openapi.json` 并命中同一合同，同时在短暂可用后用不依赖 stdin 的等待路径复查一次。如果默认端口上是旧后端，正常启动会自动切到备用后端和前端端口，避免前端连到旧目录或失效 fallback 页面。
 - 如果备用后端可以监听但复盘 API 不可用，启动器必须将其归类为后端运行态失败并打印端口 owner PID，避免误报为前端未启动。
 - `--check` 检查 Python、npm 和端口配置；如果后端正在运行，也会验证 P2 必需 API 路由，但不启动服务、不自动切换备用端口。
 - `GRIT_NO_BROWSER=1` 可跳过自动打开浏览器，便于脚本验证。
@@ -522,6 +545,7 @@ npm.cmd --prefix web run build
 
 ### P2 Tests
 
+- AI Strategy Recommendation：v2 新五模板固定目录顺序、建议参数、100k/20% 仓位、稳定 recommendation key、全榜单证据门槛、本地排序 tie-break、参数过期、明确排除非可用日期、null profit factor、响应不含逐日大对象和只读 CTA。
 - Strategy storage v4 表、索引、状态枚举和 run 幂等。
 - BB Squeeze long/short entry、ATR stop、ATR target exit、warmup 无信号和无未来函数。
 - Institutional Liquidity Sweep long/short sweep entry、OCO 止盈、止损、影线不足拒绝和 run artifact 保存。

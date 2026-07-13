@@ -28,7 +28,10 @@ def test_trade_marker_glyph_tip_uses_execution_price_anchor():
 
 def test_trade_markers_still_use_bar_time_and_execution_price_coordinates():
     assert "const index = nearestBarIndex(fill.filled_at, bars);" in APP_SOURCE
-    assert "x: xForIndex(index), y: yForPrice(fill.price)" in APP_SOURCE
+    assert "const fillMarkerAnchors = showTradeMarkers" in APP_SOURCE
+    assert "const markers = fillMarkerAnchors.map(({ fill, index }) => ({" in APP_SOURCE
+    assert "x: xForIndex(index)," in APP_SOURCE
+    assert "y: yForPrice(fill.price)" in APP_SOURCE
     assert '<circle cx={x} cy={y} r="2.4" />' in APP_SOURCE
 
 
@@ -38,13 +41,31 @@ def test_candle_chart_y_axis_uses_execution_prices_not_risk_targets():
     domain_end = source.index("const priceDomain = chartPriceDomain", domain_start)
     domain_source = source[domain_start:domain_end]
 
-    assert "const strategySignalExecutionPrices = visibleStrategySignals.map((signal) => signal.price);" in source
-    assert "const primaryPriceValues = stableChartPrimaryPrices(bars, [...fillPrices, ...strategySignalExecutionPrices]);" in source
+    assert "const visibleFillPrices = fillMarkerAnchors.map(({ fill }) => fill.price);" in source
+    assert "const visibleStrategySignalPrices = strategyMarkerAnchors.map(({ signal }) => signal.price);" in source
+    assert "const primaryPriceValues = stableChartPrimaryPrices(bars, [...visibleFillPrices, ...visibleStrategySignalPrices]);" in source
     assert "nearbyChartOverlayPrices(primaryPriceValues, auxiliaryPriceValues)" in domain_source
     assert "signal.stop_loss_price" not in domain_source
     assert "signal.take_profit_price" not in domain_source
     assert "isPriceVisible(props.archive.vwap)" in source
     assert 'indicatorLinePath(strategyLinePoints, "bb_lower", xForIndex, yForPrice, isPriceVisible)' in source
+
+
+def test_candle_chart_does_not_snap_out_of_window_markers_to_edge_bars():
+    source = _minute_candle_chart_source()
+    nearest_source = APP_SOURCE[
+        APP_SOURCE.index("function nearestBarIndex"):
+        APP_SOURCE.index("\n\nfunction isFiniteNumber", APP_SOURCE.index("function nearestBarIndex"))
+    ]
+
+    assert "const maxMarkerBarDistanceMinutes = 1;" in nearest_source
+    assert "return bestDistance <= maxMarkerBarDistanceMinutes ? bestIndex : -1;" in nearest_source
+    assert "const fillMarkerAnchors = showTradeMarkers" in source
+    assert "return index < 0 ? null : { fill, index };" in source
+    assert "const strategyMarkerAnchors = visibleStrategySignals" in source
+    assert "return index < 0 ? null : { signal, index };" in source
+    assert "0 / ${formatInteger(props.fills.length)} 个可见成交标记" not in source
+    assert "${formatInteger(markers.length)} / ${formatInteger(props.fills.length)} 个可见成交标记" in source
 
 
 def test_candle_chart_y_axis_filters_isolated_wick_outliers_and_clips_price_plot():
@@ -65,11 +86,18 @@ def test_candle_chart_default_scope_uses_same_ten_bar_buffer_as_trade_replay():
     source = _minute_candle_chart_source()
 
     assert "const minuteCandleEdgeBufferBars = 10;" in APP_SOURCE
+    assert "const tradeReplayHalfHourWindowMinutes = 30;" in APP_SOURCE
     assert "chartMinuteScope(props.fills, visibleStrategySignals, minuteCandleEdgeBufferBars)" in source
-    assert "tradeGroupScope(props.group, minuteCandleEdgeBufferBars)" in APP_SOURCE
+    assert "const visibleScope = scopedBars.length > 0 ? fillScope : null;" in source
+    assert "const scopeStartLabel = visibleScope ? formatMinuteOfDay(visibleScope.startMinute)" in source
+    assert "const scopeEndLabel = visibleScope" in source
+    assert "showHalfHourReplayWindow ? tradeReplayHalfHourWindowMinutes : minuteCandleEdgeBufferBars" in APP_SOURCE
+    assert "scope={replayScope}" in APP_SOURCE
     assert "function chartMinuteScope(fills: ChartFill[], signals: StrategySignal[], bufferMinutes = 0)" in APP_SOURCE
     assert "startMinute: Math.max(0, Math.min(...minutes) - bufferMinutes)" in APP_SOURCE
     assert "endMinute: Math.min(24 * 60 - 1, Math.max(...minutes) + bufferMinutes)" in APP_SOURCE
+    assert "<span>查看半小时</span>" in APP_SOURCE
+    assert 'title="开平仓前后各半小时"' in APP_SOURCE
     assert "edgePaddingBars" not in source
 
 

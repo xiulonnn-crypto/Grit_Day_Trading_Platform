@@ -38,6 +38,7 @@ button {
 .reviewWorkspace,
 .liveTradingWorkspace,
 .strategyTestingWorkspace,
+.aiStrategyWorkspace,
 .tradeLedgerPanel,
 .evidenceGrid {
   margin-left: auto;
@@ -4165,6 +4166,27 @@ th:nth-child(8) {
   grid-template-columns: minmax(0, 1fr) minmax(300px, 360px);
 }
 
+.replayChartToolbar {
+  align-items: flex-start;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.replayChartToolbar .chartMeta {
+  flex: 1 1 360px;
+  margin-bottom: 0;
+}
+
+.replayWindowToggle {
+  background: #f7faf9;
+  border: 1px solid #dce3e8;
+  border-radius: 999px;
+  padding: 4px 8px;
+}
+
 .replayChartPane,
 .replaySidePane {
   min-width: 0;
@@ -4202,6 +4224,32 @@ th:nth-child(8) {
 
 .evaluationBox small {
   color: #607080;
+}
+
+.tradeEvaluationRecommendations {
+  display: grid;
+  gap: 8px;
+}
+
+.tradeEvaluationRecommendations div {
+  background: #ffffff;
+  border: 1px solid #dce3e8;
+  border-radius: 8px;
+  display: grid;
+  gap: 4px;
+  padding: 9px 10px;
+}
+
+.tradeEvaluationRecommendations strong {
+  color: #1f2933;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.tradeEvaluationRecommendations span {
+  color: #405160;
+  font-size: 12px;
+  line-height: 1.45;
 }
 
 .tagList {
@@ -4799,6 +4847,497 @@ th:nth-child(8) {
   }
 }
 
+.aiStrategyWorkspace {
+  display: grid;
+  gap: 14px;
+}
+
+.aiStrategyHero {
+  align-items: end;
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(260px, 0.72fr) minmax(0, 1.28fr);
+}
+
+.aiStrategyHeroIntro {
+  align-items: flex-start;
+  display: flex;
+  gap: 10px;
+}
+
+.aiStrategyIcon {
+  align-items: center;
+  background: #edf7f5;
+  border: 1px solid #cce8e2;
+  border-radius: 8px;
+  color: #1f6f67;
+  display: inline-flex;
+  flex: 0 0 auto;
+  justify-content: center;
+  min-height: 38px;
+  min-width: 38px;
+}
+
+.aiStrategyHeroControls {
+  align-items: end;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(150px, 0.9fr) minmax(142px, 0.75fr) minmax(180px, 1fr) minmax(160px, 0.9fr);
+}
+
+.aiStrategyHeroControls label,
+.aiStrategyCapital,
+.aiStrategyRankingBasis {
+  color: #607080;
+  display: grid;
+  font-size: 12px;
+  gap: 5px;
+  min-width: 0;
+}
+
+.aiStrategyHeroControls input {
+  background: #ffffff;
+  border: 1px solid #c8d1d9;
+  border-radius: 8px;
+  color: #1f2933;
+  min-height: 38px;
+  min-width: 0;
+  padding: 7px 9px;
+  width: 100%;
+}
+
+.aiStrategyCapital strong,
+.aiStrategyRankingBasis strong {
+  color: #1f2933;
+  font-size: 16px;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.aiStrategyCapital strong {
+  color: #1f6f67;
+  font-size: 20px;
+}
+
+.aiStrategyCapital small,
+.aiStrategyRankingBasis small {
+  color: #607080;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.aiStrategyCatalogNotice,
+.aiStrategyRiskNotice,
+.aiStrategyError,
+.aiStrategyEvidenceWarning,
+.aiStrategyVerifiedLine {
+  align-items: center;
+  border-radius: 8px;
+  display: flex;
+  gap: 9px;
+  line-height: 1.45;
+  padding: 10px 12px;
+}
+
+.aiStrategyCatalogNotice {
+  background: #edf7f5;
+  border: 1px solid #b9ddd7;
+  color: #175b54;
+  font-size: 12px;
+}
+
+.aiStrategyRiskNotice {
+  background: #fff8eb;
+  border: 1px solid #ffe0a6;
+  color: #7a4b00;
+  font-size: 12px;
+}
+
+.aiStrategyCatalogNotice svg,
+.aiStrategyRiskNotice svg,
+.aiStrategyEvidenceWarning svg,
+.aiStrategyVerifiedLine svg {
+  flex: 0 0 auto;
+}
+
+.aiStrategyError {
+  background: #fff1f0;
+  border: 1px solid #ffccc7;
+  color: #a8071a;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+}
+
+.aiStrategyError > div {
+  display: grid;
+  gap: 3px;
+}
+
+.aiStrategyError span {
+  font-size: 12px;
+}
+
+.aiStrategyError button {
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid #d99a9a;
+  border-radius: 8px;
+  cursor: pointer;
+  display: inline-flex;
+  gap: 6px;
+  padding: 7px 10px;
+}
+
+.aiStrategyLayout {
+  align-items: start;
+  display: grid;
+  gap: 14px;
+  grid-template-columns: minmax(330px, 0.36fr) minmax(0, 0.64fr);
+}
+
+.aiStrategyRanking,
+.aiStrategyDetail {
+  min-width: 0;
+}
+
+.aiStrategyRanking > header,
+.aiStrategyDetailHeader {
+  align-items: flex-start;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.aiStrategyRankList {
+  display: grid;
+  gap: 9px;
+  margin-top: 14px;
+}
+
+.panel .aiStrategyRankItem {
+  align-items: start;
+  background: #ffffff;
+  border: 1px solid #e1e7eb;
+  border-radius: 8px;
+  cursor: pointer;
+  display: grid;
+  gap: 9px 10px;
+  grid-template-columns: 38px minmax(0, 1fr);
+  padding: 11px;
+  text-align: left;
+  transition: background 140ms ease, border-color 140ms ease, box-shadow 140ms ease;
+  width: 100%;
+}
+
+.panel .aiStrategyRankItem:hover {
+  border-color: #79aaa5;
+}
+
+.panel .aiStrategyRankItem.active {
+  background: #f2faf8;
+  border-color: #1f6f67;
+  box-shadow: 0 0 0 3px rgba(31, 111, 103, 0.08);
+}
+
+.aiStrategyRankNumber {
+  align-items: center;
+  background: #e9eff1;
+  border-radius: 8px;
+  display: inline-flex;
+  font-size: 15px;
+  font-weight: 900;
+  height: 34px;
+  justify-content: center;
+  width: 34px;
+}
+
+.aiStrategyRankItem.active .aiStrategyRankNumber {
+  background: #1f6f67;
+  color: #ffffff;
+}
+
+.aiStrategyRankMain,
+.aiStrategyRankExpectation {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.aiStrategyRankMain strong,
+.aiStrategyRankExpectation strong {
+  font-size: 13px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.aiStrategyRankMain small,
+.aiStrategyRankExpectation small {
+  color: #607080;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.aiStrategyRankMain .statusPill {
+  margin-top: 2px;
+  width: fit-content;
+}
+
+.aiStrategyRankExpectation {
+  border-top: 1px solid #eef2f4;
+  grid-column: 2;
+  padding-top: 8px;
+}
+
+.aiStrategyDetail {
+  display: grid;
+  gap: 14px;
+}
+
+.aiStrategyDetailHeader h2 {
+  font-size: 20px;
+}
+
+.aiStrategyDetailBadges,
+.aiStrategyHighlights,
+.aiStrategyTickerList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.aiStrategyDetailBadges {
+  margin-top: 9px;
+}
+
+.panel .aiStrategyCta {
+  align-items: center;
+  background: #1f6f67;
+  border: 1px solid #1f6f67;
+  border-radius: 8px;
+  color: #ffffff;
+  cursor: pointer;
+  display: inline-flex;
+  flex: 0 0 auto;
+  font-weight: 800;
+  gap: 7px;
+  justify-content: center;
+  min-height: 38px;
+  padding: 8px 12px;
+}
+
+.panel .aiStrategyCta:hover {
+  border-color: #174f49;
+  box-shadow: 0 0 0 3px rgba(31, 111, 103, 0.16);
+}
+
+.aiStrategyEvidenceWarning {
+  background: #fff8eb;
+  border: 1px solid #ffe0a6;
+  color: #7a4b00;
+  font-size: 12px;
+}
+
+.aiStrategyVerifiedLine {
+  background: #f3fbf6;
+  border: 1px solid #cfead7;
+  color: #237804;
+  font-size: 12px;
+}
+
+.aiStrategyEvidenceSummary,
+.aiStrategyCapitalGrid {
+  display: grid;
+  gap: 9px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.aiStrategyMetric {
+  background: #fbfcfd;
+  border: 1px solid #e6ecf1;
+  border-radius: 8px;
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  padding: 10px;
+}
+
+.aiStrategyMetric span,
+.aiStrategyMetric small {
+  color: #607080;
+  font-size: 11px;
+}
+
+.aiStrategyMetric strong {
+  font-size: 14px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.aiStrategyEvidenceReasons {
+  background: #f7f9fa;
+  border: 1px solid #e1e7eb;
+  border-radius: 8px;
+  padding: 11px 12px;
+}
+
+.aiStrategyEvidenceReasons > div {
+  align-items: center;
+  display: flex;
+  gap: 7px;
+}
+
+.aiStrategyEvidenceReasons ul,
+.aiStrategyReasonList,
+.aiStrategyLogicGrid ul {
+  color: #405060;
+  font-size: 12px;
+  line-height: 1.55;
+  margin: 8px 0 0;
+  padding-left: 18px;
+}
+
+.aiStrategyDetailSection {
+  border-top: 1px solid #eef2f4;
+  display: grid;
+  gap: 10px;
+  padding-top: 14px;
+}
+
+.aiStrategyDetailSection h3 {
+  align-items: center;
+  display: flex;
+  font-size: 14px;
+  gap: 7px;
+  margin: 0;
+}
+
+.aiStrategyLogicGrid,
+.aiStrategyInstrumentGrid {
+  display: grid;
+  gap: 9px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.aiStrategyLogicGrid article,
+.aiStrategyInstrumentGrid article {
+  background: #fbfcfd;
+  border: 1px solid #e6ecf1;
+  border-radius: 8px;
+  min-width: 0;
+  padding: 11px;
+}
+
+.aiStrategyLogicGrid article > strong,
+.aiStrategyInstrumentGrid article > strong {
+  font-size: 13px;
+}
+
+.aiStrategyLogicGrid ul {
+  margin-top: 6px;
+}
+
+.aiStrategyCapitalNote,
+.aiStrategyInstrumentGrid p,
+.aiStrategySourceNote {
+  color: #607080;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.aiStrategyTickerList {
+  margin: 8px 0;
+}
+
+.aiStrategyTickerList span,
+.aiStrategyHighlights span {
+  background: #edf7f5;
+  border: 1px solid #cce8e2;
+  border-radius: 999px;
+  color: #1f6f67;
+  font-size: 11px;
+  font-weight: 800;
+  padding: 4px 7px;
+}
+
+.aiStrategyParamGrid {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 0;
+}
+
+.aiStrategyParamGrid div {
+  border: 1px solid #eef2f4;
+  border-radius: 8px;
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 9px;
+}
+
+.aiStrategyParamGrid dt {
+  color: #607080;
+  font-size: 11px;
+}
+
+.aiStrategyParamGrid dd {
+  font-size: 13px;
+  font-weight: 800;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.aiStrategySourceList {
+  display: grid;
+  gap: 7px;
+}
+
+.aiStrategySourceList a {
+  align-items: center;
+  border: 1px solid #e1e7eb;
+  border-radius: 8px;
+  color: #1f6f67;
+  display: flex;
+  font-size: 12px;
+  font-weight: 800;
+  gap: 8px;
+  justify-content: space-between;
+  padding: 9px 10px;
+  text-decoration: none;
+}
+
+.aiStrategySourceList a:hover {
+  background: #f2faf8;
+  border-color: #79aaa5;
+}
+
+.aiStrategyLoadingPanel,
+.aiStrategyEmpty {
+  align-content: center;
+  color: #607080;
+  display: grid;
+  gap: 7px;
+  justify-items: start;
+  min-height: 180px;
+}
+
+.aiStrategyLoadingPanel strong,
+.aiStrategyEmpty strong {
+  color: #1f2933;
+}
+
+.aiStrategyLoadingPanel span,
+.aiStrategyEmpty span {
+  font-size: 12px;
+}
+
+.aiStrategyWorkspace button:focus-visible,
+.aiStrategyWorkspace input:focus-visible,
+.aiStrategySourceList a:focus-visible {
+  outline: 3px solid rgba(31, 111, 103, 0.22);
+  outline-offset: 2px;
+}
+
 @media (max-width: 1080px) {
   .kpis {
     grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -4817,6 +5356,11 @@ th:nth-child(8) {
   }
 
   .strategyTestingGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .aiStrategyHero,
+  .aiStrategyLayout {
     grid-template-columns: 1fr;
   }
 
@@ -4887,6 +5431,7 @@ th:nth-child(8) {
   }
 
   .strategyGrid,
+  .aiStrategyHeroControls,
   .strategyResearchMetrics,
   .candidateMetricGrid,
   .paramGrid,
@@ -4899,6 +5444,12 @@ th:nth-child(8) {
   .strategyDescriptionFacts,
   .strategyOrderMain {
     grid-template-columns: 1fr;
+  }
+
+  .aiStrategyEvidenceSummary,
+  .aiStrategyCapitalGrid,
+  .aiStrategyParamGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .strategyOrderFacts {
@@ -4991,6 +5542,25 @@ th:nth-child(8) {
   .strategyCreate,
   .strategyListActions {
     grid-template-columns: 1fr;
+  }
+
+  .aiStrategyEvidenceSummary,
+  .aiStrategyCapitalGrid,
+  .aiStrategyLogicGrid,
+  .aiStrategyInstrumentGrid,
+  .aiStrategyParamGrid,
+  .aiStrategyError {
+    grid-template-columns: 1fr;
+  }
+
+  .aiStrategyDetailHeader {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .panel .aiStrategyCta,
+  .aiStrategyError button {
+    width: 100%;
   }
 
   .workspaceTabs {
