@@ -17,8 +17,8 @@ def load_snapshot() -> dict:
 def test_root_index_exposes_three_review_tabs_and_static_assets() -> None:
     html = ROOT_INDEX.read_text(encoding="utf-8")
 
-    assert '<link rel="stylesheet" href="./static-review.css"' in html
-    assert '<script defer src="./static-review.js"' in html
+    assert '<link rel="stylesheet" href="./static-review.css?v=20260728-style-parity"' in html
+    assert '<script defer src="./static-review.js?v=20260728-style-parity"' in html
     assert 'id="snapshot-loading"' in html
     assert 'id="review-content" hidden' in html
     assert 'data-review-tab="data"' in html
