@@ -30,7 +30,25 @@ def test_root_index_exposes_three_review_tabs_and_static_assets() -> None:
     assert "数据下钻" in html
     assert "盈亏复盘" in html
     assert "交易总结" in html
-    assert "只读云端快照" in html
+    assert "P2 Review Desk" in html
+    assert "日内复盘台" in html
+    assert "STP 成交证据、行情上下文、盘前 watchlist 与策略复盘信号" in html
+    assert "上传 STP TXT" in html
+    assert ">只读云端快照<" not in html
+    assert "P3 REVIEW DESK" not in html
+    assert 'aria-label="工作区切换"' in html
+    assert 'aria-label="交易复盘下钻"' in html
+    assert 'aria-label="下钻复盘模块"' in html
+    assert 'class="cloudSnapshotMeta visuallyHidden"' in html
+    assert 'class="lucide lucide-file-up"' in html
+    assert 'class="lucide lucide-table-properties"' in html
+    assert 'class="lucide lucide-sliders-horizontal"' in html
+    assert 'class="lucide lucide-brain-circuit"' in html
+    assert 'class="lucide lucide-power"' in html
+    assert 'class="lucide lucide-triangle-alert"' in html
+    assert 'class="lucide lucide-list-checks"' in html
+    assert "buttonIcon" not in html
+    assert "uploadIcon" not in html
     assert "原始 STP 行" in html
 
 
@@ -51,7 +69,13 @@ def test_static_review_supports_tabs_calendar_filters_and_failure_blocking() -> 
     assert '"#trade-summary"' in script
     assert "云端复盘快照不可用" in script
     assert "页面不会用旧数字或空图伪装成功" in script
+    assert 'class="compactFacts summaryMiniFacts"' in script
+    assert 'svgIcon("calendar-days", 17)' in script
+    assert 'svgIcon("chevron-left", 15)' in script
+    assert 'svgIcon("chevron-right", 15)' in script
+    assert 'svgIcon("play", 14)' in script
     assert "@import url(\"./web/src/styles.css\")" in stylesheet
+    assert ".cloudSnapshotMeta.visuallyHidden" in stylesheet
     assert "@media (max-width: 720px)" in stylesheet
 
 

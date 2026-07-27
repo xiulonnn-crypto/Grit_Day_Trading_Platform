@@ -10,6 +10,22 @@
     minimumFractionDigits: 2,
     maximumFractionDigits: 2
   });
+  const svgIconBodies = {
+    "calendar-days":
+      '<path d="M8 2v4"></path><path d="M16 2v4"></path><rect width="18" height="18" x="3" y="4" rx="2"></rect><path d="M3 10h18"></path><path d="M8 14h.01"></path><path d="M12 14h.01"></path><path d="M16 14h.01"></path><path d="M8 18h.01"></path><path d="M12 18h.01"></path><path d="M16 18h.01"></path>',
+    "chevron-left": '<path d="m15 18-6-6 6-6"></path>',
+    "chevron-right": '<path d="m9 18 6-6-6-6"></path>',
+    "list-checks":
+      '<path d="M13 5h8"></path><path d="M13 12h8"></path><path d="M13 19h8"></path><path d="m3 17 2 2 4-4"></path><path d="m3 7 2 2 4-4"></path>',
+    play: '<path d="M5 5a2 2 0 0 1 3.008-1.728l11.997 6.998a2 2 0 0 1 .003 3.458l-12 7A2 2 0 0 1 5 19z"></path>',
+    "triangle-alert":
+      '<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"></path><path d="M12 9v4"></path><path d="M12 17h.01"></path>'
+  };
+
+  function svgIcon(name, size) {
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-${name}" aria-hidden="true">${svgIconBodies[name]}</svg>`;
+  }
+
   const pageSize = 20;
   const weekdays = ["一", "二", "三", "四", "五", "六", "日"];
   const timeFilterLabels = {
@@ -384,7 +400,7 @@
               const summary = summaryFromGroups(symbolMap.get(symbol) || []);
               return `<article class="drillSecondaryItem ${symbol === state.selectedSymbol ? "active" : ""}">
                 <div><strong>${escapeHtml(symbol)}</strong><small>订单数 ${formatInteger(summary.fill_count)} · 股数 ${formatInteger(summary.traded_quantity)} · PnL ${formatPnl(summary.pnl)}</small></div>
-                <button class="linkButton" data-select-symbol="${escapeHtml(symbol)}" type="button">进入复盘</button>
+                <button class="linkButton" data-select-symbol="${escapeHtml(symbol)}" type="button">${svgIcon("play", 14)}进入复盘</button>
               </article>`;
             })
             .join("")
@@ -400,11 +416,11 @@
       ${summaryStripHtml(summaryFromGroups(groups), rangeLabel(range, "全部订单"))}
       <section class="dataReviewCalendarPanel" aria-label="数据下钻月日历">
         <header class="dataReviewCalendarHeader">
-          <div><h3>▣ 月日历下钻</h3><p class="panelNote">点击有订单的日期方块，右侧立即切到该日标的下钻</p></div>
+          <div><h3>${svgIcon("calendar-days", 17)}月日历下钻</h3><p class="panelNote">点击有订单的日期方块，右侧立即切到该日标的下钻</p></div>
           <div class="dataReviewCalendarNav" aria-label="月份切换">
-            <button aria-label="上个月" class="smallButton iconOnly" data-calendar-shift="-1" type="button">‹</button>
+            <button aria-label="上个月" class="smallButton iconOnly" data-calendar-shift="-1" type="button">${svgIcon("chevron-left", 15)}</button>
             <strong>${monthLabel}</strong>
-            <button aria-label="下个月" class="smallButton iconOnly" data-calendar-shift="1" type="button">›</button>
+            <button aria-label="下个月" class="smallButton iconOnly" data-calendar-shift="1" type="button">${svgIcon("chevron-right", 15)}</button>
           </div>
         </header>
         <div class="dataReviewCalendarLayout">
@@ -417,7 +433,7 @@
               <div><strong>${escapeHtml(state.selectedDate)} 日统计</strong><small>选择标的进入当前复盘模块</small></div>
               <span class="sourcePill">${formatInteger(symbols.length)} 个标的</span>
             </div>
-            <dl class="summaryMiniFacts">
+            <dl class="compactFacts summaryMiniFacts">
               <div><dt>订单数</dt><dd>${formatInteger(summaryFromGroups(dayGroups).fill_count)}</dd></div>
               <div><dt>股数</dt><dd>${formatInteger(summaryFromGroups(dayGroups).traded_quantity)}</dd></div>
               <div><dt>PnL</dt><dd class="${tone(summaryFromGroups(dayGroups).pnl)}">${formatPnl(summaryFromGroups(dayGroups).pnl)}</dd></div>
@@ -689,7 +705,7 @@
       )
       .join("")}</div>`;
     container.innerHTML = `<div class="lossReviewDrilldown cloudLossReview">
-      <header class="lossReviewDrillHeader cloudLossHeader"><div><h2>⚠ 盈亏复盘</h2><p class="panelNote">默认查看全部订单；也可只看盈利单或亏损单</p></div><span class="sourcePill">Review Journal</span></header>
+      <header class="lossReviewDrillHeader cloudLossHeader"><div><h2>${svgIcon("triangle-alert", 18)}盈亏复盘</h2><p class="panelNote">默认查看全部订单；也可只看盈利单或亏损单</p></div><span class="sourcePill">Review Journal</span></header>
       ${timeFilterHtml("shared", state.sharedTimeMode, state.customSharedStart, state.customSharedEnd, rangeLabel(range, "全部闭合交易"), modeSwitch)}
       <dl class="compactFacts lossReviewSummaryGrid lossReviewSummaryRow">
         <div><dt>${escapeHtml(modeLabels[state.profitLossMode])}</dt><dd>${formatInteger(modeGroups.length)}</dd></div>
@@ -753,7 +769,7 @@
             )
             .join("")}</div></section>`;
     container.innerHTML = `<div class="tradeSummaryPanel cloudTradeSummary">
-      <header class="tradeSummaryHeader cloudTradeSummaryHeader"><div><h2>☑ 交易总结</h2><p class="panelNote">本会话生成摘要表达；后端确定规则、排序与量化执行动作</p></div><span class="sourcePill">${escapeHtml(summary.rule_catalog_version)}</span></header>
+      <header class="tradeSummaryHeader cloudTradeSummaryHeader"><div><h2>${svgIcon("list-checks", 18)}交易总结</h2><p class="panelNote">本会话生成摘要表达；后端确定规则、排序与量化执行动作</p></div><span class="sourcePill">${escapeHtml(summary.rule_catalog_version)}</span></header>
       ${timeFilterHtml("shared", state.sharedTimeMode, state.customSharedStart, state.customSharedEnd, rangeLabel(range, "全部闭合交易"))}
       <section aria-label="交易总结样本概览">
         <div class="tradeSummarySectionHeading"><div><p class="eyebrow">样本概览</p><h3>闭合交易证据</h3></div><span class="statusPill ${summary.evidence_status === "eligible" ? "ok" : "warn"}">${summary.evidence_status === "eligible" ? "达到个性化门槛" : "样本准备中"}</span></div>

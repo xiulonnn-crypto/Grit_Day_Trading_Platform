@@ -8,6 +8,7 @@
 
 - 通过 repo-owned 导出脚本读取本地 trade group、review summary、日期/标的聚合与 trade summary API，生成 `review-snapshot.json`。
 - 根入口只加载脱敏快照并复用本地复盘样式；数据下钻支持全部/本月/本周/特定时间段与日历，盈亏复盘支持全部/盈利/亏损、矩阵、排序和分页，交易总结展示当前快照的规则和生成状态。
+- 云端根入口的共享壳层必须与本地 `App.tsx` DOM 合同一致：标题文案、工作区与复盘 tab 使用同一组 Lucide SVG，导航和复盘面板之间不得插入可见的云端专属元信息，日历详情沿用 `compactFacts summaryMiniFacts` 布局；合同测试和同视口截图负责防回归。
 - Canonical source 仍为 committed fills、Review Journal、分钟归档证据和规则目录；静态 JSON 只是部署 read model，artifact source 为 GitHub Pages 根入口资产。
 - 幂等口径为去除导出时间后的排序 JSON SHA-256；parser version 和 field mapper version 不变。
 
