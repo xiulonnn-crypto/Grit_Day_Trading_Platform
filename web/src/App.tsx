@@ -24,7 +24,16 @@ import {
   TableProperties,
   X
 } from "lucide-react";
-import { Fragment, useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  Fragment,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type PointerEvent as ReactPointerEvent,
+  type ReactNode
+} from "react";
 
 import {
   applyStrategyOptimizationCandidate,
@@ -36,6 +45,7 @@ import {
   fetchQuarantine,
   fetchReviewSummary,
   fetchReviewSummaryGroups,
+  fetchTradeSummary,
   fetchStrategies,
   fetchStrategyHistory,
   fetchStrategyOptimizationDetail,
@@ -85,6 +95,7 @@ import type {
   TradeGroupFill,
   TradeEvaluationRecommendation,
   TradeReviewReasonCategory,
+  TradeSummary,
   WatchlistRun,
   WatchlistRunStatus,
   YahooMinuteArchiveResult
@@ -402,7 +413,7 @@ function initialWorkspaceTab(): WorkspaceTab {
   return marker.startsWith("ai-strategy-recommendation-") ? "ai_strategy" : "review";
 }
 type LiveProvider = "futu" | "yahoo" | "fake";
-type ReviewDrillSurfaceTab = "data" | "loss";
+type ReviewDrillSurfaceTab = "data" | "loss" | "summary";
 type StrategyFeedbackTone = "info" | "ok" | "warn" | "danger";
 type StrategyRunFeedback = {
   tone: StrategyFeedbackTone;
@@ -468,6 +479,7 @@ type LossReviewCategorySummary = {
 type LossReviewSortMode = "time_desc" | "loss_desc";
 type LossReviewTimeFilterMode = "all" | "month" | "week" | "custom";
 type ProfitLossReviewMode = "all" | "profit" | "loss";
+type LossReviewMatrixDimension = "atr" | "shares";
 type LossReviewTimeWindowKey =
   | "early_session"
   | "late_morning_transition"
@@ -476,12 +488,19 @@ type LossReviewTimeWindowKey =
   | "power_hour"
   | "outside_regular";
 type LossReviewVolatilityRegimeKey = "extreme" | "high" | "normal" | "low" | "missing";
+type LossReviewShareBucketKey = "very_large" | "large" | "medium_large" | "medium" | "small" | "missing";
+type LossReviewMatrixRowKey = LossReviewVolatilityRegimeKey | LossReviewShareBucketKey;
 type LossReviewTimeWindowDefinition = {
   detail: string;
   endMinute: number;
   key: LossReviewTimeWindowKey;
   label: string;
   startMinute: number;
+};
+type LossReviewMatrixRowDefinition = {
+  detail: string;
+  key: LossReviewMatrixRowKey;
+  label: string;
 };
 type LossReviewMarketRegimeMode = "all" | "loss";
 type LossReviewMarketRegimeCell = {
@@ -490,22 +509,27 @@ type LossReviewMarketRegimeCell = {
   largestLoss: number | null;
   lossAmount: number;
   lossShare: number;
+  rowKey: LossReviewMatrixRowKey;
+  rowLabel: string;
   timeWindowKey: LossReviewTimeWindowKey;
   totalPnl: number;
-  volatilityKey: LossReviewVolatilityRegimeKey;
+  tradedQuantity: number;
+  volatilityKey: LossReviewVolatilityRegimeKey | null;
 };
 type LossReviewTimeWindowSummary = {
   count: number;
   key: LossReviewTimeWindowKey;
   totalPnl: number;
+  tradedQuantity: number;
 };
 type LossReviewMarketRegimeRow = {
   cells: LossReviewMarketRegimeCell[];
   detail: string;
-  key: LossReviewVolatilityRegimeKey;
+  key: LossReviewMatrixRowKey;
   label: string;
 };
 type LossReviewMarketRegimeMatrix = {
+  dimension: LossReviewMatrixDimension;
   maxLossCell: LossReviewMarketRegimeCell | null;
   maxLossAmount: number;
   maxProfitCell: LossReviewMarketRegimeCell | null;
@@ -534,6 +558,10 @@ const profitLossReviewModeLabels: Record<ProfitLossReviewMode, string> = {
   all: "全部订单",
   profit: "仅看盈利单",
   loss: "仅看亏损单"
+};
+const lossReviewMatrixDimensionLabels: Record<LossReviewMatrixDimension, string> = {
+  atr: "ATR 时间矩阵",
+  shares: "股数时间矩阵"
 };
 const dataReviewWeekdayLabels = ["一", "二", "三", "四", "五", "六", "日"];
 const lossReviewRegularTimeWindows: LossReviewTimeWindowDefinition[] = [
@@ -578,6 +606,18 @@ const lossReviewVolatilityRegimes: Array<{
   { detail: "0.5-1.5 x ATR", key: "normal", label: "常规波动" },
   { detail: "< 0.5 x ATR", key: "low", label: "低波动" },
   { detail: "缺开仓前 20 根 ATR", key: "missing", label: "缺 ATR 证据" }
+];
+const lossReviewShareBuckets: Array<{
+  detail: string;
+  key: LossReviewShareBucketKey;
+  label: string;
+}> = [
+  { detail: "> 500 股", key: "very_large", label: "超大单" },
+  { detail: "201-500 股", key: "large", label: "大单" },
+  { detail: "101-200 股", key: "medium_large", label: "中大单" },
+  { detail: "51-100 股", key: "medium", label: "中单" },
+  { detail: "≤ 50 股", key: "small", label: "小单" },
+  { detail: "股数缺失或非正数", key: "missing", label: "缺股数证据" }
 ];
 
 function strategyTestDayDetailKey(batchId: string | null | undefined, dayResultId: string) {
@@ -1121,40 +1161,62 @@ function lossReviewVolatilityRegimeKey(group: TradeGroup): LossReviewVolatilityR
   return "low";
 }
 
-function lossReviewMarketRegimeCellKey(timeWindowKey: LossReviewTimeWindowKey, volatilityKey: LossReviewVolatilityRegimeKey) {
-  return `${timeWindowKey}:${volatilityKey}`;
+function lossReviewOrderShareQuantity(group: TradeGroup) {
+  const quantity = group.total_quantity;
+  return Number.isFinite(quantity) && quantity > 0 ? quantity : null;
+}
+
+function lossReviewShareBucketKey(group: TradeGroup): LossReviewShareBucketKey {
+  const quantity = lossReviewOrderShareQuantity(group);
+  if (quantity === null) return "missing";
+  if (quantity > 500) return "very_large";
+  if (quantity > 200) return "large";
+  if (quantity > 100) return "medium_large";
+  if (quantity > 50) return "medium";
+  return "small";
+}
+
+function lossReviewMarketRegimeCellKey(timeWindowKey: LossReviewTimeWindowKey, rowKey: LossReviewMatrixRowKey) {
+  return `${timeWindowKey}:${rowKey}`;
 }
 
 function emptyLossReviewMarketRegimeCell(
   timeWindowKey: LossReviewTimeWindowKey,
-  volatilityKey: LossReviewVolatilityRegimeKey
+  row: LossReviewMatrixRowDefinition,
+  dimension: LossReviewMatrixDimension
 ): LossReviewMarketRegimeCell {
   return {
     count: 0,
-    key: lossReviewMarketRegimeCellKey(timeWindowKey, volatilityKey),
+    key: lossReviewMarketRegimeCellKey(timeWindowKey, row.key),
     largestLoss: null,
     lossAmount: 0,
     lossShare: 0,
+    rowKey: row.key,
+    rowLabel: row.label,
     timeWindowKey,
     totalPnl: 0,
-    volatilityKey
+    tradedQuantity: 0,
+    volatilityKey: dimension === "atr" ? (row.key as LossReviewVolatilityRegimeKey) : null
   };
 }
 
-function buildLossReviewMarketRegimeMatrix(
+function buildLossReviewTimeMatrix(
   groups: TradeGroup[],
-  mode: LossReviewMarketRegimeMode = "loss"
+  mode: LossReviewMarketRegimeMode,
+  dimension: LossReviewMatrixDimension,
+  rowDefinitions: LossReviewMatrixRowDefinition[],
+  rowKeyForGroup: (group: TradeGroup) => LossReviewMatrixRowKey
 ): LossReviewMarketRegimeMatrix {
   const hasOutsideRegular = groups.some((group) => lossReviewTimeWindowKey(group) === "outside_regular");
   const timeWindows = hasOutsideRegular
     ? [...lossReviewRegularTimeWindows, lossReviewOutsideRegularWindow]
     : lossReviewRegularTimeWindows;
   const cells = new Map<string, LossReviewMarketRegimeCell>();
-  for (const regime of lossReviewVolatilityRegimes) {
+  for (const row of rowDefinitions) {
     for (const window of timeWindows) {
       cells.set(
-        lossReviewMarketRegimeCellKey(window.key, regime.key),
-        emptyLossReviewMarketRegimeCell(window.key, regime.key)
+        lossReviewMarketRegimeCellKey(window.key, row.key),
+        emptyLossReviewMarketRegimeCell(window.key, row, dimension)
       );
     }
   }
@@ -1162,14 +1224,16 @@ function buildLossReviewMarketRegimeMatrix(
   let totalLossAmount = 0;
   for (const group of groups) {
     const timeWindowKey = lossReviewTimeWindowKey(group);
-    const volatilityKey = lossReviewVolatilityRegimeKey(group);
-    const cell = cells.get(lossReviewMarketRegimeCellKey(timeWindowKey, volatilityKey));
+    const rowKey = rowKeyForGroup(group);
+    const cell = cells.get(lossReviewMarketRegimeCellKey(timeWindowKey, rowKey));
     if (!cell) continue;
     const pnl = group.pnl ?? 0;
     const lossAmount = mode === "all" ? Math.abs(pnl) : Math.abs(Math.min(pnl, 0));
+    const tradedQuantity = lossReviewOrderShareQuantity(group) ?? 0;
     cell.count += 1;
     cell.lossAmount += lossAmount;
     cell.totalPnl += pnl;
+    cell.tradedQuantity += tradedQuantity;
     if (cell.largestLoss === null || pnl < cell.largestLoss) {
       cell.largestLoss = pnl;
     }
@@ -1194,10 +1258,10 @@ function buildLossReviewMarketRegimeMatrix(
     }
   }
 
-  const rows = lossReviewVolatilityRegimes
-    .map((regime) => ({
-      ...regime,
-      cells: timeWindows.map((window) => cells.get(lossReviewMarketRegimeCellKey(window.key, regime.key))!)
+  const rows = rowDefinitions
+    .map((row) => ({
+      ...row,
+      cells: timeWindows.map((window) => cells.get(lossReviewMarketRegimeCellKey(window.key, row.key))!)
     }))
     .filter((row) => row.key !== "missing" || row.cells.some((cell) => cell.count > 0));
   const timeWindowSummaries = timeWindows.map((window) =>
@@ -1208,14 +1272,16 @@ function buildLossReviewMarketRegimeMatrix(
         return {
           ...summary,
           count: summary.count + cell.count,
-          totalPnl: summary.totalPnl + cell.totalPnl
+          totalPnl: summary.totalPnl + cell.totalPnl,
+          tradedQuantity: summary.tradedQuantity + cell.tradedQuantity
         };
       },
-      { count: 0, key: window.key, totalPnl: 0 }
+      { count: 0, key: window.key, totalPnl: 0, tradedQuantity: 0 }
     )
   );
 
   return {
+    dimension,
     maxLossCell,
     maxLossAmount,
     maxProfitCell,
@@ -1224,6 +1290,17 @@ function buildLossReviewMarketRegimeMatrix(
     timeWindows,
     topCell
   };
+}
+
+function buildLossReviewMarketRegimeMatrix(
+  groups: TradeGroup[],
+  mode: LossReviewMarketRegimeMode = "loss"
+): LossReviewMarketRegimeMatrix {
+  return buildLossReviewTimeMatrix(groups, mode, "atr", lossReviewVolatilityRegimes, lossReviewVolatilityRegimeKey);
+}
+
+function buildLossReviewShareTimeMatrix(groups: TradeGroup[]): LossReviewMarketRegimeMatrix {
+  return buildLossReviewTimeMatrix(groups, "all", "shares", lossReviewShareBuckets, lossReviewShareBucketKey);
 }
 
 function lossReviewMatrixIntensity(cell: LossReviewMarketRegimeCell, maxLossAmount: number) {
@@ -1243,11 +1320,13 @@ function lossReviewVolatilityRegimeLabel(key: LossReviewVolatilityRegimeKey) {
   return lossReviewVolatilityRegimes.find((regime) => regime.key === key)?.label ?? key;
 }
 
+function lossReviewMatrixRowLabel(cell: LossReviewMarketRegimeCell) {
+  return cell.volatilityKey === null ? cell.rowLabel : lossReviewVolatilityRegimeLabel(cell.volatilityKey);
+}
+
 function lossReviewMarketRegimeZoneLabel(cell: LossReviewMarketRegimeCell | null) {
   if (!cell) return "暂无";
-  return `${lossReviewTimeWindowLabel(cell.timeWindowKey)} × ${lossReviewVolatilityRegimeLabel(
-    cell.volatilityKey
-  )} · ${formatPnl(cell.totalPnl)}`;
+  return `${lossReviewTimeWindowLabel(cell.timeWindowKey)} × ${lossReviewMatrixRowLabel(cell)} · ${formatPnl(cell.totalPnl)}`;
 }
 
 function sortLossReviewTradeGroups(left: TradeGroup, right: TradeGroup, mode: LossReviewSortMode = "time_desc") {
@@ -1371,6 +1450,12 @@ export default function App() {
   );
   const [customDataReviewStartDate, setCustomDataReviewStartDate] = useState(monthStartDateKey(todayDateKey));
   const [customDataReviewEndDate, setCustomDataReviewEndDate] = useState(todayDateKey);
+  const [profitLossReviewTimeFilterMode, setProfitLossReviewTimeFilterMode] =
+    useState<LossReviewTimeFilterMode>("all");
+  const [customProfitLossReviewStartDate, setCustomProfitLossReviewStartDate] = useState(
+    monthStartDateKey(todayDateKey)
+  );
+  const [customProfitLossReviewEndDate, setCustomProfitLossReviewEndDate] = useState(todayDateKey);
   const [selectedSymbol, setSelectedSymbol] = useState("");
   const [showLossOnlyTradeGroups, setShowLossOnlyTradeGroups] = useState(false);
   const [strategySymbolInput, setStrategySymbolInput] = useState("");
@@ -2789,6 +2874,17 @@ export default function App() {
             <AlertTriangle size={15} />
             盈亏复盘
           </button>
+          <button
+            aria-pressed={activeReviewDrillSurfaceTab === "summary"}
+            className={
+              activeReviewDrillSurfaceTab === "summary" ? "reviewDrillSurfaceTab active" : "reviewDrillSurfaceTab"
+            }
+            onClick={() => setActiveReviewDrillSurfaceTab("summary")}
+            type="button"
+          >
+            <ListChecks size={15} />
+            交易总结
+          </button>
         </div>
         {activeReviewDrillSurfaceTab === "data" ? (
           <>
@@ -2876,11 +2972,26 @@ export default function App() {
           </section>
         </div>
           </>
-        ) : (
+        ) : activeReviewDrillSurfaceTab === "loss" ? (
           <LossReviewDrilldown
+            customEndDate={customProfitLossReviewEndDate}
+            customStartDate={customProfitLossReviewStartDate}
             onReplayTradeGroup={onReplayTradeGroup}
             replayBusy={replayBusy}
+            setCustomEndDate={setCustomProfitLossReviewEndDate}
+            setCustomStartDate={setCustomProfitLossReviewStartDate}
+            setTimeFilterMode={setProfitLossReviewTimeFilterMode}
+            timeFilterMode={profitLossReviewTimeFilterMode}
             tradeGroups={profitLossReviewTradeGroups}
+          />
+        ) : (
+          <TradeSummaryPanel
+            customEndDate={customProfitLossReviewEndDate}
+            customStartDate={customProfitLossReviewStartDate}
+            setCustomEndDate={setCustomProfitLossReviewEndDate}
+            setCustomStartDate={setCustomProfitLossReviewStartDate}
+            setTimeFilterMode={setProfitLossReviewTimeFilterMode}
+            timeFilterMode={profitLossReviewTimeFilterMode}
           />
         )}
       </section>
@@ -6308,6 +6419,22 @@ function isEntrySignal(signal: StrategySignal) {
   return signal.action === "ENTRY_LONG" || signal.action === "ENTRY_SHORT";
 }
 
+function formatCandleFillPriceSummary(fills: ChartFill[]) {
+  if (fills.length === 0) return "—";
+  const prices = fills
+    .map((fill) => fill.price)
+    .filter((price) => Number.isFinite(price))
+    .sort((left, right) => left - right);
+  if (prices.length === 0) return "—";
+  const minPrice = prices[0];
+  const maxPrice = prices[prices.length - 1];
+  const priceLabel =
+    minPrice === maxPrice
+      ? decimalFormatter.format(minPrice)
+      : `${decimalFormatter.format(minPrice)}–${decimalFormatter.format(maxPrice)}`;
+  return prices.length === 1 ? priceLabel : `${priceLabel} · ${formatInteger(prices.length)}笔`;
+}
+
 function MinuteCandleChart(props: {
   archive: MarketMinuteArchive;
   allowStrategySignalDetails?: boolean;
@@ -6325,6 +6452,7 @@ function MinuteCandleChart(props: {
   const rawPriceClipId = useId();
   const priceClipId = `price-clip-${rawPriceClipId.replace(/:/g, "")}`;
   const [chartShellWidth, setChartShellWidth] = useState(0);
+  const [hoveredBarIndex, setHoveredBarIndex] = useState<number | null>(null);
   const [strategySignalDetailOpen, setStrategySignalDetailOpen] = useState(false);
   const allBars = props.archive.bars;
   const strategySignals = props.strategySignals ?? props.strategyRun?.signals ?? [];
@@ -6403,6 +6531,48 @@ function MinuteCandleChart(props: {
   const xForIndex = (index: number) =>
     margin.left + (bars.length <= 1 ? plotWidth / 2 : (index / (bars.length - 1)) * plotWidth);
   const yForPrice = (price: number) => margin.top + ((maxPrice - price) / priceRange) * plotHeight;
+  const hoveredBar = hoveredBarIndex === null ? null : bars[hoveredBarIndex] ?? null;
+  const hoveredBarX = hoveredBar && hoveredBarIndex !== null ? xForIndex(hoveredBarIndex) : null;
+  const hoveredBarFills = hoveredBarIndex === null
+    ? []
+    : fillMarkerAnchors.filter(({ index }) => index === hoveredBarIndex).map(({ fill }) => fill);
+  const hoveredBuyFills = hoveredBarFills.filter((fill) => fill.side === "BUY");
+  const hoveredSellFills = hoveredBarFills.filter((fill) => fill.side === "SELL");
+  const hoveredBuyPriceLabel = formatCandleFillPriceSummary(hoveredBuyFills);
+  const hoveredSellPriceLabel = formatCandleFillPriceSummary(hoveredSellFills);
+  const hoveredVwapPriceLabel =
+    props.archive.vwap == null ? "—" : decimalFormatter.format(props.archive.vwap);
+  const ohlcTooltipWidth = 320;
+  const ohlcTooltipHeight = 126;
+  const ohlcTooltipGap = 12;
+  const ohlcTooltipX =
+    hoveredBarX === null
+      ? margin.left
+      : hoveredBarX + ohlcTooltipGap + ohlcTooltipWidth <= width - margin.right
+        ? hoveredBarX + ohlcTooltipGap
+        : hoveredBarX - ohlcTooltipGap - ohlcTooltipWidth;
+  const ohlcTooltipY = margin.top + 8;
+  const handleCandlePointerMove = (event: ReactPointerEvent<SVGSVGElement>) => {
+    const bounds = event.currentTarget.getBoundingClientRect();
+    if (bounds.width <= 0 || bounds.height <= 0 || bars.length === 0) {
+      setHoveredBarIndex(null);
+      return;
+    }
+    const pointerX = (event.clientX - bounds.left) * (width / bounds.width);
+    const pointerY = (event.clientY - bounds.top) * (height / bounds.height);
+    if (
+      pointerX < margin.left ||
+      pointerX > width - margin.right ||
+      pointerY < margin.top ||
+      pointerY > priceBottom
+    ) {
+      setHoveredBarIndex(null);
+      return;
+    }
+    const nextIndex =
+      bars.length === 1 ? 0 : Math.round(((pointerX - margin.left) / plotWidth) * (bars.length - 1));
+    setHoveredBarIndex((currentIndex) => (currentIndex === nextIndex ? currentIndex : nextIndex));
+  };
   const markers = fillMarkerAnchors.map(({ fill, index }) => ({
     fill,
     index,
@@ -6456,8 +6626,29 @@ function MinuteCandleChart(props: {
     }
   }, [props.strategyRun]);
 
+  useEffect(() => {
+    setHoveredBarIndex(null);
+  }, [props.archive.bars_hash, visibleScope?.startMinute, visibleScope?.endMinute]);
+
+  useEffect(() => {
+    if (hoveredBarIndex === null) return;
+    const clearHoveredBarOutsideChart = (event: PointerEvent) => {
+      const chartShell = chartShellRef.current;
+      if (chartShell && !chartShell.contains(event.target as Node)) {
+        setHoveredBarIndex(null);
+      }
+    };
+    window.addEventListener("pointermove", clearHoveredBarOutsideChart, true);
+    return () => window.removeEventListener("pointermove", clearHoveredBarOutsideChart, true);
+  }, [hoveredBarIndex]);
+
   return (
-    <div className="chartShell" ref={chartShellRef}>
+    <div
+      className="chartShell"
+      onMouseLeave={() => setHoveredBarIndex(null)}
+      onPointerLeave={() => setHoveredBarIndex(null)}
+      ref={chartShellRef}
+    >
       <svg
         className={isCompactChart ? "candleChart compact" : "candleChart"}
         width={width}
@@ -6465,6 +6656,8 @@ function MinuteCandleChart(props: {
         viewBox={`0 0 ${width} ${height}`}
         role="img"
         aria-label={`${props.archive.trade_date} ${props.archive.symbol} ${layerLabels.join("，")}`}
+        onPointerCancel={() => setHoveredBarIndex(null)}
+        onPointerMove={handleCandlePointerMove}
       >
         <defs>
           <clipPath id={priceClipId}>
@@ -6646,6 +6839,74 @@ function MinuteCandleChart(props: {
               </g>
             );
           })}
+          {hoveredBar && hoveredBarX !== null ? (
+            <g
+              className="candleOhlcHover"
+              aria-label={`${formatDateTime(hoveredBar.timestamp)}，开盘价 ${decimalFormatter.format(hoveredBar.open)}，最高价 ${decimalFormatter.format(hoveredBar.high)}，最低价 ${decimalFormatter.format(hoveredBar.low)}，收盘价 ${decimalFormatter.format(hoveredBar.close)}，VWAP价 ${props.archive.vwap == null ? "暂无" : hoveredVwapPriceLabel}，买入价 ${hoveredBuyFills.length === 0 ? "暂无" : hoveredBuyPriceLabel}，卖出价 ${hoveredSellFills.length === 0 ? "暂无" : hoveredSellPriceLabel}`}
+              aria-live="polite"
+              pointerEvents="none"
+              role="status"
+            >
+              <line
+                className="candleHoverGuide"
+                x1={hoveredBarX}
+                y1={margin.top}
+                x2={hoveredBarX}
+                y2={priceBottom}
+              />
+              <circle
+                className="candleHoverClosePoint"
+                cx={hoveredBarX}
+                cy={yForPrice(hoveredBar.close)}
+                r="3.4"
+              />
+              <g className="candleOhlcTooltip">
+                <rect
+                  height={ohlcTooltipHeight}
+                  rx="8"
+                  width={ohlcTooltipWidth}
+                  x={ohlcTooltipX}
+                  y={ohlcTooltipY}
+                />
+                <text className="candleOhlcTooltipTime" x={ohlcTooltipX + 12} y={ohlcTooltipY + 18}>
+                  {formatClock(hoveredBar.timestamp)} · 分钟行情
+                </text>
+                <text className="candleOhlcTooltipValue" x={ohlcTooltipX + 12} y={ohlcTooltipY + 40}>
+                  开盘价 {decimalFormatter.format(hoveredBar.open)}
+                </text>
+                <text className="candleOhlcTooltipValue" x={ohlcTooltipX + 166} y={ohlcTooltipY + 40}>
+                  最高价 {decimalFormatter.format(hoveredBar.high)}
+                </text>
+                <text className="candleOhlcTooltipValue" x={ohlcTooltipX + 12} y={ohlcTooltipY + 59}>
+                  最低价 {decimalFormatter.format(hoveredBar.low)}
+                </text>
+                <text className="candleOhlcTooltipValue" x={ohlcTooltipX + 166} y={ohlcTooltipY + 59}>
+                  收盘价 {decimalFormatter.format(hoveredBar.close)}
+                </text>
+                <text
+                  className="candleOhlcTooltipValue candleOhlcTooltipVwap"
+                  x={ohlcTooltipX + 12}
+                  y={ohlcTooltipY + 80}
+                >
+                  VWAP价 {hoveredVwapPriceLabel}
+                </text>
+                <text
+                  className="candleOhlcTooltipValue candleOhlcTooltipTrade buy"
+                  x={ohlcTooltipX + 12}
+                  y={ohlcTooltipY + 101}
+                >
+                  买入价 {hoveredBuyPriceLabel}
+                </text>
+                <text
+                  className="candleOhlcTooltipValue candleOhlcTooltipTrade sell"
+                  x={ohlcTooltipX + 12}
+                  y={ohlcTooltipY + 120}
+                >
+                  卖出价 {hoveredSellPriceLabel}
+                </text>
+              </g>
+            </g>
+          ) : null}
         </g>
       </svg>
       <div className="chartLegend" aria-label="图例">
@@ -7170,8 +7431,10 @@ function LossReviewMarketRegimeMatrix(props: {
   concentrationLabel?: string;
   matrix: LossReviewMarketRegimeMatrix;
   note?: string;
+  onDimensionChange?: (dimension: LossReviewMatrixDimension) => void;
   readOnly?: boolean;
   showTimeWindowPnlSummary?: boolean;
+  showYAxisSummary?: boolean;
   sourceLabel?: string;
   subtitle?: string;
   summaryMode?: "concentration" | "max_loss" | "max_profit" | "pnl_extremes";
@@ -7183,15 +7446,49 @@ function LossReviewMarketRegimeMatrix(props: {
   const subtitle = props.subtitle ?? "按美股常规盘五大微观结构窗口 × 开仓 ATR Multiple 定位亏损集中区";
   const sourceLabel = props.sourceLabel ?? "Market Regime Matrix";
   const concentrationLabel = props.concentrationLabel ?? "集中区";
+  const showYAxisSummary = props.showYAxisSummary ?? false;
+  const matrixTotalSummary = props.matrix.timeWindowSummaries.reduce(
+    (summary, item) => ({
+      count: summary.count + item.count,
+      totalPnl: summary.totalPnl + item.totalPnl,
+      tradedQuantity: summary.tradedQuantity + item.tradedQuantity
+    }),
+    { count: 0, totalPnl: 0, tradedQuantity: 0 }
+  );
   const note =
     props.note ??
-    "时间窗口采用 09:30-16:00 五大美股日内微观结构划分；非常规时段只在存在盘前/盘后亏损时追加显示。纵轴使用后端从本地分钟线归档计算的开仓 1min K 振幅 / 前 20 根 ATR；缺足够历史分钟线时进入缺 ATR 证据，不用美元亏损回退。";
+    (props.matrix.dimension === "shares"
+      ? "时间窗口采用 09:30-16:00 五大美股日内微观结构划分；纵轴按 committed fills 交易组的配对股数分档，缺失或非正数进入缺股数证据。Y 轴汇总展示每个股数档的收益、订单数和股数。"
+      : "时间窗口采用 09:30-16:00 五大美股日内微观结构划分；非常规时段只在存在盘前/盘后亏损时追加显示。纵轴使用后端从本地分钟线归档计算的开仓 1min K 振幅 / 前 20 根 ATR；缺足够历史分钟线时进入缺 ATR 证据，不用美元亏损回退。");
   return (
     <section className="lossReviewMatrixPanel" aria-label={`${title} Market Regime Matrix`}>
       <header className="lossReviewMatrixHeader">
         <div>
           <h3>{title}</h3>
           <p className="panelNote">{subtitle}</p>
+          {props.onDimensionChange ? (
+            <div className="lossReviewMatrixDimensionSwitch" role="radiogroup" aria-label="热力时间矩阵参数切换">
+              {(["atr", "shares"] as LossReviewMatrixDimension[]).map((dimension) => (
+                <label
+                  className={
+                    props.matrix.dimension === dimension
+                      ? "lossReviewMatrixDimensionOption active"
+                      : "lossReviewMatrixDimensionOption"
+                  }
+                  key={dimension}
+                >
+                  <input
+                    checked={props.matrix.dimension === dimension}
+                    name="allOrdersTimeMatrixDimension"
+                    onChange={() => props.onDimensionChange?.(dimension)}
+                    type="radio"
+                    value={dimension}
+                  />
+                  <span>{lossReviewMatrixDimensionLabels[dimension]}</span>
+                </label>
+              ))}
+            </div>
+          ) : null}
         </div>
         <div className="lossReviewMatrixSummary">
           <span className="sourcePill">{sourceLabel}</span>
@@ -7216,7 +7513,7 @@ function LossReviewMarketRegimeMatrix(props: {
             <>
               <strong>
                 {concentrationLabel}：{lossReviewTimeWindowLabel(topCell.timeWindowKey)} ×{" "}
-                {lossReviewVolatilityRegimeLabel(topCell.volatilityKey)} · {formatPercentValue(topCell.lossShare)}
+                {lossReviewMatrixRowLabel(topCell)} · {formatPercentValue(topCell.lossShare)}
               </strong>
             </>
           ) : (
@@ -7228,9 +7525,11 @@ function LossReviewMarketRegimeMatrix(props: {
         <div
           className="lossReviewMatrixGrid"
           role="grid"
-          aria-label="亏损时间窗口与波动环境热力图"
+          aria-label={`订单时间窗口与${props.matrix.dimension === "shares" ? "股数" : "波动环境"}热力图`}
           style={{
-            gridTemplateColumns: `minmax(150px, 0.9fr) repeat(${props.matrix.timeWindows.length}, minmax(112px, 1fr))`
+            gridTemplateColumns: `minmax(150px, 0.9fr) repeat(${props.matrix.timeWindows.length}, minmax(112px, 1fr))${
+              showYAxisSummary ? " minmax(132px, 0.95fr)" : ""
+            }`
           }}
         >
           <div className="lossReviewMatrixCorner" />
@@ -7240,42 +7539,69 @@ function LossReviewMarketRegimeMatrix(props: {
               <small>{window.detail}</small>
             </div>
           ))}
-          {props.matrix.rows.map((row) => (
-            <Fragment key={row.key}>
-              <div className="lossReviewMatrixAxis lossReviewMatrixRowHead">
-                <strong>{row.label}</strong>
-                <small>{row.detail}</small>
-              </div>
-              {row.cells.map((cell) => {
-                const cellClassName = `lossReviewMatrixCell intensity${lossReviewMatrixIntensity(
-                  cell,
-                  props.matrix.maxLossAmount
-                )}${cell.count === 0 ? " empty" : ""} readOnly`;
-                const cellContent = (
-                  <>
-                    <strong>{formatInteger(cell.count)}</strong>
-                    <span className={summaryTone(cell.totalPnl)}>{formatPnl(cell.totalPnl)}</span>
-                    <small>
-                      {formatPercentValue(cell.lossShare)} · 最大{" "}
-                      {cell.largestLoss === null ? "N/A" : formatPnl(cell.largestLoss)}
-                    </small>
-                  </>
-                );
-                return (
+          {showYAxisSummary ? (
+            <div className="lossReviewMatrixAxis lossReviewMatrixColumnHead lossReviewMatrixYAxisHead">
+              <strong>Y 轴汇总</strong>
+              <small>股数档收益</small>
+            </div>
+          ) : null}
+          {props.matrix.rows.map((row) => {
+            const rowSummary = row.cells.reduce(
+              (summary, cell) => ({
+                count: summary.count + cell.count,
+                totalPnl: summary.totalPnl + cell.totalPnl,
+                tradedQuantity: summary.tradedQuantity + cell.tradedQuantity
+              }),
+              { count: 0, totalPnl: 0, tradedQuantity: 0 }
+            );
+            return (
+              <Fragment key={row.key}>
+                <div className="lossReviewMatrixAxis lossReviewMatrixRowHead">
+                  <strong>{row.label}</strong>
+                  <small>{row.detail}</small>
+                </div>
+                {row.cells.map((cell) => {
+                  const cellClassName = `lossReviewMatrixCell intensity${lossReviewMatrixIntensity(
+                    cell,
+                    props.matrix.maxLossAmount
+                  )}${cell.count === 0 ? " empty" : ""} readOnly`;
+                  const cellContent = (
+                    <>
+                      <strong>{formatInteger(cell.count)}</strong>
+                      <span className={summaryTone(cell.totalPnl)}>{formatPnl(cell.totalPnl)}</span>
+                      <small>
+                        {formatPercentValue(cell.lossShare)} · 最大{" "}
+                        {cell.largestLoss === null ? "N/A" : formatPnl(cell.largestLoss)}
+                      </small>
+                    </>
+                  );
+                  return (
+                    <div
+                      aria-label={`${lossReviewTimeWindowLabel(cell.timeWindowKey)} ${cell.rowLabel}`}
+                      className={cellClassName}
+                      key={cell.key}
+                      role="gridcell"
+                    >
+                      {cellContent}
+                    </div>
+                  );
+                })}
+                {showYAxisSummary ? (
                   <div
-                    aria-label={`${lossReviewTimeWindowLabel(cell.timeWindowKey)} ${lossReviewVolatilityRegimeLabel(
-                      cell.volatilityKey
-                    )}`}
-                    className={cellClassName}
-                    key={cell.key}
+                    aria-label={`${row.label} Y 轴收益汇总 ${formatPnl(rowSummary.totalPnl)}`}
+                    className={`lossReviewMatrixRowSummary${rowSummary.count === 0 ? " empty" : ""}`}
                     role="gridcell"
                   >
-                    {cellContent}
+                    <span>收益</span>
+                    <strong className={summaryTone(rowSummary.totalPnl)}>{formatPnl(rowSummary.totalPnl)}</strong>
+                    <small>
+                      {formatInteger(rowSummary.count)} 笔 · {formatInteger(rowSummary.tradedQuantity)} 股
+                    </small>
                   </div>
-                );
-              })}
-            </Fragment>
-          ))}
+                ) : null}
+              </Fragment>
+            );
+          })}
           {props.showTimeWindowPnlSummary ? (
             <>
               <div className="lossReviewMatrixAxis lossReviewMatrixRowHead lossReviewMatrixSummaryHead">
@@ -7291,9 +7617,31 @@ function LossReviewMarketRegimeMatrix(props: {
                 >
                   <span>收益</span>
                   <strong className={summaryTone(summary.totalPnl)}>{formatPnl(summary.totalPnl)}</strong>
-                  <small>{formatInteger(summary.count)} 笔</small>
+                  <small>
+                    {formatInteger(summary.count)} 笔
+                    {props.matrix.dimension === "shares"
+                      ? ` · ${formatInteger(summary.tradedQuantity)} 股`
+                      : ""}
+                  </small>
                 </div>
               ))}
+              {showYAxisSummary ? (
+                <div
+                  aria-label={`全量收益汇总 ${formatPnl(matrixTotalSummary.totalPnl)}`}
+                  className={`lossReviewMatrixColumnSummary lossReviewMatrixGrandSummary${
+                    matrixTotalSummary.count === 0 ? " empty" : ""
+                  }`}
+                  role="gridcell"
+                >
+                  <span>全量</span>
+                  <strong className={summaryTone(matrixTotalSummary.totalPnl)}>
+                    {formatPnl(matrixTotalSummary.totalPnl)}
+                  </strong>
+                  <small>
+                    {formatInteger(matrixTotalSummary.count)} 笔 · {formatInteger(matrixTotalSummary.tradedQuantity)} 股
+                  </small>
+                </div>
+              ) : null}
             </>
           ) : null}
         </div>
@@ -7429,31 +7777,88 @@ function DataReviewCalendar(props: {
   );
 }
 
+function ReviewSharedTimeFilter(props: {
+  ariaLabel: string;
+  children?: ReactNode;
+  customEndDate: string;
+  customStartDate: string;
+  rangeLabel: string;
+  setCustomEndDate: (value: string) => void;
+  setCustomStartDate: (value: string) => void;
+  setTimeFilterMode: (value: LossReviewTimeFilterMode) => void;
+  timeFilterMode: LossReviewTimeFilterMode;
+}) {
+  return (
+    <div className="lossReviewTimeFilter" aria-label={props.ariaLabel}>
+      <div className="lossReviewTimeFilterButtons" role="group" aria-label="共享日期范围">
+        {(["all", "month", "week", "custom"] as LossReviewTimeFilterMode[]).map((mode) => (
+          <button
+            aria-pressed={props.timeFilterMode === mode}
+            className={props.timeFilterMode === mode ? "smallButton active" : "smallButton"}
+            key={mode}
+            onClick={() => props.setTimeFilterMode(mode)}
+            type="button"
+          >
+            {lossReviewTimeFilterLabels[mode]}
+          </button>
+        ))}
+      </div>
+      {props.timeFilterMode === "custom" ? (
+        <div className="lossReviewCustomRange">
+          <label>
+            <span>开始</span>
+            <input
+              onChange={(event) => props.setCustomStartDate(event.currentTarget.value)}
+              type="date"
+              value={props.customStartDate}
+            />
+          </label>
+          <label>
+            <span>结束</span>
+            <input
+              onChange={(event) => props.setCustomEndDate(event.currentTarget.value)}
+              type="date"
+              value={props.customEndDate}
+            />
+          </label>
+        </div>
+      ) : null}
+      {props.children}
+      <span className="toolbarMeta">{props.rangeLabel}</span>
+    </div>
+  );
+}
+
 function LossReviewDrilldown(props: {
+  customEndDate: string;
+  customStartDate: string;
   onReplayTradeGroup: (group: TradeGroup) => Promise<void>;
   replayBusy: string | null;
+  setCustomEndDate: (value: string) => void;
+  setCustomStartDate: (value: string) => void;
+  setTimeFilterMode: (value: LossReviewTimeFilterMode) => void;
+  timeFilterMode: LossReviewTimeFilterMode;
   tradeGroups: TradeGroup[];
 }) {
   const todayDateKey = useMemo(() => dateKeyFromDate(new Date()), []);
-  const [lossReviewTimeFilterMode, setLossReviewTimeFilterMode] = useState<LossReviewTimeFilterMode>("all");
-  const [customLossReviewStartDate, setCustomLossReviewStartDate] = useState(monthStartDateKey(todayDateKey));
-  const [customLossReviewEndDate, setCustomLossReviewEndDate] = useState(todayDateKey);
   const [lossReviewPage, setLossReviewPage] = useState(1);
   const [lossReviewSortMode, setLossReviewSortMode] = useState<LossReviewSortMode>("time_desc");
   const [profitLossReviewMode, setProfitLossReviewMode] = useState<ProfitLossReviewMode>("all");
+  const [allOrdersMatrixDimension, setAllOrdersMatrixDimension] = useState<LossReviewMatrixDimension>("atr");
   const [selectedPrimaryReasonKeys, setSelectedPrimaryReasonKeys] = useState<string[]>([]);
   const [selectedSecondaryReasonKeys, setSelectedSecondaryReasonKeys] = useState<string[]>([]);
   const reviewGroupLabel = profitLossReviewGroupLabel(profitLossReviewMode);
   const showReasonModules = profitLossReviewMode === "loss";
+  const activeMatrixDimension = profitLossReviewMode === "all" ? allOrdersMatrixDimension : "atr";
   const lossReviewTimeRange = useMemo(
     () =>
       lossReviewTimeFilterRange(
-        lossReviewTimeFilterMode,
-        customLossReviewStartDate,
-        customLossReviewEndDate,
+        props.timeFilterMode,
+        props.customStartDate,
+        props.customEndDate,
         todayDateKey
       ),
-    [customLossReviewEndDate, customLossReviewStartDate, lossReviewTimeFilterMode, todayDateKey]
+    [props.customEndDate, props.customStartDate, props.timeFilterMode, todayDateKey]
   );
   const modeTradeGroups = useMemo(
     () =>
@@ -7476,8 +7881,11 @@ function LossReviewDrilldown(props: {
     [showReasonModules, timeFilteredTradeGroups]
   );
   const marketRegimeMatrix = useMemo(
-    () => buildLossReviewMarketRegimeMatrix(timeFilteredTradeGroups, profitLossReviewMode === "loss" ? "loss" : "all"),
-    [profitLossReviewMode, timeFilteredTradeGroups]
+    () =>
+      activeMatrixDimension === "shares"
+        ? buildLossReviewShareTimeMatrix(timeFilteredTradeGroups)
+        : buildLossReviewMarketRegimeMatrix(timeFilteredTradeGroups, profitLossReviewMode === "loss" ? "loss" : "all"),
+    [activeMatrixDimension, profitLossReviewMode, timeFilteredTradeGroups]
   );
   const primaryFilteredTradeGroups = useMemo(
     () =>
@@ -7515,7 +7923,7 @@ function LossReviewDrilldown(props: {
   const pageStart = sortedTradeGroups.length > 0 ? (safePage - 1) * LOSS_REVIEW_PAGE_SIZE + 1 : 0;
   const pageEnd = Math.min(safePage * LOSS_REVIEW_PAGE_SIZE, sortedTradeGroups.length);
   const filterSignature = [
-    lossReviewTimeFilterMode,
+    props.timeFilterMode,
     lossReviewTimeRange.startDate ?? "",
     lossReviewTimeRange.endDate ?? "",
     profitLossReviewMode,
@@ -7577,40 +7985,16 @@ function LossReviewDrilldown(props: {
         <span className="sourcePill">Review Journal</span>
       </header>
 
-      <div className="lossReviewTimeFilter" aria-label="盈亏复盘全局时间筛选">
-        <div className="lossReviewTimeFilterButtons" role="group" aria-label="全局时间筛选">
-          {(["all", "month", "week", "custom"] as LossReviewTimeFilterMode[]).map((mode) => (
-            <button
-              aria-pressed={lossReviewTimeFilterMode === mode}
-              className={lossReviewTimeFilterMode === mode ? "smallButton active" : "smallButton"}
-              key={mode}
-              onClick={() => setLossReviewTimeFilterMode(mode)}
-              type="button"
-            >
-              {lossReviewTimeFilterLabels[mode]}
-            </button>
-          ))}
-        </div>
-        {lossReviewTimeFilterMode === "custom" ? (
-          <div className="lossReviewCustomRange">
-            <label>
-              <span>开始</span>
-              <input
-                onChange={(event) => setCustomLossReviewStartDate(event.currentTarget.value)}
-                type="date"
-                value={customLossReviewStartDate}
-              />
-            </label>
-            <label>
-              <span>结束</span>
-              <input
-                onChange={(event) => setCustomLossReviewEndDate(event.currentTarget.value)}
-                type="date"
-                value={customLossReviewEndDate}
-              />
-            </label>
-          </div>
-        ) : null}
+      <ReviewSharedTimeFilter
+        ariaLabel="盈亏复盘全局时间筛选"
+        customEndDate={props.customEndDate}
+        customStartDate={props.customStartDate}
+        rangeLabel={timeRangeLabel}
+        setCustomEndDate={props.setCustomEndDate}
+        setCustomStartDate={props.setCustomStartDate}
+        setTimeFilterMode={props.setTimeFilterMode}
+        timeFilterMode={props.timeFilterMode}
+      >
         <div className="profitLossReviewModeSwitch" role="radiogroup" aria-label="盈亏单筛选">
           {(["all", "profit", "loss"] as ProfitLossReviewMode[]).map((mode) => (
             <label
@@ -7628,7 +8012,7 @@ function LossReviewDrilldown(props: {
             </label>
           ))}
         </div>
-      </div>
+      </ReviewSharedTimeFilter>
 
       <dl className="compactFacts lossReviewSummaryGrid lossReviewSummaryRow">
         <div>
@@ -7655,9 +8039,15 @@ function LossReviewDrilldown(props: {
         <>
           <LossReviewMarketRegimeMatrix
             matrix={marketRegimeMatrix}
+            onDimensionChange={profitLossReviewMode === "all" ? setAllOrdersMatrixDimension : undefined}
             readOnly
+            showYAxisSummary={activeMatrixDimension === "shares"}
             sourceLabel={reviewGroupLabel}
-            subtitle={`按美股常规盘五大微观结构窗口 × 开仓 ATR Multiple 查看${reviewGroupLabel}分布`}
+            subtitle={
+              activeMatrixDimension === "shares"
+                ? "按美股常规盘五大微观结构窗口 × 每笔订单股数查看全部订单分布"
+                : `按美股常规盘五大微观结构窗口 × 开仓 ATR Multiple 查看${reviewGroupLabel}分布`
+            }
             showTimeWindowPnlSummary={profitLossReviewMode === "all"}
             summaryMode={
               profitLossReviewMode === "all"
@@ -7830,6 +8220,282 @@ function LossReviewDrilldown(props: {
         </>
       ) : (
         <EmptyState icon={<CheckCircle2 size={18} />} title={`暂无${reviewGroupLabel}`} detail={`当前 committed 交易组中没有已闭合${reviewGroupLabel}`} />
+      )}
+    </div>
+  );
+}
+
+const tradeSummaryGenerationMeta: Record<
+  TradeSummary["generation"]["status"],
+  { label: string; detail: string; tone: "info" | "ok" | "warn" | "danger" }
+> = {
+  not_requested: { label: "等待会话摘要", detail: "确定性规则已就绪，可在本次会话中生成并写入当前证据摘要。", tone: "info" },
+  unconfigured: { label: "等待会话摘要", detail: "当前范围尚无本会话摘要；量化执行规则仍可直接使用。", tone: "info" },
+  pending: { label: "摘要生成中", detail: "正在用脱敏聚合证据生成摘要。", tone: "info" },
+  completed: { label: "已完成", detail: "摘要已通过规则 ID 和无新增数字校验。", tone: "ok" },
+  failed: { label: "摘要不可用", detail: "摘要生成或校验失败；确定性量化规则未受影响。", tone: "danger" },
+  stale: { label: "证据已变化", detail: "旧会话摘要不再代表当前范围，量化规则已按新证据刷新。", tone: "warn" }
+};
+
+function TradeSummaryPanel(props: {
+  customEndDate: string;
+  customStartDate: string;
+  setCustomEndDate: (value: string) => void;
+  setCustomStartDate: (value: string) => void;
+  setTimeFilterMode: (value: LossReviewTimeFilterMode) => void;
+  timeFilterMode: LossReviewTimeFilterMode;
+}) {
+  const todayDateKey = useMemo(() => dateKeyFromDate(new Date()), []);
+  const [summary, setSummary] = useState<TradeSummary | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [summaryError, setSummaryError] = useState<string | null>(null);
+  const timeRange = useMemo(
+    () => lossReviewTimeFilterRange(props.timeFilterMode, props.customStartDate, props.customEndDate, todayDateKey),
+    [props.customEndDate, props.customStartDate, props.timeFilterMode, todayDateKey]
+  );
+  const rangeLabel = lossReviewTimeRangeLabel(timeRange.startDate, timeRange.endDate, "全部闭合交易");
+
+  useEffect(() => {
+    const controller = new AbortController();
+    setLoading(true);
+    setSummary(null);
+    setSummaryError(null);
+    void fetchTradeSummary(timeRange.startDate ?? undefined, timeRange.endDate ?? undefined, {
+      signal: controller.signal
+    })
+      .then((payload) => {
+        setSummary(payload);
+      })
+      .catch((error: unknown) => {
+        if (error instanceof DOMException && error.name === "AbortError") return;
+        setSummaryError(error instanceof Error ? error.message : "交易总结读取失败，请稍后重试。");
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
+      });
+    return () => controller.abort();
+  }, [timeRange.endDate, timeRange.startDate]);
+
+  if (loading && !summary) {
+    return (
+      <div className="tradeSummaryPanel tradeSummaryLoading" aria-live="polite">
+        <RefreshCw className="spin" size={18} />
+        <strong>正在汇总盈利、亏损与持平交易证据</strong>
+      </div>
+    );
+  }
+
+  if (!summary) {
+    return (
+      <div className="tradeSummaryPanel">
+        <EmptyState
+          detail={summaryError ?? "当前无法读取交易总结，请检查后端合同后重试。"}
+          icon={<AlertTriangle size={18} />}
+          title="交易总结不可用"
+        />
+      </div>
+    );
+  }
+
+  const generationStatus = summary.generation.status;
+  const generationMeta = tradeSummaryGenerationMeta[generationStatus];
+  const currentModel = summary.generation.current_model ?? summary.generation.model;
+  const isSessionSummary = summary.generation.provider === "codex_session";
+  const executionNarratives = new Map(
+    summary.generation.narrative?.execution_rules.map((item) => [item.rule_id, item.text]) ?? []
+  );
+  const avoidanceNarratives = new Map(
+    summary.generation.narrative?.avoidance_rules.map((item) => [item.rule_id, item.text]) ?? []
+  );
+  const sampleQualified = summary.evidence_status === "eligible";
+
+  return (
+    <div className="tradeSummaryPanel">
+      <header className="tradeSummaryHeader">
+        <div>
+          <h2>
+            <ListChecks size={18} />
+            交易总结
+          </h2>
+          <p className="panelNote">本会话生成摘要表达；后端确定规则、排序与量化执行动作</p>
+        </div>
+        <span className="sourcePill">{summary.rule_catalog_version}</span>
+      </header>
+
+      <ReviewSharedTimeFilter
+        ariaLabel="交易总结共享日期筛选"
+        customEndDate={props.customEndDate}
+        customStartDate={props.customStartDate}
+        rangeLabel={rangeLabel}
+        setCustomEndDate={props.setCustomEndDate}
+        setCustomStartDate={props.setCustomStartDate}
+        setTimeFilterMode={props.setTimeFilterMode}
+        timeFilterMode={props.timeFilterMode}
+      />
+
+      <section aria-label="交易总结样本概览">
+        <div className="tradeSummarySectionHeading">
+          <div>
+            <p className="eyebrow">样本概览</p>
+            <h3>闭合交易证据</h3>
+          </div>
+          <span className={`statusPill ${sampleQualified ? "ok" : summary.evidence_status === "no_trades" ? "info" : "warn"}`}>
+            {sampleQualified ? "达到个性化门槛" : summary.evidence_status === "no_trades" ? "暂无闭合交易" : "样本准备中"}
+          </span>
+        </div>
+        <dl className="tradeSummaryMetrics">
+          <div><dt>闭合交易</dt><dd>{formatInteger(summary.metrics.closed_trade_count)}</dd></div>
+          <div><dt>盈利</dt><dd className="ok">{formatInteger(summary.metrics.win_count)}</dd></div>
+          <div><dt>亏损</dt><dd className="bad">{formatInteger(summary.metrics.loss_count)}</dd></div>
+          <div><dt>持平</dt><dd>{formatInteger(summary.metrics.flat_count)}</dd></div>
+          <div><dt>PnL</dt><dd className={summaryTone(summary.metrics.pnl)}>{formatPnl(summary.metrics.pnl)}</dd></div>
+          <div><dt>Profit Factor</dt><dd>{summary.metrics.profit_factor === null ? "N/A" : summary.metrics.profit_factor.toFixed(2)}</dd></div>
+          <div><dt>分钟线评价覆盖率</dt><dd>{formatPercentValue(summary.metrics.evaluation_coverage_ratio)}</dd></div>
+          <div><dt>亏损 Journal 覆盖率</dt><dd>{formatPercentValue(summary.metrics.loss_journal_coverage_ratio)}</dd></div>
+        </dl>
+      </section>
+
+      {!sampleQualified ? (
+        <section className="tradeSummaryGate" aria-label="个性化样本准备进度">
+          <div className="tradeSummarySectionHeading">
+            <div>
+              <p className="eyebrow">严格门槛</p>
+              <h3>继续积累闭合交易样本</h3>
+            </div>
+            <span className="statusPill warn">AI 生成已禁用</span>
+          </div>
+          <p className="panelNote">
+            个性化需要至少 {summary.thresholds.minimum_closed_trades} 笔闭合交易，且盈利、亏损各至少 {summary.thresholds.minimum_wins} 笔。
+          </p>
+          <div className="tradeSummaryProgressGrid">
+            <TradeSummaryProgress
+              label="闭合交易"
+              missing={summary.gaps.closed_trades_needed}
+              value={summary.progress.closed_trades}
+            />
+            <TradeSummaryProgress label="盈利样本" missing={summary.gaps.wins_needed} value={summary.progress.wins} />
+            <TradeSummaryProgress label="亏损样本" missing={summary.gaps.losses_needed} value={summary.progress.losses} />
+          </div>
+        </section>
+      ) : null}
+
+      <section className={`tradeSummaryAiCard ${generationMeta.tone}`} aria-live="polite">
+        <div className="tradeSummaryAiCardHeader">
+          <div>
+            <p className="eyebrow">AI 摘要</p>
+            <h3>{summary.generation.narrative?.headline ?? generationMeta.label}</h3>
+            <p>{summary.generation.narrative?.overview ?? generationMeta.detail}</p>
+          </div>
+          <span className={`statusPill ${generationMeta.tone}`}>{generationMeta.label}</span>
+        </div>
+        {summaryError ? <p className="formError">{summaryError}</p> : null}
+        <div className="tradeSummaryAiActions">
+          {isSessionSummary ? (
+            <strong className="tradeSummaryAiModel"><CheckCircle2 size={14} />摘要来源：本次会话</strong>
+          ) : currentModel && generationStatus === "completed" ? (
+            <small className="tradeSummaryAiModel">摘要来源：历史本地模型 {currentModel}</small>
+          ) : (
+            <small>当前范围没有本会话摘要，不会由浏览器自动调用模型。</small>
+          )}
+        </div>
+      </section>
+
+      {sampleQualified ? (
+        <section className="tradeSummaryRuleColumns" aria-label="个性化交易规则">
+          <TradeSummaryRuleColumn
+            emptyDetail="当前范围没有同时满足盈利支持和亏损反证门槛的执行规则。"
+            emptyTitle="暂无个性化执行规则"
+            narratives={executionNarratives}
+            rules={summary.execution_rules}
+            title="推荐执行规则"
+            tone="execute"
+          />
+          <TradeSummaryRuleColumn
+            emptyDetail="当前范围没有达到三笔亏损命中的规避规则。"
+            emptyTitle="暂无个性化规避规则"
+            narratives={avoidanceNarratives}
+            rules={summary.avoidance_rules}
+            title="推荐规避错误"
+            tone="avoid"
+          />
+        </section>
+      ) : (
+        <section className="tradeSummaryClassicGrid" aria-label="经典规则基线">
+          <div className="tradeSummarySectionHeading">
+            <div>
+              <p className="eyebrow">经典基线</p>
+              <h3>样本达标前的复盘检查单</h3>
+            </div>
+          </div>
+          <div className="tradeSummaryBaselineCards">
+            {summary.classic_baselines.map((rule) => (
+              <article className="tradeSummaryBaselineCard" key={rule.rule_id}>
+                <span>{rule.family}</span>
+                <strong>{rule.title}</strong>
+                <p>{rule.condition}</p>
+                <dl className="tradeSummaryRuleActionGrid">
+                  {(rule.action_steps ?? []).map((step) => <div key={step.label}><dt>{step.label}</dt><dd>{step.value}</dd></div>)}
+                </dl>
+              </article>
+            ))}
+          </div>
+        </section>
+      )}
+
+      <details className="tradeSummarySources">
+        <summary>经典方法依据</summary>
+        <div className="tradeSummarySourceBody">
+          <p>以下来源只提供方法背景，不作为盈利保证；个性化规则仍以当前后端证据门槛为准。</p>
+          <ul>
+            {summary.sources.map((source) => (
+              <li key={source.id}>
+                <a href={source.url} rel="noreferrer" target="_blank">{source.title}</a>
+                <span>{source.kind === "risk" ? "风险提示" : "方法研究"}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </details>
+      <p className="tradeSummaryDisclaimer">{summary.disclaimer}</p>
+    </div>
+  );
+}
+
+function TradeSummaryProgress(props: { label: string; missing: number; value: number }) {
+  const percent = Math.max(0, Math.min(100, Math.round(props.value * 100)));
+  return (
+    <div className="tradeSummaryProgressItem">
+      <div><strong>{props.label}</strong><span>{props.missing > 0 ? `还差 ${props.missing} 笔` : "已达标"}</span></div>
+      <div className="tradeSummaryProgressTrack"><span style={{ width: `${percent}%` }} /></div>
+    </div>
+  );
+}
+
+function TradeSummaryRuleColumn(props: {
+  emptyDetail: string;
+  emptyTitle: string;
+  narratives: Map<string, string>;
+  rules: TradeSummary["execution_rules"];
+  title: string;
+  tone: "execute" | "avoid";
+}) {
+  return (
+    <div className={`tradeSummaryRuleColumn ${props.tone}`}>
+      <header><h3>{props.title}</h3><span>{formatInteger(props.rules.length)} 条</span></header>
+      {props.rules.length > 0 ? props.rules.map((rule) => (
+        <article className="tradeSummaryRuleCard" key={rule.rule_id}>
+          <div className="tradeSummaryRuleMeta"><span>{rule.family}</span></div>
+          <h4>{rule.title}</h4>
+          <p>{rule.condition}</p>
+          {props.narratives.get(rule.rule_id) ? <p className="tradeSummaryRuleNarrative">会话点评：{props.narratives.get(rule.rule_id)}</p> : null}
+          <dl className="tradeSummaryRuleActionGrid" aria-label={`${rule.title}量化执行清单`}>
+            {(rule.action_steps ?? []).map((step) => (
+              <div key={step.label}><dt>{step.label}</dt><dd>{step.value}</dd></div>
+            ))}
+          </dl>
+        </article>
+      )) : (
+        <EmptyState detail={props.emptyDetail} icon={<CircleSlash size={18} />} title={props.emptyTitle} />
       )}
     </div>
   );

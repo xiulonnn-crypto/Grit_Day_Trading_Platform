@@ -29,6 +29,12 @@ from .service import (
     save_trade_group_review,
 )
 from .storage import connect, initialize_database
+from .trade_summary import (
+    TRADE_SUMMARY_CONTRACT_VERSION,
+    generate_trade_summary,
+    get_trade_summary,
+    trade_summary_llm_configured,
+)
 from .strategy import (
     BB_SQUEEZE_TEMPLATE_KEY,
     LIQUIDITY_SWEEP_TEMPLATE_KEY,
@@ -63,6 +69,8 @@ REQUIRED_API_ROUTES = (
     "/api/ai-strategy-recommendations",
     "/api/strategies/{strategy_id}/live-signal",
     "/api/trade-groups/{trade_group_id}/review",
+    "/api/review/trade-summary",
+    "/api/review/trade-summary/generations",
 )
 LIVE_SIGNAL_CONTRACT_VERSION = "live_order_quantity_reason_tags_v1"
 TRADE_EVALUATION_CONTRACT_VERSION = "trade_eval_recommendation_v1"
@@ -129,6 +137,11 @@ class TradeGroupReviewRequest(BaseModel):
     note: str = Field(default="", max_length=500)
 
 
+class TradeSummaryGenerationRequest(BaseModel):
+    start_date: str | None = Field(default=None, pattern=r"^\d{4}-\d{2}-\d{2}$")
+    end_date: str | None = Field(default=None, pattern=r"^\d{4}-\d{2}-\d{2}$")
+
+
 class LiveStrategySignalRequest(BaseModel):
     symbol: str = Field(min_length=1, max_length=16)
     provider: str = Field(default="yahoo", pattern=r"^(fake|futu|yahoo)$")
@@ -177,6 +190,8 @@ def create_app(db_path: str | Path | None = None) -> FastAPI:
             "live_signal_contract": LIVE_SIGNAL_CONTRACT_VERSION,
             "trade_eval_contract": TRADE_EVALUATION_CONTRACT_VERSION,
             "ai_strategy_catalog": AI_STRATEGY_CATALOG_VERSION,
+            "trade_summary_contract": TRADE_SUMMARY_CONTRACT_VERSION,
+            "trade_summary_llm_configured": trade_summary_llm_configured(),
         }
 
     @app.post("/api/imports/stp-txt")
@@ -235,6 +250,32 @@ def create_app(db_path: str | Path | None = None) -> FastAPI:
         conn=Depends(get_conn),
     ):
         return {"items": review_summary_groups(conn, group_by=group_by, date=date, symbol=symbol)}
+
+    @app.get("/api/review/trade-summary")
+    def review_trade_summary(
+        start_date: Annotated[str | None, Query(pattern=r"^\d{4}-\d{2}-\d{2}$")] = None,
+        end_date: Annotated[str | None, Query(pattern=r"^\d{4}-\d{2}-\d{2}$")] = None,
+        conn=Depends(get_conn),
+    ):
+        _validate_trade_summary_range(start_date, end_date)
+        return get_trade_summary(conn, start_date=start_date, end_date=end_date)
+
+    @app.post("/api/review/trade-summary/generations")
+    def review_trade_summary_generation(
+        request: TradeSummaryGenerationRequest,
+        conn=Depends(get_conn),
+    ):
+        _validate_trade_summary_range(request.start_date, request.end_date)
+        try:
+            return generate_trade_summary(
+                conn,
+                start_date=request.start_date,
+                end_date=request.end_date,
+            )
+        except ValueError as exc:
+            detail = str(exc)
+            status_code = 422 if detail == "trade_summary_personalization_insufficient" else 503
+            raise HTTPException(status_code=status_code, detail=detail) from exc
 
     @app.get("/api/trade-groups")
     def trade_groups(
@@ -575,6 +616,11 @@ def create_app(db_path: str | Path | None = None) -> FastAPI:
             raise HTTPException(status_code=404, detail=str(exc).strip("'")) from exc
 
     return app
+
+
+def _validate_trade_summary_range(start_date: str | None, end_date: str | None) -> None:
+    if start_date and end_date and start_date > end_date:
+        raise HTTPException(status_code=422, detail="trade_summary_date_range_invalid")
 
 
 app = create_app()

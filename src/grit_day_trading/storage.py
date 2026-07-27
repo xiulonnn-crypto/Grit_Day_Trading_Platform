@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 
-STORAGE_SCHEMA_VERSION = 8
+STORAGE_SCHEMA_VERSION = 9
 ACCOUNT_STRIP_CHARS_SQL = "char(9) || char(10) || char(11) || char(12) || char(13) || char(32)"
 
 
@@ -391,6 +391,36 @@ CREATE TABLE IF NOT EXISTS trade_reviews (
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+
+CREATE TABLE IF NOT EXISTS trade_summary_generations (
+    id TEXT PRIMARY KEY,
+    summary_key TEXT NOT NULL,
+    idempotency_key TEXT NOT NULL UNIQUE,
+    start_date TEXT,
+    end_date TEXT,
+    evidence_status TEXT NOT NULL CHECK (
+        evidence_status IN ('no_trades', 'insufficient_sample', 'eligible')
+    ),
+    generation_status TEXT NOT NULL CHECK (
+        generation_status IN ('pending', 'completed', 'failed')
+    ),
+    rule_catalog_version TEXT NOT NULL,
+    prompt_version TEXT NOT NULL,
+    provider TEXT NOT NULL,
+    model TEXT NOT NULL,
+    model_config_hash TEXT NOT NULL,
+    evidence_snapshot_json TEXT NOT NULL,
+    deterministic_rules_json TEXT NOT NULL,
+    ai_narrative_json TEXT,
+    response_hash TEXT,
+    failure_reason TEXT,
+    retry_count INTEGER NOT NULL DEFAULT 0 CHECK (retry_count >= 0),
+    parser_versions_json TEXT NOT NULL DEFAULT '[]',
+    field_mapper_versions_json TEXT NOT NULL DEFAULT '[]',
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    completed_at TEXT
+);
 """
 
 STORAGE_CONTRACT_SQL = f"""
@@ -565,6 +595,15 @@ ON trade_reviews(idempotency_key);
 
 CREATE INDEX IF NOT EXISTS ix_trade_reviews_symbol_date
 ON trade_reviews(symbol, trade_date, updated_at);
+
+CREATE UNIQUE INDEX IF NOT EXISTS ux_trade_summary_generations_idempotency
+ON trade_summary_generations(idempotency_key);
+
+CREATE INDEX IF NOT EXISTS ix_trade_summary_generations_summary
+ON trade_summary_generations(summary_key, updated_at);
+
+CREATE INDEX IF NOT EXISTS ix_trade_summary_generations_scope
+ON trade_summary_generations(start_date, end_date, updated_at);
 """
 
 
@@ -637,6 +676,13 @@ def initialize_database(conn: sqlite3.Connection) -> None:
         VALUES (?, ?)
         """,
         (8, "p3_trade_review_journal_contract_v8"),
+    )
+    conn.execute(
+        """
+        INSERT OR IGNORE INTO storage_migrations (version, description)
+        VALUES (?, ?)
+        """,
+        (9, "p3_trade_summary_generation_contract_v9"),
     )
     conn.execute(f"PRAGMA user_version = {STORAGE_SCHEMA_VERSION}")
     conn.commit()

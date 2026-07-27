@@ -17,6 +17,12 @@ def _minute_candle_chart_source() -> str:
     return APP_SOURCE[start:end]
 
 
+def _candle_fill_price_summary_source() -> str:
+    start = APP_SOURCE.index("function formatCandleFillPriceSummary")
+    end = APP_SOURCE.index("\n\nfunction MinuteCandleChart", start)
+    return APP_SOURCE[start:end]
+
+
 def test_trade_marker_glyph_tip_uses_execution_price_anchor():
     source = _trade_marker_path_source()
 
@@ -116,3 +122,61 @@ def test_trade_replay_chart_adds_replay_only_ema20_overlay():
     assert "showReplayEma20" in replay_source
     assert "function buildEma20OverlayPoints" in APP_SOURCE
     assert "function priceLinePath" in APP_SOURCE
+
+
+def test_shared_candle_chart_shows_hovered_archive_bar_ohlc():
+    source = _minute_candle_chart_source()
+
+    assert "const [hoveredBarIndex, setHoveredBarIndex] = useState<number | null>(null);" in source
+    assert "const handleCandlePointerMove = (event: ReactPointerEvent<SVGSVGElement>) => {" in source
+    assert "onPointerMove={handleCandlePointerMove}" in source
+    assert 'className="candleOhlcTooltip"' in source
+    assert "{formatClock(hoveredBar.timestamp)} · 分钟行情" in source
+    assert "开盘价 {decimalFormatter.format(hoveredBar.open)}" in source
+    assert "最高价 {decimalFormatter.format(hoveredBar.high)}" in source
+    assert "最低价 {decimalFormatter.format(hoveredBar.low)}" in source
+    assert "收盘价 {decimalFormatter.format(hoveredBar.close)}" in source
+    assert "VWAP价 {hoveredVwapPriceLabel}" in source
+    assert 'props.archive.vwap == null ? "—" : decimalFormatter.format(props.archive.vwap)' in source
+    assert 'VWAP价 ${props.archive.vwap == null ? "暂无" : hoveredVwapPriceLabel}' in source
+
+
+def test_candle_hover_uses_committed_fill_prices_for_the_hovered_bar():
+    source = _minute_candle_chart_source()
+    summary_source = _candle_fill_price_summary_source()
+
+    assert (
+        "const hoveredBarFills = hoveredBarIndex === null\n"
+        "    ? []\n"
+        "    : fillMarkerAnchors.filter(({ index }) => index === hoveredBarIndex).map(({ fill }) => fill);"
+    ) in source
+    assert 'const hoveredBuyFills = hoveredBarFills.filter((fill) => fill.side === "BUY");' in source
+    assert 'const hoveredSellFills = hoveredBarFills.filter((fill) => fill.side === "SELL");' in source
+    assert "const hoveredBuyPriceLabel = formatCandleFillPriceSummary(hoveredBuyFills);" in source
+    assert "const hoveredSellPriceLabel = formatCandleFillPriceSummary(hoveredSellFills);" in source
+    assert "买入价 {hoveredBuyPriceLabel}" in source
+    assert "卖出价 {hoveredSellPriceLabel}" in source
+    assert '买入价 ${hoveredBuyFills.length === 0 ? "暂无" : hoveredBuyPriceLabel}' in source
+    assert '卖出价 ${hoveredSellFills.length === 0 ? "暂无" : hoveredSellPriceLabel}' in source
+    assert 'if (fills.length === 0) return "—";' in summary_source
+    assert ".sort((left, right) => left - right);" in summary_source
+    assert "minPrice === maxPrice" in summary_source
+    assert "`${decimalFormatter.format(minPrice)}–${decimalFormatter.format(maxPrice)}`" in summary_source
+    assert "`${priceLabel} · ${formatInteger(prices.length)}笔`" in summary_source
+    assert "reduce(" not in summary_source
+
+
+def test_candle_hover_clears_outside_plot_and_when_archive_scope_changes():
+    source = _minute_candle_chart_source()
+
+    assert "pointerY > priceBottom" in source
+    assert 'className="chartShell"' in source
+    assert "onMouseLeave={() => setHoveredBarIndex(null)}" in source
+    assert "onPointerLeave={() => setHoveredBarIndex(null)}" in source
+    assert "onPointerCancel={() => setHoveredBarIndex(null)}" in source
+    assert 'window.addEventListener("pointermove", clearHoveredBarOutsideChart, true);' in source
+    assert 'window.removeEventListener("pointermove", clearHoveredBarOutsideChart, true);' in source
+    assert "!chartShell.contains(event.target as Node)" in source
+    assert "setHoveredBarIndex(null);" in source
+    assert "[props.archive.bars_hash, visibleScope?.startMinute, visibleScope?.endMinute]" in source
+    assert "hoveredBarIndex === null ? null : bars[hoveredBarIndex] ?? null" in source

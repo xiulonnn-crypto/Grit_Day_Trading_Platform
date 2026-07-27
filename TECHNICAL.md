@@ -1,8 +1,62 @@
 # Technical Plan
 
+## 当前 P3 切片：GitHub Pages 交易复盘一致性
+
+目标：把本地交易复盘的「数据下钻」「盈亏复盘」「交易总结」同步到 GitHub Pages 根入口，保留三模块切换、月份/日期选择和本地样式语义，同时严格保持公开页面只读和证据脱敏。
+
+范围：
+
+- 通过 repo-owned 导出脚本读取本地 trade group、review summary、日期/标的聚合与 trade summary API，生成 `review-snapshot.json`。
+- 根入口只加载脱敏快照并复用本地复盘样式；数据下钻支持全部/本月/本周/特定时间段与日历，盈亏复盘支持全部/盈利/亏损、矩阵、排序和分页，交易总结展示当前快照的规则和生成状态。
+- Canonical source 仍为 committed fills、Review Journal、分钟归档证据和规则目录；静态 JSON 只是部署 read model，artifact source 为 GitHub Pages 根入口资产。
+- 幂等口径为去除导出时间后的排序 JSON SHA-256；parser version 和 field mapper version 不变。
+
+Focused test owner slice：根入口合同、脱敏快照聚合、交易复盘前端合同、交易总结合同；通过后再执行 web typecheck/build、全量 pytest 和 Windows 启动入口检查。
+
+负向路径：快照缺失、schema 无效或 closed group 数、`traded_quantity`、PnL 任一不一致时阻断全部复盘内容，不使用硬编码旧数字或空成功态。
+
+## 当前 P3 切片：交易总结混合推荐
+
+目标：在「交易复盘」下新增「交易总结」，把指定日期范围的盈利、亏损和持平闭合交易转成证据可追溯、参数明确的执行规则与规避错误；后端确定规则、排序和量化动作，当前 Codex 会话负责生成受约束的摘要表达。
+
+范围：
+
+- 「盈亏复盘」和「交易总结」共用全部、本月、本周和特定时间段 state；盈亏单单选仍属于盈亏复盘。
+- 新增 `GET /api/review/trade-summary` 和 `POST /api/review/trade-summary/generations`。
+- 存储版本升级到 v9，新增 `trade_summary_generations` 保存脱敏聚合快照、确定性规则、AI 文案、失败和重试证据。
+- `intraday_review_rule_catalog_v2` 覆盖突破回踩、VWAP/趋势一致、量能确认、结构/时间止损、盈利保护和执行纪律，并为每条规则固化 `condition` 与 `action_steps`；参数包含 K 线数、量能倍数、ATR、风险百分比、R 倍数、分批比例和停手线。
+- 本地模型只允许 loopback `/v1` 地址，`temperature=0`、非流式、60 秒超时；服务端读取模型配置和可选密钥。
+- `trade_summary_contract_v3` 优先读取当前 `summary_key + prompt_version + codex_session + session_model + model_config_hash` 匹配的本会话 artifact；前端只 GET 展示，不自动或手动 POST 模型请求。
+- 当前会话 narrative 必须覆盖后端给出的全部规则 ID，且不能新增数字；服务层重新计算证据后才写入 `trade_summary_generations`。可选本地模型入口沿用相同校验和脱敏边界。
+- 支持率、命中率和影响金额继续作为后端 `quantification` 审计字段保存，但 UI 推荐卡只展示目录确定的量化条件与动作，不把相关性证据误写成执行参数。
+- 设计包位于 `designs/2026-07-22-trade-summary-tab/`；本切片不新增全局 `DESIGN.md`。
+
+事实源：
+
+- Canonical source：committed fills 构成的 closed Trade Groups。
+- Subjective source：Review Journal 亏损原因。
+- Market evidence：已保存分钟归档、archive id 和 `bars_hash`。
+- Knowledge source：版本化经典规则目录。
+- Read model：交易总结 GET。
+- Artifact source：`trade_summary_generations`。
+- Idempotency：`summary_key + prompt_version + provider + model + model_config_hash` 稳定 hash。
+
+验收：
+
+- 至少 20 笔闭合交易且盈利、亏损各至少 5 笔才允许个性化生成；未达标展示经典基线和缺口。
+- 因子统一归一化为 `score / max_score`；盈利支持 `>= 0.70`，亏损弱项 `< 0.40`。
+- 执行规则至少 3 笔盈利支持和 3 笔亏损反证；规避规则至少 3 笔亏损命中。
+- 缺归档和缺 Journal 不被当成反向证据。
+- 模型未配置、不可连接、超时、非成功响应、非法 JSON、规则 ID 篡改或新增数字时保存失败，确定性规则仍可见。
+- 证据、规则目录或提示词变化后旧会话 artifact 必须标记 `stale`；页面不得继续把旧文案展示为当前结论。
+- 模型外发不包含账号、原始 STP 行、fill/order id、原始 payload、Journal 自由文本或本机路径。
+- Windows 启动器和 `/api/healthz` 检查 `trade_summary_contract_v3` 与两条新路由，不暴露模型地址或密钥。
+
+负向路径：无交易不创建 artifact；样本不足拒绝生成；规则 ID 缺失、篡改或摘要新增数字时拒绝写入；证据变化后旧文案显示 `stale`；摘要失败不能显示成功或伪造建议，确定性量化规则仍可见。
+
 ## 当前 P3 切片：亏损交易组 Review Journal
 
-目标：在 Trade Replay 弹层内为已平仓亏损交易组提供精简原因下拉，记录本次亏损的主观归因；「成交记录」模块提供「仅看亏损单」勾选项但不提供单独「复盘」操作按钮；「下钻复盘」保留「数据下钻」和「盈亏复盘」tab，数据下钻用月日历选择每日下钻，盈亏复盘集中承接热力时间矩阵、全部订单/盈利单/亏损单列表和亏损原因分类。
+目标：在 Trade Replay 弹层内为已平仓亏损交易组提供精简原因下拉，记录本次亏损的主观归因；「成交记录」模块提供「仅看亏损单」勾选项但不提供单独「复盘」操作按钮；「下钻复盘」保留「数据下钻」和「盈亏复盘」能力，并由当前交易总结切片增加第三个「交易总结」tab。数据下钻用月日历选择每日下钻，盈亏复盘集中承接热力时间矩阵、全部订单/盈利单/亏损单列表和亏损原因分类。
 
 范围：
 
@@ -20,7 +74,7 @@
 - 「下钻复盘」默认展示「数据下钻」；切到「盈亏复盘」后读取所有日期 closed 且 PnL 可计算的交易组，单选默认选中「全部订单」，可切到「仅看盈利单」或「仅看亏损单」。
 - 盈亏复盘时间筛选提供全部、本月、本周和特定时间段；当前单选和时间范围统一控制统计指标、热力矩阵和订单列表。亏损视图额外展示一级/二级原因分类汇总并支持联动多选筛选订单明细；盈利和全部视图的原因模块展示为空。
 - 盈亏复盘统计指标整理在一行；订单明细默认按时间倒序，也可按盈亏绝对值、盈利金额或亏损金额倒序，每页 20 笔。
-- 「盈亏复盘」展示只读热力时间矩阵，按 09:30-10:30、10:30-11:30、11:30-13:30、13:30-15:00、15:00-16:00 五个美股常规盘微观结构窗口和开仓 ATR Multiple 统计当前单选范围；全部订单视图在摘要中展示最大盈利区、最大亏损区和每个时间窗口收益合计，盈利视图展示最大盈利区，亏损视图展示最大亏损区；矩阵格不筛选订单明细。波动/冲击环境读取后端 `position_drawdown.entry_atr_multiple`，由本地 `market_minute_archives` 计算开仓 1min K 振幅 / 前 20 根 ATR；缺开仓前 20 根分钟线时显示缺 ATR 证据，不用已实现盈亏或美元回撤回退，也不新增前端行情指标计算。
+- 「盈亏复盘」展示只读热力时间矩阵，横轴固定为 09:30-10:30、10:30-11:30、11:30-13:30、13:30-15:00、15:00-16:00 五个美股常规盘微观结构窗口。全部订单视图默认展示 ATR 时间矩阵，并可切换为股数时间矩阵；ATR 纵轴读取后端 `position_drawdown.entry_atr_multiple`，由本地 `market_minute_archives` 计算开仓 1min K 振幅 / 前 20 根 ATR，缺历史分钟线时显示缺 ATR 证据；股数纵轴只读使用轻量交易组 `total_quantity`，按 `≤50`、`51-100`、`101-200`、`201-500`、`>500` 股分档，异常非正数进入缺股数证据，并在右侧 Y 轴汇总每档收益、订单数和股数。全部订单两种矩阵均展示最大盈利区、最大亏损区和每个时间窗口收益合计；盈利视图和亏损视图继续使用 ATR 时间矩阵，分别展示最大盈利区或最大亏损区。矩阵格不筛选订单明细，不用已实现盈亏或美元回撤回退 ATR，也不新增前端行情指标计算。
 - 只有 closed 且 PnL 小于 0 的交易组在 Trade Replay 弹层订单明细模块下方展示亏损原因下拉。
 - 保存原因后成交记录行显示已选亏损原因。
 - 盈利、持平、未清仓或不存在的交易组不能写入亏损复盘。
@@ -127,6 +181,7 @@
 - 交易组按 `account_canonical + symbol`、成交时间和 fill id 顺序配对，支持多头、空头、加仓、部分平仓和未清仓状态。
 - Daily summary 的 `trade_group_count`、PnL、胜率、盈亏比、单笔期望值、每股净收益和持仓最大回撤复用 closed trade groups，避免 UI 分组和 KPI 口径漂移。
 - Replay 弹层只读取本地已归档 `market_minute_archives`，默认按开仓到清仓窗口自动缩放并保留首尾各 10 分钟；勾选「查看半小时」时只把可见蜡烛图窗口扩大到开平仓前后各 30 分钟，叠加组内所有成交点，并展示按组内成交路径和窗口分钟 high/low 追溯的持仓最大回撤；打开弹层不会自动触发行情 provider 拉取。
+- 分钟蜡烛复盘主图、Trade Replay 弹层和共享组件下的策略蜡烛图支持鼠标悬浮查看对应分钟的中文开盘价、最高价、最低价、收盘价、归档 VWAP 与买入/卖出成交价；OHLC/VWAP 只读当前 archive，成交价只读映射到该分钟的 committed `fills`，多笔同向成交显示价格区间与笔数，不新增前端行情、成交均价或策略计算。
 - 智能评价采用 `trade_eval_intraday_v1` 规则模型，只读计算 VWAP 执行质量、趋势配合、成交量确认、MFE/MAE、清仓效率和 PnL 结果；评分 payload 以结构化 `recommendations` 返回后续开仓和平仓建议；持仓最大回撤是交易组 read model 字段，不由前端自行重算。
 - 交易复盘 tab 头部展示有记录以来汇总；随后按交易日和按标的两个下钻 tab 展示次级汇总，选择具体日期+标的后进入分钟蜡烛和交易组复盘模块。
 
@@ -136,6 +191,7 @@
 - `trade_group_id` 只暴露 hash 后 ID，不暴露原始 fill idempotency key。
 - 缺分钟线、provider failure、时区冲突或无 bars 时，持仓最大回撤和评价必须返回 `insufficient_market_data`，不能生成正常评分。
 - Replay 弹层不能用行情数据改写成交价格、数量或时间。
+- 鼠标离开价格绘图区、切换归档或改变可见窗口后必须清空旧浮层；缺归档、无 bars 或失败状态不得显示悬浮行情，没有映射成交或 VWAP 时必须显示缺值，不得合成价格或伪造成交。
 - 「查看半小时」只改变 Trade Replay 可见分钟线范围；缺归档、provider failure 或无 bars 时仍显示不可用状态，不渲染成功图。
 - 无 committed fills 时，全局汇总为 0、日期/标的下钻为空，UI 不展示假日期、假标的或成功复盘。
 - 文档和 changelog 必须同步 P1 事实源、read model、artifact source 和负向路径。
@@ -270,6 +326,8 @@ GET /api/fills/{fill_id}
 GET /api/review/summary
 GET /api/review/summary-groups?group_by=date|symbol
 GET /api/trade-groups?date=YYYY-MM-DD&include_details=false
+GET /api/review/trade-summary?start_date=YYYY-MM-DD&end_date=YYYY-MM-DD
+POST /api/review/trade-summary/generations
 ```
 
 ### Market Context

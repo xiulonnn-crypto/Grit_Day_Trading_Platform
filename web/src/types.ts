@@ -202,6 +202,116 @@ export interface ReviewSummaryGroup extends ReviewSummary {
   group_label: string;
 }
 
+export type TradeSummaryEvidenceStatus = "no_trades" | "insufficient_sample" | "eligible";
+export type TradeSummaryGenerationStatus =
+  | "not_requested"
+  | "unconfigured"
+  | "pending"
+  | "completed"
+  | "failed"
+  | "stale";
+
+export interface TradeSummaryRule {
+  rule_id: string;
+  family: string;
+  title: string;
+  condition: string;
+  source_ids: string[];
+  catalog_order: number;
+  evidence_count: number;
+  impact_amount: number;
+  winning_support_count: number;
+  loss_hit_count: number;
+  winning_support_pnl: number;
+  loss_impact: number;
+  action_steps: Array<{ label: string; value: string }>;
+  quantification: {
+    winning_observed_count: number;
+    winning_support_count: number;
+    winning_support_rate: number | null;
+    winning_support_pnl: number;
+    average_winning_support_pnl: number | null;
+    loss_observed_count: number;
+    loss_hit_count: number;
+    loss_hit_rate: number | null;
+    loss_impact: number;
+    average_loss_impact: number | null;
+  };
+}
+
+export interface TradeSummaryClassicBaseline {
+  rule_id: string;
+  family: string;
+  title: string;
+  condition: string;
+  source_ids: string[];
+  catalog_order: number;
+  action_steps: Array<{ label: string; value: string }>;
+}
+
+export interface TradeSummaryNarrative {
+  headline: string;
+  overview: string;
+  execution_rules: Array<{ rule_id: string; text: string }>;
+  avoidance_rules: Array<{ rule_id: string; text: string }>;
+}
+
+export interface TradeSummary {
+  contract_version: "trade_summary_contract_v3" | string;
+  rule_catalog_version: "intraday_review_rule_catalog_v2" | string;
+  evaluation_model_version: "trade_eval_intraday_v1" | string;
+  prompt_version: "trade_summary_prompt_v3" | string;
+  scope: { start_date: string | null; end_date: string | null };
+  evidence_status: TradeSummaryEvidenceStatus;
+  thresholds: {
+    minimum_closed_trades: number;
+    minimum_wins: number;
+    minimum_losses: number;
+    minimum_rule_evidence: number;
+    winning_support_ratio: number;
+    loss_weakness_ratio: number;
+  };
+  gaps: {
+    closed_trades_needed: number;
+    wins_needed: number;
+    losses_needed: number;
+  };
+  progress: { closed_trades: number; wins: number; losses: number };
+  metrics: {
+    closed_trade_count: number;
+    win_count: number;
+    loss_count: number;
+    flat_count: number;
+    pnl: number;
+    profit_factor: number | null;
+    evaluated_trade_count: number;
+    evaluation_coverage_ratio: number;
+    reviewed_loss_count: number;
+    loss_journal_coverage_ratio: number;
+  };
+  classic_baselines: TradeSummaryClassicBaseline[];
+  execution_rules: TradeSummaryRule[];
+  avoidance_rules: TradeSummaryRule[];
+  summary_key: string;
+  sources: Array<{ id: string; title: string; url: string; kind: "research" | "risk" | string }>;
+  disclaimer: string;
+  generation: {
+    status: TradeSummaryGenerationStatus;
+    llm_configured: boolean;
+    current_model: string | null;
+    provider: string | null;
+    artifact_id: string | null;
+    artifact_summary_key: string | null;
+    model: string | null;
+    retry_count: number;
+    failure_reason: string | null;
+    created_at: string | null;
+    updated_at: string | null;
+    completed_at: string | null;
+    narrative: TradeSummaryNarrative | null;
+  };
+}
+
 export type MarketDataStatus = "available" | "partial" | "missing" | "provider_failed" | "timezone_conflict";
 
 export interface MarketBar {

@@ -1,10 +1,24 @@
 # Grit Day Trading Platform
 
+## 云端交易复盘快照
+
+- GitHub Pages 根入口同步本地「数据下钻」「盈亏复盘」「交易总结」三个复盘模块，支持模块切换、月份翻页、日期选择、时间范围、盈亏模式、矩阵维度、排序和分页。
+- 云端数据由本地 committed fills、Review Journal、分钟归档证据与交易总结 read model 导出；统计口径与本地一致，但账号、原始 STP 行、批次追溯和内部调试字段不会进入公开快照。
+- 静态快照带稳定 `source_hash` 并在浏览器内重新核对闭合交易数、交易股数与 PnL；文件缺失或校验失败时页面明确阻断，不会继续显示旧数字或空成功态。
+
+## 最新交易总结更新
+
+- 「交易复盘」下新增第三个子 tab「交易总结」，与「盈亏复盘」共享全部、本月、本周和特定时间段筛选；交易总结始终同时分析该范围的盈利、亏损和持平闭合交易，盈亏单单选仍只属于盈亏复盘。
+- 个性化推荐采用严格样本门槛：至少 20 笔闭合交易，且盈利、亏损各至少 5 笔。未达标时只显示经典日内交易基线、样本缺口和准备进度，不允许生成 AI 摘要。
+- 推荐规则、排序和证据由后端 `intraday_review_rule_catalog_v2` 确定；规则卡直接展示可执行参数，包括等待 K 线数、量能倍数、ATR 距离、单笔风险、分批止盈比例、R 倍数、时间止损和当日停手线。支持笔数、支持率和影响金额只保留在后端审计证据，不作为推荐规则主文案。
+- AI 摘要由当前 Codex 会话基于脱敏聚合证据生成，并以 `codex_session` artifact 写入 `trade_summary_generations` 后由页面直接展示；浏览器不会自动或手动调用模型。摘要必须匹配当前 `summary_key`、提示词版本和全部规则 ID，不能新增数字、规则或交易结论；证据变化后旧摘要进入 `stale`。
+- `POST /api/review/trade-summary/generations` 仍保留为可选的后端本地模型兼容入口，使用 `GRIT_REVIEW_LLM_BASE_URL`、`GRIT_REVIEW_LLM_MODEL` 和可选的 `GRIT_REVIEW_LLM_API_KEY`；地址只允许包含 `/v1` 的本机 loopback，前端交易总结页不主动调用该入口。
+
 ## 最新下钻复盘更新
 
 - 「成交记录」模块新增「仅看亏损单」勾选项，并同步收窄上方分钟蜡烛图的买卖点；模块不再提供单独「复盘」操作按钮；已平仓亏损交易组可在 Trade Replay 弹层的订单明细下方选择开仓信号、平仓信号或误操作下的精简亏损原因；该记录进入 Review Journal，不会修改 STP 成交价格、数量或时间。
 - 「数据下钻」tab 现在先展示全部、本月、本周或特定时间段筛选，再展示该时间范围内全部订单统计指标和月日历；日历按天展示股数与 PnL，点击有订单的日期方块即可选中该日并在右侧进入标的下钻，当前复盘日期、标的和指标移到月日历下方。
-- 「下钻复盘」包含「数据下钻」和「盈亏复盘」两个模块 tab；热力时间矩阵调整到「盈亏复盘」。盈亏复盘默认展示全部订单，也可切到仅看盈利单或仅看亏损单；所选时间段会统一控制统计指标、热力时间矩阵和订单列表，亏损视图额外展示一级/二级原因饼图联动筛选。热力时间矩阵按美股常规盘五大微观结构窗口和开仓 1min K 振幅 / 前 20 根 ATR 的倍数只读定位最大盈利区和最大亏损区，仍只写 Review Journal。
+- 「下钻复盘」包含「数据下钻」「盈亏复盘」和「交易总结」三个模块 tab；热力时间矩阵位于「盈亏复盘」。盈亏复盘默认展示全部订单，也可切到仅看盈利单或仅看亏损单；所选时间段会统一控制统计指标、热力时间矩阵和订单列表，亏损视图额外展示一级/二级原因饼图联动筛选。全部订单热力时间矩阵可在 ATR 时间矩阵与股数时间矩阵之间切换：ATR 视图按开仓 1min K 振幅 / 前 20 根 ATR 分层，股数视图按每笔已平仓交易组的配对股数分档并在右侧展示 Y 轴收益、订单数和股数汇总；两种矩阵均保持只读，仍只写 Review Journal。
 
 ## 最新信号面板更新
 - 「下单信号」模块展开当前监控窗口内后端 `signals[]` 的真实 BUY/SELL 信号订单，展示标的、订单意图、操作类型、信号价、股数、触发时间和 bar index；开仓单额外展示止损/止盈，股数由后端按策略初始本金和入场资金比例计算，关仓单不展示止损/止盈并显示后端平仓原因标签；HOLD、失败、完整策略动作、状态、版本、provider、原因码和 hash 证据保留在「原因与证据」模块。
@@ -51,6 +65,7 @@
 - 离线脚本入口是 `python scripts/archive-yahoo-minute-data.py --date YYYY-MM-DD`；不传日期时会扫描所有已提交成交涉及的交易日和标的。
 - 本地研究标的组归档入口是 `python scripts/archive-local-minute-db.py --date YYYY-MM-DD --symbols MU,NVDA,SPY --window-trading-days 1`；该脚本把指定标的的 1 分钟线持久化到同一个 SQLite 本地库，供策略测试只读复用。
 - 交易复盘页只读取本地已保存分钟线归档，分钟蜡烛图会自动缩放到该标的第一笔到最后一笔 committed fill，并把买卖点叠加到图上；打开 Replay 弹层不会自动触发行情 provider 拉取。
+- 分钟蜡烛复盘主图、Trade Replay 弹层和复用同一图表的策略复盘支持鼠标悬浮查看对应分钟的中文开盘价、最高价、最低价、收盘价、归档 VWAP 和该分钟买入/卖出成交价；多笔同向成交显示价格区间与笔数，数值只读当前归档 bar 和 committed fills，鼠标离开或证据不可用时不会保留或伪造提示。
 - 归档只写入 `market_minute_archives` 和 provider attempt 记录，不会修改 STP 成交价格、数量或时间。
 - 每条归档保存 `bars_hash`、`bars_json`、VWAP、当日高低、成交量上下文、provider 状态和归档版本。
 
@@ -160,7 +175,8 @@ Grit Day Trading Platform 是个人日内交易闭环 Web 系统。首版目标�
 - [TECHNICAL.md](./TECHNICAL.md)：当前技术计划、阶段切片、接口草案、测试策略和开放问题。
 - [AGENTS.md](./AGENTS.md)：Codex 和后续工程 agent 的操作规则、交付门禁和变更纪律。
 - [CHANGELOG.md](./CHANGELOG.md)：公开变更记录。
-- [index.html](./index.html)：仓库根目录静态入口页，用于确认当前阶段、事实源边界，并静态切换查看「数据下钻」和「盈亏复盘」两个模块。
+- [index.html](./index.html)：仓库根目录只读云端复盘入口，同步「数据下钻」「盈亏复盘」「交易总结」三个模块及日历交互。
+- [scripts/export-review-snapshot.py](./scripts/export-review-snapshot.py)：从本地复盘 API 导出脱敏、可校验的 GitHub Pages read-model 快照。
 - [scripts/archive-yahoo-minute-data.py](./scripts/archive-yahoo-minute-data.py)：从已提交成交目标准备 Yahoo 1 分钟线归档。
 - [scripts/archive-local-minute-db.py](./scripts/archive-local-minute-db.py)：按本地研究标的组准备 Yahoo 1 分钟线归档。
 - [scripts/run-ai-strategy-benchmark.py](./scripts/run-ai-strategy-benchmark.py)：显式运行 AI策略 v2 五模板的同口径本地历史回放并输出摘要报告；GET 推荐接口不会自动触发该脚本。
@@ -168,6 +184,7 @@ Grit Day Trading Platform 是个人日内交易闭环 Web 系统。首版目标�
 - [designs/2026-06-03-review-desk-layout/spec.md](./designs/2026-06-03-review-desk-layout/spec.md)：复盘台主图优先、盘前工作栏和导入证据区布局规格。
 - [designs/2026-07-14-ai-strategy-tab/spec.md](./designs/2026-07-14-ai-strategy-tab/spec.md)：AI策略 Top 5 榜单、详情台、窄屏堆叠和证据状态设计规格。
 - [designs/2026-07-14-ai-strategy-tab/traceability-matrix.md](./designs/2026-07-14-ai-strategy-tab/traceability-matrix.md)：AI策略 v2 从需求、实现、自动化测试到桌面/移动端运行截图的追踪矩阵。
+- [designs/2026-07-22-trade-summary-tab/spec.md](./designs/2026-07-22-trade-summary-tab/spec.md)：交易总结样本概览、AI 状态、双栏规则、经典方法依据和响应式设计规格。
 
 ## P0 API
 
@@ -199,6 +216,11 @@ Grit Day Trading Platform 是个人日内交易闭环 Web 系统。首版目标�
 - `GET /api/strategies/{strategy_id}/history`：读取策略配置版本、参数快照和参数变更历史。
 - `POST /api/strategies/{strategy_id}/history/{history_id}/rollback`：从历史记录恢复变更前参数快照，并新增一条回退历史记录。
 - `POST /api/strategies/{strategy_id}/live-signal`：用 Futu、Yahoo 或 Fake 实时分钟线生成只读信号预览，返回当前配置版本、最新策略版本、provider 状态和 hash 证据。
+
+## P3 API
+
+- `GET /api/review/trade-summary?start_date=YYYY-MM-DD&end_date=YYYY-MM-DD`：读取指定日期范围的确定性交易总结、样本门槛、覆盖率、量化 `condition/action_steps`、`summary_key` 和匹配的本会话 AI artifact。
+- `POST /api/review/trade-summary/generations`：可选的本地模型兼容入口，只接收日期范围并由服务端重新计算规则证据；交易总结页面不调用该入口，任何客户端都不能提交或覆盖规则、证据数或交易结论。
 
 ## 登录快捷方式
 

@@ -22,6 +22,7 @@ def test_storage_contract_creates_required_indexes_triggers_and_migration_marker
             6: "p2_strategy_config_history_contract_v6",
             7: "p2_strategy_config_history_rollback_contract_v7",
             8: "p3_trade_review_journal_contract_v8",
+            9: "p3_trade_summary_generation_contract_v9",
         }
         assert migration["description"] == expected_current_migrations[STORAGE_SCHEMA_VERSION]
         p0_migration = conn.execute("SELECT description FROM storage_migrations WHERE version = 1").fetchone()
@@ -49,6 +50,9 @@ def test_storage_contract_creates_required_indexes_triggers_and_migration_marker
         if STORAGE_SCHEMA_VERSION >= 8:
             trade_review_migration = conn.execute("SELECT description FROM storage_migrations WHERE version = 8").fetchone()
             assert trade_review_migration["description"] == "p3_trade_review_journal_contract_v8"
+        if STORAGE_SCHEMA_VERSION >= 9:
+            trade_summary_migration = conn.execute("SELECT description FROM storage_migrations WHERE version = 9").fetchone()
+            assert trade_summary_migration["description"] == "p3_trade_summary_generation_contract_v9"
         assert {
             "ux_import_batches_file_hash",
             "ux_import_rows_batch_line_hash",
@@ -88,6 +92,9 @@ def test_storage_contract_creates_required_indexes_triggers_and_migration_marker
             "ux_trade_reviews_group",
             "ux_trade_reviews_idempotency",
             "ix_trade_reviews_symbol_date",
+            "ux_trade_summary_generations_idempotency",
+            "ix_trade_summary_generations_summary",
+            "ix_trade_summary_generations_scope",
         }.issubset(
             _index_names(conn, "market_context_snapshots")
             | _index_names(conn, "market_minute_archives")
@@ -103,6 +110,7 @@ def test_storage_contract_creates_required_indexes_triggers_and_migration_marker
             | _index_names(conn, "strategy_optimization_candidates")
             | _index_names(conn, "strategy_config_history")
             | _index_names(conn, "trade_reviews")
+            | _index_names(conn, "trade_summary_generations")
         )
         assert "params_json" in _column_names(conn, "strategy_signal_runs")
         assert {"previous_params_json", "next_params_json", "source_history_id"}.issubset(
@@ -117,6 +125,23 @@ def test_storage_contract_creates_required_indexes_triggers_and_migration_marker
             "field_mapper_versions_json",
             "idempotency_key",
         }.issubset(_column_names(conn, "trade_reviews"))
+        assert {
+            "summary_key",
+            "idempotency_key",
+            "evidence_status",
+            "generation_status",
+            "rule_catalog_version",
+            "prompt_version",
+            "model_config_hash",
+            "evidence_snapshot_json",
+            "deterministic_rules_json",
+            "ai_narrative_json",
+            "response_hash",
+            "failure_reason",
+            "retry_count",
+            "parser_versions_json",
+            "field_mapper_versions_json",
+        }.issubset(_column_names(conn, "trade_summary_generations"))
         conn.execute(
             """
             INSERT INTO strategy_configs (

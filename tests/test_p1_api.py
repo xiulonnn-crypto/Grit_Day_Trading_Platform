@@ -21,13 +21,19 @@ def test_healthz_advertises_p1_runtime_routes(tmp_path):
     assert payload["live_signal_contract"] == "live_order_quantity_reason_tags_v1"
     assert payload["trade_eval_contract"] == "trade_eval_recommendation_v1"
     assert payload["ai_strategy_catalog"] == "ai_strategy_catalog_v2"
+    assert payload["trade_summary_contract"] == "trade_summary_contract_v3"
+    assert isinstance(payload["trade_summary_llm_configured"], bool)
     assert "/api/market-data/minute-archives" in payload["required_routes"]
     assert "/api/market-data/yahoo-minute-archive" in payload["required_routes"]
     assert "/api/trade-groups/{trade_group_id}/review" in payload["required_routes"]
+    assert "/api/review/trade-summary" in payload["required_routes"]
+    assert "/api/review/trade-summary/generations" in payload["required_routes"]
     routes = openapi.json()["paths"]
     assert "/api/market-data/minute-archives" in routes
     assert "/api/market-data/yahoo-minute-archive" in routes
     assert "/api/trade-groups/{trade_group_id}/review" in routes
+    assert "/api/review/trade-summary" in routes
+    assert "/api/review/trade-summary/generations" in routes
 
 
 def test_market_context_api_replays_and_reads_snapshot(tmp_path):

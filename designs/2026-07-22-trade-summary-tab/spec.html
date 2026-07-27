@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>P3 交易总结设计规格</title>
+  <style>
+    :root{font-family:Inter,"Segoe UI","PingFang SC",sans-serif;color:#1f2933;background:#eef2f5}*{box-sizing:border-box}body{margin:0;padding:28px}.shell{max-width:1384px;margin:auto;background:#fbfcfd;border:1px solid #d8e0e5;border-radius:10px;overflow:hidden}.tabs{display:flex;gap:6px;padding:12px 16px;border-bottom:1px solid #dce3e8;background:#fff}.tabs span,.filters span{padding:8px 14px;border-radius:6px;font-size:13px;font-weight:700;color:#607080}.tabs .active,.filters .active{color:#fff;background:#1f6f67}.main{padding:18px}.head,.section-head,.ai-head,.column>header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}.head h1{font-size:20px;margin:0 0 5px}.muted,.head p,.ai p,.rule p,.source{color:#607080;font-size:12px;line-height:1.55;margin:0}.pill,.status,.family{display:inline-flex;border-radius:999px;padding:5px 9px;font-size:11px;font-weight:800}.pill{background:#eef8f6;color:#1f6f67}.filters{display:flex;align-items:center;gap:5px;margin:16px 0 12px;padding:8px;background:#f3f6f8;border:1px solid #dce3e8;border-radius:8px}.filters b{font-size:12px;margin-right:8px}.metrics{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:8px;margin-bottom:12px}.metric{background:#fff;border:1px solid #dce3e8;border-radius:8px;padding:10px}.metric span{display:block;color:#607080;font-size:11px}.metric strong{display:block;font-size:17px;margin-top:4px}.ok{color:#137568}.bad{color:#b4533e}.ai{background:#f2faf8;border:1px solid #bcded7;border-top:3px solid #1f6f67;border-radius:8px;padding:14px;margin-bottom:14px}.ai h2{font-size:16px;margin:3px 0 6px}.ai .eyebrow,.column .eyebrow{font-size:10px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;color:#1f6f67}.status{background:#dff3ee;color:#17665f}.source-tag{display:flex;align-items:center;gap:6px;margin-top:10px;font-size:11px;color:#17665f;font-weight:800}.source-dot{width:7px;height:7px;border-radius:50%;background:#1f6f67}.columns{display:grid;grid-template-columns:1fr 1fr;gap:14px}.column{background:#fff;border:1px solid #dce3e8;border-radius:8px;padding:12px}.column>header{align-items:center;margin-bottom:10px}.column h2{font-size:15px;margin:0}.count{font-size:11px;color:#607080}.rule{border:1px solid #dce3e8;border-top:3px solid #1f6f67;border-radius:7px;padding:12px;margin-top:9px}.column.avoid .rule{border-top-color:#b4533e}.rule h3{font-size:14px;margin:7px 0 5px}.family{padding:3px 7px;background:#eef8f6;color:#1f6f67}.avoid .family{background:#fff1ef;color:#9a4635}.actions{display:grid;gap:5px;margin:10px 0 0}.actions div{display:grid;grid-template-columns:90px 1fr;gap:8px;padding:7px 8px;background:#f6f8f9;border-radius:5px}.actions dt{font-size:11px;color:#607080;font-weight:700}.actions dd{margin:0;font-size:12px;font-weight:850}.comment{margin-top:8px!important;padding-left:9px;border-left:2px solid #77b7ae}.footer{margin-top:14px;padding:11px 12px;border:1px solid #dce3e8;border-radius:7px;background:#fff}.footer strong{font-size:12px}.footer p{font-size:11px;color:#607080;margin:5px 0 0}@media(max-width:900px){body{padding:12px}.metrics{grid-template-columns:repeat(4,1fr)}.columns{grid-template-columns:1fr}}@media(max-width:520px){body{padding:0}.shell{border-radius:0}.tabs{overflow:auto}.main{padding:12px}.head{display:block}.pill{margin-top:8px}.filters{overflow:auto}.metrics{grid-template-columns:1fr 1fr}.actions div{grid-template-columns:1fr}.ai-head{display:block}.status{margin-top:8px}}
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <nav class="tabs"><span>数据下钻</span><span>盈亏复盘</span><span class="active">交易总结</span></nav>
+    <div class="main">
+      <header class="head"><div><h1>交易总结</h1><p>本会话生成摘要表达；后端确定规则、排序与量化执行动作</p></div><span class="pill">intraday_review_rule_catalog_v2</span></header>
+      <div class="filters"><b>共享日期范围</b><span class="active">全部</span><span>本月</span><span>本周</span><span>特定时间段</span></div>
+      <section class="metrics" aria-label="样本概览">
+        <div class="metric"><span>闭合交易</span><strong>28</strong></div><div class="metric"><span>盈利</span><strong class="ok">18</strong></div><div class="metric"><span>亏损</span><strong class="bad">8</strong></div><div class="metric"><span>持平</span><strong>2</strong></div>
+        <div class="metric"><span>PnL</span><strong class="ok">+$640</strong></div><div class="metric"><span>Profit Factor</span><strong>1.32</strong></div><div class="metric"><span>分钟线覆盖</span><strong>93%</strong></div><div class="metric"><span>Journal 覆盖</span><strong>75%</strong></div>
+      </section>
+      <section class="ai">
+        <div class="ai-head"><div><span class="eyebrow">AI 摘要</span><h2>先控制单笔亏损，再扩大确认后的盈利交易</h2><p>盈利交易数量占优，但退出纪律仍决定整体结果。优先执行结构止损、首目标减仓和移动保护，只保留趋势与量能共同确认的机会。</p></div><span class="status">已完成</span></div>
+        <div class="source-tag"><span class="source-dot"></span>摘要来源：本次会话</div>
+      </section>
+      <section class="columns">
+        <div class="column">
+          <header><h2>推荐执行规则</h2><span class="count">3 条</span></header>
+          <article class="rule"><span class="family">盈利保护</span><h3>分批止盈并移动保护剩余仓位</h3><p>达到首个目标后锁定收益，并按跟踪线保护剩余仓位。</p><p class="comment">会话点评：盈利机会先兑现再延伸，把剩余风险降到可控范围。</p><dl class="actions"><div><dt>首个目标</dt><dd>+1R 止盈 50%，止损移到入场价</dd></div><div><dt>第二目标</dt><dd>+2R 再止盈 25%</dd></div><div><dt>剩余仓位</dt><dd>最后 25% 用 9 EMA 或两根 K 线低点跟踪</dd></div></dl></article>
+          <article class="rule"><span class="family">风险退出</span><h3>结构失效与时间止损必须执行</h3><p>先定义风险，再用价格结构和推进速度决定退出。</p><dl class="actions"><div><dt>单笔风险</dt><dd>不超过账户权益 0.5%</dd></div><div><dt>硬止损</dt><dd>结构失效或 -1R，先到者执行</dd></div><div><dt>时间止损</dt><dd>5 根 1 分钟 K 未达到 +0.5R 即退出</dd></div></dl></article>
+        </div>
+        <div class="column avoid">
+          <header><h2>推荐规避错误</h2><span class="count">3 条</span></header>
+          <article class="rule"><span class="family">盈利保护</span><h3>避免盈利回吐失控</h3><p>首目标触达后未锁定收益或未移动保护，立即纠正。</p><dl class="actions"><div><dt>最低锁定</dt><dd>+1R 后至少兑现 50%</dd></div><div><dt>保护要求</dt><dd>剩余止损不得低于入场价</dd></div><div><dt>回吐上限</dt><dd>从峰值回撤 0.5R 即保护离场</dd></div></dl></article>
+          <article class="rule"><span class="family">执行纪律</span><h3>避免超仓、重复下单和失控交易</h3><p>任何一项越过计划边界，都取消新开仓。</p><dl class="actions"><div><dt>仓位偏差</dt><dd>超过计划 10% 立即取消或减仓</dd></div><div><dt>重复订单</dt><dd>同标的同方向最多 1 个活动订单</dd></div><div><dt>当日停手</dt><dd>累计 -2R 或连续 3 笔亏损</dd></div></dl></article>
+        </div>
+      </section>
+      <footer class="footer"><strong>经典方法依据（折叠）</strong><p>规则用于结构化复盘与纪律检查，不构成投资建议，也不保证未来盈利。</p></footer>
+    </div>
+  </main>
+</body>
+</html>

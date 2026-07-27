@@ -274,7 +274,7 @@ def test_loss_trade_review_action_and_reason_catalog_are_visible():
 
 
 def test_profit_loss_review_drill_tab_reads_profit_and_loss_trade_groups():
-    assert 'type ReviewDrillSurfaceTab = "data" | "loss";' in APP_SOURCE
+    assert 'type ReviewDrillSurfaceTab = "data" | "loss" | "summary";' in APP_SOURCE
     assert 'const [activeReviewDrillSurfaceTab, setActiveReviewDrillSurfaceTab] = useState<ReviewDrillSurfaceTab>("data")' in APP_SOURCE
     assert "const [allTradeGroups, setAllTradeGroups] = useState<TradeGroup[]>([])" in APP_SOURCE
     assert "fetchTradeGroups(undefined, undefined, { ...requestOptions, includeDetails: false })" in APP_SOURCE
@@ -304,7 +304,9 @@ def test_profit_loss_review_drill_tab_reads_profit_and_loss_trade_groups():
     assert "onClick={() => void props.onReplayTradeGroup(group)}" in APP_SOURCE
     assert 'type LossReviewSortMode = "time_desc" | "loss_desc";' in APP_SOURCE
     assert 'type LossReviewTimeFilterMode = "all" | "month" | "week" | "custom";' in APP_SOURCE
-    assert 'const [lossReviewTimeFilterMode, setLossReviewTimeFilterMode] = useState<LossReviewTimeFilterMode>("all")' in APP_SOURCE
+    assert 'useState<LossReviewTimeFilterMode>("all")' in APP_SOURCE
+    assert "profitLossReviewTimeFilterMode" in APP_SOURCE
+    assert "function ReviewSharedTimeFilter" in APP_SOURCE
     assert "lossReviewTimeFilterLabels" in APP_SOURCE
     assert 'all: "全部"' in APP_SOURCE
     assert 'month: "本月"' in APP_SOURCE
@@ -336,6 +338,48 @@ def test_profit_loss_review_drill_tab_reads_profit_and_loss_trade_groups():
     assert ".lossReviewTradeItem" in STYLES_SOURCE
     assert "date?: string" in API_SOURCE
     assert 'if (date) params.set("date", date);' in API_SOURCE
+
+
+def test_trade_summary_third_tab_uses_shared_scope_session_summary_and_executable_rules():
+    assert "交易总结" in APP_SOURCE
+    assert 'activeReviewDrillSurfaceTab === "summary"' in APP_SOURCE
+    assert "function TradeSummaryPanel" in APP_SOURCE
+    assert "fetchTradeSummary(timeRange.startDate ?? undefined, timeRange.endDate ?? undefined" in APP_SOURCE
+    summary_panel = APP_SOURCE[APP_SOURCE.index("function TradeSummaryPanel"):APP_SOURCE.index("function TradeSummaryProgress")]
+    assert "generateTradeSummary(" not in summary_panel
+    assert "onGenerateSummary" not in summary_panel
+    assert "window.setInterval" not in summary_panel
+    assert 'summary.generation.provider === "codex_session"' in summary_panel
+    assert "摘要来源：本次会话" in summary_panel
+    assert "不会由浏览器自动调用模型" in summary_panel
+    assert "customEndDate={customProfitLossReviewEndDate}" in APP_SOURCE
+    assert "customStartDate={customProfitLossReviewStartDate}" in APP_SOURCE
+    assert "timeFilterMode={profitLossReviewTimeFilterMode}" in APP_SOURCE
+    assert "闭合交易" in APP_SOURCE
+    assert "Profit Factor" in APP_SOURCE
+    assert "分钟线评价覆盖率" in APP_SOURCE
+    assert "亏损 Journal 覆盖率" in APP_SOURCE
+    assert "推荐执行规则" in APP_SOURCE
+    assert "推荐规避错误" in APP_SOURCE
+    assert "量化执行清单" in APP_SOURCE
+    assert "(rule.action_steps ?? []).map" in APP_SOURCE
+    assert "rule.action_steps.map" not in APP_SOURCE
+    assert "会话点评：" in APP_SOURCE
+    assert "盈利支持率" not in summary_panel
+    assert "formatRuleEvidenceRate" not in APP_SOURCE
+    assert "经典方法依据" in APP_SOURCE
+    assert "AI 生成已禁用" in APP_SOURCE
+    assert 'summary.evidence_status === "eligible"' in APP_SOURCE
+    for status in ("not_requested", "unconfigured", "pending", "completed", "failed", "stale"):
+        assert f"{status}:" in APP_SOURCE
+    assert '"/api/review/trade-summary/generations"' in API_SOURCE
+    assert 'method: "POST"' in API_SOURCE
+    assert '`/api/review/trade-summary${suffix}`' in API_SOURCE
+    assert ".tradeSummaryRuleColumns" in STYLES_SOURCE
+    assert ".tradeSummaryRuleActionGrid" in STYLES_SOURCE
+    assert ".tradeSummaryMetrics" in STYLES_SOURCE
+    assert ".tradeSummaryAiCard" in STYLES_SOURCE
+    assert ".tradeSummaryBaselineCards" in STYLES_SOURCE
 
 
 def test_profit_review_view_keeps_reason_module_empty():
@@ -404,7 +448,7 @@ def test_loss_review_market_regime_matrix_uses_us_session_windows():
     assert "timeWindowSummaries: LossReviewTimeWindowSummary[]" in APP_SOURCE
     assert '.filter((row) => row.key !== "missing" || row.cells.some((cell) => cell.count > 0))' in APP_SOURCE
     assert "props.matrix.timeWindows.map" in APP_SOURCE
-    assert "gridTemplateColumns: `minmax(150px, 0.9fr) repeat(${props.matrix.timeWindows.length}, minmax(112px, 1fr))`" in APP_SOURCE
+    assert 'showYAxisSummary ? " minmax(132px, 0.95fr)" : ""' in APP_SOURCE
     assert "lossReviewTimeWindows" not in APP_SOURCE
     assert 'return "extended"' not in APP_SOURCE
     assert ".lossReviewMatrixPanel" in STYLES_SOURCE
@@ -423,6 +467,42 @@ def test_loss_review_market_regime_matrix_uses_us_session_windows():
     assert "未选择矩阵格" not in APP_SOURCE
     assert "onToggleCell={toggleMarketRegimeCell}" not in loss_body
     assert "selectedCell={selectedMarketRegimeCell}" not in loss_body
+
+
+def test_all_orders_can_switch_to_share_time_matrix_with_y_axis_summary():
+    loss_body_start = APP_SOURCE.index('function LossReviewDrilldown(props: {')
+    loss_body_end = APP_SOURCE.index('function EmptyState', loss_body_start)
+    loss_body = APP_SOURCE[loss_body_start:loss_body_end]
+
+    assert 'type LossReviewMatrixDimension = "atr" | "shares";' in APP_SOURCE
+    assert 'useState<LossReviewMatrixDimension>("atr")' in loss_body
+    assert 'profitLossReviewMode === "all" ? allOrdersMatrixDimension : "atr"' in loss_body
+    assert 'activeMatrixDimension === "shares"' in loss_body
+    assert "buildLossReviewShareTimeMatrix(timeFilteredTradeGroups)" in loss_body
+    assert "group.total_quantity" in APP_SOURCE
+    assert '{ detail: "> 500 股", key: "very_large", label: "超大单" }' in APP_SOURCE
+    assert '{ detail: "201-500 股", key: "large", label: "大单" }' in APP_SOURCE
+    assert '{ detail: "101-200 股", key: "medium_large", label: "中大单" }' in APP_SOURCE
+    assert '{ detail: "51-100 股", key: "medium", label: "中单" }' in APP_SOURCE
+    assert '{ detail: "≤ 50 股", key: "small", label: "小单" }' in APP_SOURCE
+    assert '{ detail: "股数缺失或非正数", key: "missing", label: "缺股数证据" }' in APP_SOURCE
+    assert 'return Number.isFinite(quantity) && quantity > 0 ? quantity : null;' in APP_SOURCE
+    assert 'role="radiogroup" aria-label="热力时间矩阵参数切换"' in APP_SOURCE
+    assert 'atr: "ATR 时间矩阵"' in APP_SOURCE
+    assert 'shares: "股数时间矩阵"' in APP_SOURCE
+    assert 'name="allOrdersTimeMatrixDimension"' in APP_SOURCE
+    assert 'onDimensionChange={profitLossReviewMode === "all" ? setAllOrdersMatrixDimension : undefined}' in loss_body
+    assert 'showYAxisSummary={activeMatrixDimension === "shares"}' in loss_body
+    assert "Y 轴汇总" in APP_SOURCE
+    assert "股数档收益" in APP_SOURCE
+    assert "rowSummary.tradedQuantity" in APP_SOURCE
+    assert "matrixTotalSummary.tradedQuantity" in APP_SOURCE
+    assert "纵轴按 committed fills 交易组的配对股数分档" in APP_SOURCE
+    assert ".lossReviewMatrixDimensionSwitch" in STYLES_SOURCE
+    assert ".lossReviewMatrixDimensionOption" in STYLES_SOURCE
+    assert ".lossReviewMatrixRowSummary" in STYLES_SOURCE
+    assert ".lossReviewMatrixGrandSummary" in STYLES_SOURCE
+    assert "onToggleCell" not in APP_SOURCE
 
 
 def test_loss_review_tab_does_not_render_data_drill_modules():

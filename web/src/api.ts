@@ -8,6 +8,7 @@ import type {
   MarketMinuteArchive,
   QuarantineRow,
   TradeReview,
+  TradeSummary,
   ReviewSummary,
   ReviewSummaryGroup,
   StrategyConfig,
@@ -63,6 +64,11 @@ const apiErrorDetailMessages: Record<string, string> = {
   trade_group_not_found: "没有找到这笔交易组，请刷新成交记录后重试。",
   trade_review_requires_closed_loss: "只有已平仓的亏损交易组可以保存亏损复盘。",
   trade_review_requires_loss: "只有已平仓的亏损交易组可以保存亏损复盘。",
+  trade_summary_personalization_insufficient: "当前样本尚未达到个性化生成门槛。",
+  trade_summary_llm_unconfigured: "本地复盘模型尚未配置。",
+  trade_summary_llm_invalid_base_url: "本地复盘模型地址无效，必须使用包含 /v1 的 loopback 地址。",
+  trade_summary_llm_non_loopback_rejected: "复盘模型只允许使用本机 loopback 地址。",
+  trade_summary_date_range_invalid: "交易总结开始日期不能晚于结束日期。",
   unsupported_trade_review_category: "请选择有效的亏损原因分类。",
   unsupported_trade_review_reason: "请选择有效的亏损原因。",
   archive_symbol_required: "请选择要归档的标的。",
@@ -119,6 +125,7 @@ const apiFieldLabels: Record<string, string> = {
   reason_category: "亏损原因分类",
   reason_code: "亏损原因",
   search_space: "优化搜索空间",
+  start_date: "开始日期",
   strategy_id: "策略",
   symbol: "标的",
   symbols: "标的组",
@@ -339,6 +346,31 @@ export async function fetchReviewSummaryGroups(
   if (filters.symbol) params.set("symbol", filters.symbol);
   const payload = await readGetJson<{ items: ReviewSummaryGroup[] }>(`/api/review/summary-groups?${params.toString()}`, options);
   return payload.items;
+}
+
+export async function fetchTradeSummary(
+  startDate?: string,
+  endDate?: string,
+  options: GetRequestOptions = {}
+): Promise<TradeSummary> {
+  const search = new URLSearchParams();
+  if (startDate) search.set("start_date", startDate);
+  if (endDate) search.set("end_date", endDate);
+  const suffix = search.size > 0 ? `?${search.toString()}` : "";
+  return readGetJson<TradeSummary>(`/api/review/trade-summary${suffix}`, options);
+}
+
+export async function generateTradeSummary(startDate?: string, endDate?: string): Promise<TradeSummary> {
+  return readJson<TradeSummary>(
+    await fetch("/api/review/trade-summary/generations", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        start_date: startDate || null,
+        end_date: endDate || null
+      })
+    })
+  );
 }
 
 export async function replayMarketContext(fillId: string, force = false): Promise<MarketContextSnapshot> {

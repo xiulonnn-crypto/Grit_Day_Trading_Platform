@@ -23,22 +23,29 @@ def test_login_launcher_auto_fallbacks_when_default_backend_is_stale():
     assert "call :is_backend_review_ready" in launcher
     assert '"%BACKEND_URL%%REQUIRED_REVIEW_ROUTE%"' in launcher
     assert "REQUIRED_TRADE_REVIEW_ROUTE=/api/trade-groups/{trade_group_id}/review" in launcher
+    assert "REQUIRED_TRADE_SUMMARY_ROUTE=/api/review/trade-summary" in launcher
+    assert "REQUIRED_TRADE_SUMMARY_GENERATION_ROUTE=/api/review/trade-summary/generations" in launcher
     assert "REQUIRED_STRATEGY_TEMPLATE=five_minute_opening_range_breakout_v1" in launcher
     assert "REQUIRED_STRATEGY_RUN_DETAIL_ROUTE=/api/strategy-runs/{run_id}" in launcher
     assert "REQUIRED_AI_STRATEGY_ROUTE=/api/ai-strategy-recommendations" in launcher
     assert "REQUIRED_LIVE_SIGNAL_CONTRACT=live_order_quantity_reason_tags_v1" in launcher
     assert "REQUIRED_TRADE_EVAL_CONTRACT=trade_eval_recommendation_v1" in launcher
     assert "REQUIRED_AI_STRATEGY_CATALOG=ai_strategy_catalog_v2" in launcher
+    assert "REQUIRED_TRADE_SUMMARY_CONTRACT=trade_summary_contract_v3" in launcher
     assert "REQUIRED_FRONTEND_MARKER=AiStrategyWorkspace" in launcher
+    assert "REQUIRED_TRADE_SUMMARY_FRONTEND_MARKER=TradeSummaryPanel" in launcher
     assert "FRONTEND_CACHE_BUSTER=ai-strategy-recommendation-v2" in launcher
     assert "%REQUIRED_AI_STRATEGY_ROUTE%" in launcher
     assert "%REQUIRED_STRATEGY_RUN_DETAIL_ROUTE%" in launcher
     assert "%REQUIRED_TRADE_REVIEW_ROUTE%" in launcher
+    assert "%REQUIRED_TRADE_SUMMARY_ROUTE%" in launcher
+    assert "%REQUIRED_TRADE_SUMMARY_GENERATION_ROUTE%" in launcher
     assert "%FRONTEND_URL%/api/healthz" in launcher
     assert "%FRONTEND_URL%/openapi.json" in launcher
     assert "$h.live_signal_contract -ne '%REQUIRED_LIVE_SIGNAL_CONTRACT%'" in launcher
     assert "$h.trade_eval_contract -ne '%REQUIRED_TRADE_EVAL_CONTRACT%'" in launcher
     assert "$h.ai_strategy_catalog -ne '%REQUIRED_AI_STRATEGY_CATALOG%'" in launcher
+    assert "$h.trade_summary_contract -ne '%REQUIRED_TRADE_SUMMARY_CONTRACT%'" in launcher
     assert "%FRONTEND_URL%/src/App.tsx" in launcher
     assert ".Contains('%REQUIRED_FRONTEND_MARKER%')" in launcher
     assert "%FRONTEND_URL%/?grit_ui=%FRONTEND_CACHE_BUSTER%" in launcher
