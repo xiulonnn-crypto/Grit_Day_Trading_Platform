@@ -88,25 +88,25 @@ def test_review_snapshot_matches_local_committed_fill_read_model() -> None:
     ]
 
     assert snapshot["schema_version"] == "github_pages_review_snapshot_v1"
-    assert snapshot["as_of_date"] == "2026-07-27"
+    assert snapshot["as_of_date"] == "2026-07-28"
     assert len(snapshot["source_hash"]) == hashlib.sha256().digest_size * 2
-    assert len(groups) == snapshot["summary"]["trade_group_count"] == 1318
+    assert len(groups) == snapshot["summary"]["trade_group_count"] == 1375
     assert (
         sum(int(group["total_quantity"]) for group in groups)
         == snapshot["summary"]["traded_quantity"]
-        == 87643
+        == 89743
     )
     assert abs(
         sum(float(group["pnl"]) for group in groups)
         - float(snapshot["summary"]["pnl"])
     ) < 0.000001
-    assert snapshot["summary"]["pnl"] == -4385.2515
+    assert snapshot["summary"]["pnl"] == -3781.8515
 
     summary_metrics = snapshot["trade_summary"]["metrics"]
-    assert summary_metrics["closed_trade_count"] == 1318
-    assert summary_metrics["win_count"] == 1081
-    assert summary_metrics["loss_count"] == 215
-    assert summary_metrics["flat_count"] == 22
+    assert summary_metrics["closed_trade_count"] == 1375
+    assert summary_metrics["win_count"] == 1120
+    assert summary_metrics["loss_count"] == 229
+    assert summary_metrics["flat_count"] == 26
 
 
 def test_review_snapshot_excludes_private_or_raw_evidence_fields() -> None:
