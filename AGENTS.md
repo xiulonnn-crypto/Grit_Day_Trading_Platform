@@ -96,6 +96,9 @@ Market Context Replay 改动必须支持：
 - 每个 watchlist symbol 的入选原因和指标。
 - watchlist provider failure 和零结果状态。
 - 手工指定标的和自然日窗口的分钟线归档，只能写行情归档和 provider attempt，不能改成交事实。
+- 有 committed fills 的分钟线目标在 Yahoo 拒绝、失败、返回空数据、覆盖不完整或出现与前后行情不连续的孤立异常柱时，必须尝试 Futu 备选源，并按 provider 分别保存 attempt。
+- 已有 `available` / `partial` 分钟线归档不能被失败、空数据或质量更差的强制刷新覆盖；失败 attempt 仍需留痕。
+- 复盘 read model 必须在同一日期和标的的多 provider 归档中优先读取可用本地 bars，不能硬编码只读 Yahoo。
 
 禁止行为：
 
@@ -103,6 +106,7 @@ Market Context Replay 改动必须支持：
 - 缺分钟线时用静态空图表示成功。
 - 用行情数据修改成交价格、成交数量或成交时间。
 - 前端自行计算 VWAP 或 watchlist 入选原因。
+- 因后续 provider 窗口收窄而清空已经成功存档的历史分钟线。
 
 ## P2 Agent 要求
 

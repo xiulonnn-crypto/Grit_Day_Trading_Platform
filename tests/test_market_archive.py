@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from grit_day_trading.market_archive import (
+    archive_market_minutes,
     archive_yahoo_minutes_for_committed_fills,
     archive_yahoo_minutes_for_import_batch,
     archive_yahoo_minutes_for_symbol_group_window,
@@ -174,6 +175,176 @@ def test_archive_yahoo_minutes_is_idempotent_without_force(tmp_path):
         assert second["archive_id"] == first["archive_id"]
         assert conn.execute("SELECT COUNT(*) FROM market_minute_archives").fetchone()[0] == 1
         assert conn.execute("SELECT COUNT(*) FROM market_data_provider_attempts").fetchone()[0] == 1
+    finally:
+        conn.close()
+
+
+def test_failed_force_refresh_preserves_existing_available_archive(tmp_path):
+    conn = _seed_db(tmp_path)
+    available_provider = FakeMarketDataProvider(
+        minute_bars={
+            "AAPL": [
+                MarketBar("2026-06-01T09:31:00", 99.5, 101.0, 99.0, 100.0, 100),
+                MarketBar("2026-06-01T10:15:00", 100.5, 103.0, 100.0, 102.0, 300),
+            ]
+        }
+    )
+    failed_provider = FakeMarketDataProvider(minute_status={"AAPL": "provider_failed"})
+    try:
+        first = archive_market_minutes(
+            conn,
+            symbol="AAPL",
+            trade_date="2026-06-01",
+            source_fill_count=2,
+            provider=available_provider,
+        )
+        refreshed = archive_market_minutes(
+            conn,
+            symbol="AAPL",
+            trade_date="2026-06-01",
+            source_fill_count=2,
+            force=True,
+            provider=failed_provider,
+        )
+
+        assert refreshed["archive_id"] == first["archive_id"]
+        assert refreshed["data_status"] == "available"
+        assert refreshed["bars_hash"] == first["bars_hash"]
+        assert refreshed["bars"] == first["bars"]
+        assert conn.execute("SELECT COUNT(*) FROM market_minute_archives").fetchone()[0] == 1
+        attempts = conn.execute(
+            "SELECT status, error_code FROM market_data_provider_attempts ORDER BY rowid"
+        ).fetchall()
+        assert [(row["status"], row["error_code"]) for row in attempts] == [
+            ("success", None),
+            ("failed", "fake_provider_failed"),
+        ]
+    finally:
+        conn.close()
+
+
+def test_yahoo_failure_falls_back_to_futu_archive(tmp_path):
+    conn = _seed_db(tmp_path)
+    yahoo_provider = FakeMarketDataProvider(minute_status={"AAPL": "provider_failed"})
+    futu_provider = FakeMarketDataProvider(
+        minute_bars={
+            "AAPL": [
+                MarketBar("2026-06-01T09:31:00", 99.5, 101.0, 99.0, 100.0, 100),
+                MarketBar("2026-06-01T10:15:00", 100.5, 103.0, 100.0, 102.0, 300),
+            ]
+        }
+    )
+    try:
+        summary = archive_yahoo_minutes_for_committed_fills(
+            conn,
+            trade_date="2026-06-01",
+            provider=yahoo_provider,
+            fallback_provider=futu_provider,
+        )
+
+        archive = summary["items"][0]
+        assert summary["provider_chain"] == ["yahoo", "futu"]
+        assert summary["fallback_attempted_count"] == 1
+        assert summary["fallback_available_count"] == 1
+        assert summary["available_count"] == 1
+        assert archive["provider"] == "futu"
+        assert archive["data_status"] == "available"
+        assert archive["bar_count"] == 2
+        stored = list_market_minute_archives(conn, trade_date="2026-06-01", symbol="AAPL")
+        assert [(item["provider"], item["data_status"]) for item in stored] == [
+            ("futu", "available"),
+            ("yahoo", "provider_failed"),
+        ]
+        attempts = conn.execute(
+            "SELECT provider, status FROM market_data_provider_attempts ORDER BY rowid"
+        ).fetchall()
+        assert [(row["provider"], row["status"]) for row in attempts] == [
+            ("yahoo", "failed"),
+            ("futu", "success"),
+        ]
+    finally:
+        conn.close()
+
+
+def test_yahoo_missing_for_committed_fill_target_falls_back_to_futu_archive(tmp_path):
+    conn = _seed_db(tmp_path)
+    yahoo_provider = FakeMarketDataProvider(minute_status={"AAPL": "missing"})
+    futu_provider = FakeMarketDataProvider(
+        minute_bars={
+            "AAPL": [
+                MarketBar("2026-06-01T09:31:00", 99.5, 101.0, 99.0, 100.0, 100),
+                MarketBar("2026-06-01T10:15:00", 100.5, 103.0, 100.0, 102.0, 300),
+            ]
+        }
+    )
+    try:
+        summary = archive_yahoo_minutes_for_committed_fills(
+            conn,
+            trade_date="2026-06-01",
+            provider=yahoo_provider,
+            fallback_provider=futu_provider,
+        )
+
+        assert summary["items"][0]["provider"] == "futu"
+        assert summary["items"][0]["data_status"] == "available"
+        attempts = conn.execute(
+            "SELECT provider, status FROM market_data_provider_attempts ORDER BY rowid"
+        ).fetchall()
+        assert [(row["provider"], row["status"]) for row in attempts] == [
+            ("yahoo", "missing"),
+            ("futu", "success"),
+        ]
+    finally:
+        conn.close()
+
+
+def test_yahoo_isolated_price_discontinuity_falls_back_to_futu_archive(tmp_path):
+    conn = _seed_db(tmp_path)
+    yahoo_provider = FakeMarketDataProvider(
+        minute_bars={
+            "AAPL": [
+                MarketBar("2026-06-01T09:31:00", 100.0, 100.3, 99.8, 100.1, 1000),
+                MarketBar("2026-06-01T10:12:00", 100.1, 100.4, 99.9, 100.2, 1200),
+                MarketBar("2026-06-01T10:13:00", 100.2, 100.5, 100.0, 100.3, 1300),
+                MarketBar("2026-06-01T10:14:00", 100.2, 107.0, 100.1, 107.0, 5000),
+                MarketBar("2026-06-01T10:15:00", 100.1, 100.3, 99.8, 100.0, 1400),
+            ]
+        }
+    )
+    futu_provider = FakeMarketDataProvider(
+        minute_bars={
+            "AAPL": [
+                MarketBar("2026-06-01T09:31:00", 100.0, 100.3, 99.8, 100.1, 1000),
+                MarketBar("2026-06-01T10:12:00", 100.1, 100.4, 99.9, 100.2, 1200),
+                MarketBar("2026-06-01T10:13:00", 100.2, 100.5, 100.0, 100.3, 1300),
+                MarketBar("2026-06-01T10:14:00", 100.3, 100.6, 100.1, 100.4, 1500),
+                MarketBar("2026-06-01T10:15:00", 100.4, 100.7, 100.2, 100.5, 1400),
+            ]
+        }
+    )
+    try:
+        summary = archive_yahoo_minutes_for_committed_fills(
+            conn,
+            trade_date="2026-06-01",
+            provider=yahoo_provider,
+            fallback_provider=futu_provider,
+        )
+
+        assert summary["items"][0]["provider"] == "futu"
+        assert summary["items"][0]["data_status"] == "available"
+        stored = list_market_minute_archives(conn, trade_date="2026-06-01", symbol="AAPL")
+        assert [(item["provider"], item["data_status"]) for item in stored] == [
+            ("futu", "available"),
+            ("yahoo", "partial"),
+        ]
+        assert stored[1]["failure_reason"] == "isolated_price_discontinuity"
+        attempts = conn.execute(
+            "SELECT provider, status, error_code FROM market_data_provider_attempts ORDER BY rowid"
+        ).fetchall()
+        assert [(row["provider"], row["status"], row["error_code"]) for row in attempts] == [
+            ("yahoo", "partial", "isolated_price_discontinuity"),
+            ("futu", "success", None),
+        ]
     finally:
         conn.close()
 

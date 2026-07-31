@@ -71,7 +71,10 @@ Focused test owner slice：根入口合同、脱敏快照聚合、交易复盘�
 
 - 成交记录行不显示单独「复盘」操作按钮。
 - 成交记录可勾选「仅看亏损单」只查看当前范围内 closed 且 PnL 小于 0 的交易组，并同步让上方分钟蜡烛图只显示这些交易组对应的买卖点；该筛选不重新计算 KPI 或修改事实源。
-- 「数据下钻」tab 按全部、本月、本周和特定时间段筛选当前下钻 read model；展示顺序固定为时间筛选、该时间范围内全部订单统计指标、月日历下钻和月历下方的当前复盘上下文。月日历按日展示股数与 PnL，点击有订单的日期方块只更新当前复盘日期并显示该日标的入口，不写入 `trade_reviews`、STP 成交或行情归档。
+- 「数据下钻」tab 按全部、本月、本周和特定时间段筛选当前下钻 read model；展示顺序固定为时间筛选、该时间范围内全部订单统计指标、月日历下钻和月历下方的当前复盘上下文。「月日历下钻」默认保持日历视图，也可切到覆盖完整所选时间范围的每日表格；表格与导出固定为日期、成交数、股数、PnL、胜率、盈亏比、单笔期望值、每股净收益、MFE、MAE 十列，不重复展示已平仓/未平仓计数。桌面表格自适应容器，窄屏转换为逐日指标卡片，不产生横向滚动。月日历按日展示股数与 PnL，点击有订单的日期方块只更新当前复盘日期并显示该日标的入口，不写入 `trade_reviews`、STP 成交或行情归档。
+- 每个 closed trade group 的 MFE/MAE 由后端按实际 open position、移动均价和已保存 `market_minute_archives` 窗口 high/low 计算；头部汇总、当前每日指标、成交记录行和每日表格只投影后端 excursion read model，并统一提供可悬浮、可键盘聚焦的「?」名词解释，不在浏览器读取 bars 自算。历史日期按同一确定性路径回溯计算，启动器必须验证 `trade_group_excursion_v2`，避免复用尚未提供 MFE/MAE 的旧后端。缺归档时 MFE/MAE 为 N/A，无每日数据时导出不可用。
+- 工作区启动查询参数只用于确定首次打开的工作区；React 初始化完成后删除 `grit_ui`，保留其他查询参数和 hash，避免地址栏长期暴露渠道标记。
+- Canonical source 为 committed fills；market evidence 为 `market_minute_archives`；read model 为轻量 trade groups、review summary 与每日分组；artifact source 为原成交证据与 archive id / `bars_hash`。沿用既有 `trade_group_id` 和成交幂等口径，不新增持久化幂等 key；parser version 与 field mapper version 不变。
 - 「下钻复盘」默认展示「数据下钻」；切到「盈亏复盘」后读取所有日期 closed 且 PnL 可计算的交易组，单选默认选中「全部订单」，可切到「仅看盈利单」或「仅看亏损单」。
 - 盈亏复盘时间筛选提供全部、本月、本周和特定时间段；当前单选和时间范围统一控制统计指标、热力矩阵和订单列表。亏损视图额外展示一级/二级原因分类汇总并支持联动多选筛选订单明细；盈利和全部视图的原因模块展示为空。
 - 盈亏复盘统计指标整理在一行；订单明细默认按时间倒序，也可按盈亏绝对值、盈利金额或亏损金额倒序，每页 20 笔。
@@ -197,13 +200,13 @@ Focused test owner slice：根入口合同、脱敏快照聚合、交易复盘�
 - 无 committed fills 时，全局汇总为 0、日期/标的下钻为空，UI 不展示假日期、假标的或成功复盘。
 - 文档和 changelog 必须同步 P1 事实源、read model、artifact source 和负向路径。
 
-## 当前 P1 切片：Yahoo 离线分钟线归档
+## 当前 P1 切片：本地分钟线归档与备选行情
 
-目标：从 committed fills 推导有交易日的标的，用 Yahoo Finance 获取 1 分钟线，并保存为可复查离线归档。
+目标：从 committed fills 推导有交易日的标的，使用 Yahoo 主源与 Futu 备选源获取 1 分钟线，并保存为长期可复查的本地归档。
 
 范围：
 
-- 新增 Yahoo provider adapter，只负责分钟线获取和错误状态映射。
+- Yahoo provider adapter 负责主源分钟线获取和错误状态映射；Yahoo 拒绝、失败、返回不完整数据、出现与前后行情不连续且显著超过典型分钟振幅的孤立异常柱，或对有 committed fills 的目标返回空数据时，再调用 Futu 历史 K 线 adapter。
 - 新增 `market_minute_archives` 存储合同，保存 symbol/day 级别的 bars、hash、VWAP、当日高低、成交量上下文和归档版本。
 - 新增 `POST /api/market-data/yahoo-minute-archive`、`GET /api/market-data/minute-archives`、`scripts/archive-yahoo-minute-data.py` 和 `scripts/archive-local-minute-db.py` 作为操作入口。
 - `POST /api/imports/stp-txt` 导入 committed 后会按本批 `source_batch_id` 下的成交日期和标的触发缺失分钟线归档，并在上传响应中返回归档摘要。
@@ -211,15 +214,21 @@ Focused test owner slice：根入口合同、脱敏快照聚合、交易复盘�
 - 复盘页新增日期和标的选择器，按 `trade_date + symbol` 读取归档分钟线，默认显示当前标的第一笔到最后一笔 committed fill 的时间范围，并用 committed fills 标注买卖点。
 - 归档目标来自已提交 `fills`，不读取 quarantine 行，不修改 STP 成交事实。
 - 启用 Momentum Mean Reversion 时，归档目标还包括同日 QQQ/SMH 策略上下文标的；这些上下文归档的 `source_fill_count` 为 0，策略 run 仍只读取已归档 artifact。
+- 兼容 API 名称保留 `yahoo-minute-archive`，但响应会返回 `provider_chain`、备选尝试数和备选成功数；读取端不限定 Yahoo，按可用状态和 provider 顺序选择本地归档。
+- Futu 仅在本地分钟线归档回退路径启用 OpenD 自动启动；只允许连接本机行情端口，只启动已安装的 `Futu_OpenD` GUI 并等待行情通道，不执行 `unlock_trade` 或任何交易动作；可用 `FUTU_AUTO_START_OPEND=0` 显式关闭。
+- Version boundary: 本切片不涉及 STP parser 或 field mapper，相关版本保持不变；`market_minute_archive_v1`、provider、bars hash 和逐次 attempt 继续随原记录保存。
 
 验收：
 
 - 重复运行默认不新增 archive 或 provider attempt。
 - 重复上传同一 STP TXT 默认复用既有批次和既有分钟线归档，不新增重复 provider attempt。
-- `force=true` 可以刷新已有 archive。
-- Yahoo 缺数据或 provider 失败必须留下 archive 状态和 provider attempt。
+- `force=true` 可以刷新已有 archive，但失败、空数据或质量更差的新结果不得覆盖既有 `available` / `partial` bars、hash 和归档时间；失败 attempt 仍必须保存。
+- Yahoo 失败后必须尝试 Futu；两个 provider 的 attempt 独立留痕，Futu 成功后保存为独立本地 archive。
+- Yahoo 和 Futu 都失败、Futu OpenD 未运行或历史 K 线额度不可用时，必须保留可见失败状态，不得伪造成功归档。
+- 历史已保存的异常 Yahoo bars/hash 保留追溯，但读取端必须把孤立价格断层投影为 `partial`；有可用 Futu 归档时优先读取 Futu，没有可用备选时 Trade Replay、MFE/MAE、交易评价和新策略 run 均不得渲染成功。
+- 用户显式刷新本地分钟线并获得可用归档后，交易复盘必须同步重读当前日期/标的汇总、全局汇总、日期/标的分组和轻量交易组，确保蜡烛图、MFE/MAE、每日列表和成交记录使用同一次刷新后的 read model。
 - 复盘页缺归档或缺分钟线时必须显示缺失状态，不能用空蜡烛图表示成功。
-- 负向路径覆盖无成交目标、provider failure、重复归档、缺 QQQ/SMH 动能上下文和 STP fill 不被行情数据改写。
+- 负向路径覆盖无成交目标、双 provider failure、孤立价格断层、历史异常归档降级、失败强刷保护、重复归档、缺 QQQ/SMH 动能上下文和 STP fill 不被行情数据改写。
 
 本文档记录当前技术计划、阶段切片、接口草案、测试策略和开放问题。
 
@@ -556,6 +565,7 @@ npm.cmd --prefix web run build
 - 前端默认端口：`5173`。
 - 后端备用端口从 `8011` 起选择，前端备用端口从 `5183` 起选择。
 - 前端 API 代理默认指向当前选中的后端端口；只有用户显式设置 `VITE_API_PROXY` 时才保留外部指定值。
+- `scripts/resolve-backend-python.ps1` 按 `GRIT_PYTHON`、项目 `.venv`、PATH 候选顺序选择同时具备 FastAPI、Uvicorn 和 Futu SDK 的 Python；找不到合格环境时后端启动必须失败并显示修复提示，不能以缺少 Futu SDK 的环境继续提供会导致回补失败的服务。
 - 启动前会验证后端 `healthz`、`trade_eval_recommendation_v1` 评分建议合同、`ai_strategy_catalog_v2` 目录 sentinel、复盘汇总 API、AI策略推荐 API、P2 必需 API 路由、`GET /api/strategy-runs/{run_id}` 详情路由、亏损复盘保存路由和新策略模板；前端 ready 还必须通过 Vite 代理读取 `/openapi.json` 并命中同一合同，同时在短暂可用后用不依赖 stdin 的等待路径复查一次。如果默认端口上是旧后端，正常启动会自动切到备用后端和前端端口，避免前端连到旧目录或失效 fallback 页面。
 - 如果备用后端可以监听但复盘 API 不可用，启动器必须将其归类为后端运行态失败并打印端口 owner PID，避免误报为前端未启动。
 - `--check` 检查 Python、npm 和端口配置；如果后端正在运行，也会验证 P2 必需 API 路由，但不启动服务、不自动切换备用端口。
@@ -598,6 +608,7 @@ npm.cmd --prefix web run build
 - 盘后成交。
 - 富途接口失败。
 - provider 返回 partial bars。
+- 分钟线强制刷新后，蜡烛图和所有依赖行情的复盘汇总同步失效并重读。
 - Replay 幂等和 force replay。
 - Watchlist 稳定排序、入选理由、零结果、provider failure。
 - API 404/422、fill 不存在、日期格式错误、watchlist 重跑。

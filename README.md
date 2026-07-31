@@ -17,7 +17,7 @@
 ## 最新下钻复盘更新
 
 - 「成交记录」模块新增「仅看亏损单」勾选项，并同步收窄上方分钟蜡烛图的买卖点；模块不再提供单独「复盘」操作按钮；已平仓亏损交易组可在 Trade Replay 弹层的订单明细下方选择开仓信号、平仓信号或误操作下的精简亏损原因；该记录进入 Review Journal，不会修改 STP 成交价格、数量或时间。
-- 「数据下钻」tab 现在先展示全部、本月、本周或特定时间段筛选，再展示该时间范围内全部订单统计指标和月日历；日历按天展示股数与 PnL，点击有订单的日期方块即可选中该日并在右侧进入标的下钻，当前复盘日期、标的和指标移到月日历下方。
+- 「数据下钻」tab 现在先展示全部、本月、本周或特定时间段筛选，再展示该时间范围内全部订单统计指标和月日历；「月日历下钻」可切换为每日表格，查看成交数、股数、PnL、胜率、盈亏比、单笔期望值、每股净收益、MFE 和 MAE，并把当前范围导出为同口径 Excel 兼容工作簿。列表不重复展示已平仓/未平仓列，桌面端自动贴合容器，窄屏改为逐日指标卡片，避免横向滚动。头部汇总、当前每日指标和成交记录均用 MFE/MAE 取代持仓最大回撤，并提供「?」名词解释。历史 MFE/MAE 会从 committed fills 与已保存分钟线重新计算，启动入口会拒绝缺少当前 excursion 合同的旧后端。日历仍按天展示股数与 PnL，点击有订单的日期方块即可选中该日并在右侧进入标的下钻，当前复盘日期、标的和指标位于月日历下方。
 - 「下钻复盘」包含「数据下钻」「盈亏复盘」和「交易总结」三个模块 tab；热力时间矩阵位于「盈亏复盘」。盈亏复盘默认展示全部订单，也可切到仅看盈利单或仅看亏损单；所选时间段会统一控制统计指标、热力时间矩阵和订单列表，亏损视图额外展示一级/二级原因饼图联动筛选。全部订单热力时间矩阵可在 ATR 时间矩阵与股数时间矩阵之间切换：ATR 视图按开仓 1min K 振幅 / 前 20 根 ATR 分层，股数视图按每笔已平仓交易组的配对股数分档并在右侧展示 Y 轴收益、订单数和股数汇总；两种矩阵均保持只读，仍只写 Review Journal。
 
 ## 最新信号面板更新
@@ -47,7 +47,7 @@
 - PA-1min边缘狙击反转策略v1.1 默认回看最近 45 根 1 分钟 K，要求震荡区间上下沿各至少 2 次触边、20 EMA 钝化、至少 8 根 K 穿越 EMA；只在区间顶部或底部 25% 边缘等待假突破反转，下一根 K 开盘入场；第一目标为区间中轴线并按 50% 分批止盈，触达后剩余仓位止损上移到保本价，第二目标为对侧区间边缘。
 - 策略运行只读取已保存的 `market_minute_archives`，不会自动拉行情，也不会修改 STP 成交价格、数量或时间。
 - Momentum Mean Reversion 额外读取同日已归档的 QQQ 和 SMH 分钟线作为动能过滤输入；缺任一归档时保存缺归档状态，不渲染成功信号。
-- 启用 Momentum Mean Reversion 后，Yahoo 分钟线归档会把同日 QQQ 和 SMH 作为策略上下文目标一起归档；策略 run 仍然只读取已归档 artifact。
+- 启用 Momentum Mean Reversion 后，分钟线归档会把同日 QQQ 和 SMH 作为策略上下文目标一起归档；策略 run 仍然只读取已归档 artifact。
 - 被动止盈和 `OCO_Immediate` 只在历史策略 run 中按 high/low 触达建模为出场信号，不会向券商或 STP 发送真实限价单。
 - `POST /api/strategies/{strategy_id}/runs` 会生成可追溯的 strategy run，保存 `source_archive_id`、`bars_hash`、指标序列、`indicator_hash` 和开平仓信号。
 - `GET /api/strategy-runs/{run_id}` 会返回按 entry/exit 配对的 `signal_groups`，每个订单组的资金 PnL 由后端 run read model 按初始本金和入场资金比例计算；旧详情响应缺少 `signal_groups` 时，前端只读取后端 signal metrics 里的收益证据做兼容展示，未闭合或缺证据时显示 N/A。
@@ -55,12 +55,12 @@
 - 分钟蜡烛图会叠加 BB bands、策略 EMA、策略 VWAP 和策略开平仓 marker；实际成交 marker 仍只来自 committed fills。
 - 缺分钟线归档、非可用行情或分钟线不足时会显示策略 run 状态，不渲染假信号。
 
-## P1 Yahoo 离线分钟线归档
+## P1 本地分钟线归档与备选行情
 
-- P1 现在可以从已提交成交记录推导有交易日的标的，并用 Yahoo Finance 获取 1 分钟线归档。
-- 上传 STP TXT 成功后，会按本批 committed fills 的日期和标的检查本地分钟线；缺失时补写 Yahoo 分钟线归档和 provider attempt，重复上传仍复用既有归档。
+- P1 从已提交成交记录推导有交易日的标的，优先用 Yahoo Finance 获取 1 分钟线；Yahoo 拒绝、失败、返回不完整数据、出现与前后行情不连续的孤立异常柱，或对有 committed fills 的目标返回空数据时，自动尝试 Futu 历史 1 分钟 K 线。
+- 上传 STP TXT 成功后，会按本批 committed fills 的日期和标的检查本地分钟线；缺失时补写分钟线归档和逐 provider attempt，重复上传仍复用既有归档。
 - 如果启用了需要动能过滤的均值回归策略，同日 QQQ/SMH 会作为零成交数的策略上下文目标纳入归档队列。
-- 归档入口是 `POST /api/market-data/yahoo-minute-archive`，读取入口是 `GET /api/market-data/minute-archives`。
+- 兼容归档入口仍是 `POST /api/market-data/yahoo-minute-archive`，读取入口是 `GET /api/market-data/minute-archives`；读取不限定 provider，按 `trade_date + symbol` 优先返回可用本地归档。
 - 归档入口支持按已提交成交目标批量归档，也支持手工指定 `symbol + end_date + window_trading_days` 拉取研究标的最近自然日窗口分钟线；字段名为兼容旧 API 保留，业务语义是最近 N 天。
 - 离线脚本入口是 `python scripts/archive-yahoo-minute-data.py --date YYYY-MM-DD`；不传日期时会扫描所有已提交成交涉及的交易日和标的。
 - 本地研究标的组归档入口是 `python scripts/archive-local-minute-db.py --date YYYY-MM-DD --symbols MU,NVDA,SPY --window-trading-days 1`；该脚本把指定标的的 1 分钟线持久化到同一个 SQLite 本地库，供策略测试只读复用。
@@ -68,6 +68,10 @@
 - 分钟蜡烛复盘主图、Trade Replay 弹层和复用同一图表的策略复盘支持鼠标悬浮查看对应分钟的中文开盘价、最高价、最低价、收盘价、归档 VWAP 和该分钟买入/卖出成交价；多笔同向成交显示价格区间与笔数，数值只读当前归档 bar 和 committed fills，鼠标离开或证据不可用时不会保留或伪造提示。
 - 归档只写入 `market_minute_archives` 和 provider attempt 记录，不会修改 STP 成交价格、数量或时间。
 - 每条归档保存 `bars_hash`、`bars_json`、VWAP、当日高低、成交量上下文、provider 状态和归档版本。
+- 强制刷新仍会保存本次 provider attempt；如果新结果失败、为空或质量更差，既有 `available` / `partial` bars、hash 和归档时间保持不变，不会把日后可复查的成功蜡烛数据降级清空。
+- 交易复盘中的「刷新本地分钟线」在归档完成后会同步刷新当前日期、当前标的、每日列表、全局汇总和成交组 read model；蜡烛图与 MFE/MAE 不会分别停留在新旧两份状态。
+- 历史已保存归档也会在读取时执行同一价格质量门禁；异常 bars 和 hash 保留用于追溯，但有效状态投影为 `partial`，Trade Replay、MFE/MAE、交易评价和策略运行不得把它当成成功行情消费。
+- Futu 备选源依赖本机 Futu OpenD 和历史 K 线额度；本机回退请求发现行情端口未连接时，会尝试启动已安装的 Futu OpenD GUI 并等待行情端口，且不会调用交易解锁。OpenD 未安装、未登录或 Futu 仍不可用时会保留两个 provider 的失败证据并显示分钟线不可用，不会渲染假成功图。
 
 ## P1 Market Context And Watchlist
 
@@ -177,9 +181,10 @@ Grit Day Trading Platform 是个人日内交易闭环 Web 系统。首版目标�
 - [CHANGELOG.md](./CHANGELOG.md)：公开变更记录。
 - [index.html](./index.html)：仓库根目录只读云端复盘入口，同步「数据下钻」「盈亏复盘」「交易总结」三个模块及日历交互。
 - [scripts/export-review-snapshot.py](./scripts/export-review-snapshot.py)：从本地复盘 API 导出脱敏、可校验的 GitHub Pages read-model 快照。
-- [scripts/archive-yahoo-minute-data.py](./scripts/archive-yahoo-minute-data.py)：从已提交成交目标准备 Yahoo 1 分钟线归档。
-- [scripts/archive-local-minute-db.py](./scripts/archive-local-minute-db.py)：按本地研究标的组准备 Yahoo 1 分钟线归档。
+- [scripts/archive-yahoo-minute-data.py](./scripts/archive-yahoo-minute-data.py)：从已提交成交目标准备 Yahoo 优先、Futu 备选的 1 分钟线归档。
+- [scripts/archive-local-minute-db.py](./scripts/archive-local-minute-db.py)：按本地研究标的组准备 Yahoo 优先、Futu 备选的 1 分钟线归档。
 - [scripts/run-ai-strategy-benchmark.py](./scripts/run-ai-strategy-benchmark.py)：显式运行 AI策略 v2 五模板的同口径本地历史回放并输出摘要报告；GET 推荐接口不会自动触发该脚本。
+- [scripts/resolve-backend-python.ps1](./scripts/resolve-backend-python.ps1)：后端启动前选择同时具备 FastAPI、Uvicorn 和 Futu SDK 的 Python；可用 `GRIT_PYTHON` 显式指定环境。
 - [docs/p0_acceptance.md](./docs/p0_acceptance.md)：P0 DB/API/UI read-model 一致性和验收证据。
 - [designs/2026-06-03-review-desk-layout/spec.md](./designs/2026-06-03-review-desk-layout/spec.md)：复盘台主图优先、盘前工作栏和导入证据区布局规格。
 - [designs/2026-07-14-ai-strategy-tab/spec.md](./designs/2026-07-14-ai-strategy-tab/spec.md)：AI策略 Top 5 榜单、详情台、窄屏堆叠和证据状态设计规格。
@@ -192,7 +197,7 @@ Grit Day Trading Platform 是个人日内交易闭环 Web 系统。首版目标�
 - `GET /api/imports/{batch_id}`：查看批次状态、parser version、mapping version 和错误摘要。
 - `GET /api/imports/{batch_id}/quarantine`：查看异常行、原始文本、失败字段、失败原因和修复建议。
 - `GET /api/fills`：按日期、账号、symbol 查询 committed 成交 read-model；跨批重导的同一 fallback 成交只展示最新批次。
-- `GET /api/review/daily-summary?date=YYYY-MM-DD`：查看只基于 committed 成交 read-model 计算的 PnL、胜率、盈亏比、单笔期望值、每股净收益、持仓最大回撤、成交数量和异常行数量；这些核心 KPI 按已平仓 round-trip、成交组实际持仓路径和分钟线追溯统计。
+- `GET /api/review/daily-summary?date=YYYY-MM-DD`：查看只基于 committed 成交 read-model 计算的 PnL、胜率、盈亏比、单笔期望值、每股净收益、MFE、MAE、持仓最大回撤、成交数量和异常行数量；这些核心 KPI 按已平仓 round-trip、成交组实际持仓路径和分钟线追溯统计，缺少可用分钟归档时 MFE/MAE 保持不可用。
 - `GET /api/review/summary`：按全局、日期或标的范围查看 committed fills 轻量汇总。
 - `GET /api/review/summary-groups`：按交易日或标的返回轻量下钻汇总，供复盘页选择具体日期+标的；完整交易评价只在交易组详情路径读取。
 - `GET /api/trade-groups?date=YYYY-MM-DD&include_details=false`：读取复盘页首屏交易组轻量列表，不携带组内 fills 和评价因子明细；不传 `date` 时返回全部日期的轻量交易组，供盈亏复盘下钻汇总；Replay 操作再用 `include_details=true` 拉取完整证据。
@@ -224,7 +229,7 @@ Grit Day Trading Platform 是个人日内交易闭环 Web 系统。首版目标�
 
 ## 登录快捷方式
 
-Windows 下可双击根目录的 `Login-Grit-DayTrading.cmd` 进入本地复盘台。它会检查 Python、npm、复盘汇总 API、AI策略推荐 API、`ai_strategy_catalog_v2` 健康 sentinel、P2 必需 API 路由、策略 run 详情路由、亏损复盘保存路由和新策略模板，优先复用默认后端和前端端口，并自动打开 AI策略 v2；如果默认后端端口上已有旧服务但缺少当前合同，会自动切到备用后端和前端端口启动，并通过前端代理复查 OpenAPI 合同。
+Windows 下可双击根目录的 `Login-Grit-DayTrading.cmd` 进入本地复盘台。它会检查 Python、npm、复盘汇总 API、AI策略推荐 API、`ai_strategy_catalog_v2` 健康 sentinel、P2 必需 API 路由、策略 run 详情路由、亏损复盘保存路由和新策略模板，优先复用默认后端和前端端口，并自动打开 AI策略 v2；新启动的后端会优先使用 `GRIT_PYTHON` 或项目 `.venv`，否则从 PATH 中选择同时具备 FastAPI、Uvicorn 和 Futu SDK 的 Python。如果默认后端端口上已有旧服务但缺少当前合同，会自动切到备用后端和前端端口启动，并通过前端代理复查 OpenAPI 合同。
 
 如果备用后端已监听但复盘 API 返回 500，启动器会按后端运行态失败处理，并打印相关端口 owner PID；通常需要先关闭占用默认后端端口的旧进程，再重新运行启动入口。
 

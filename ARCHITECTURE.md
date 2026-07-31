@@ -26,7 +26,7 @@
 
 - Canonical source: `trade_reviews` 保存用户对已平仓亏损交易组的主观复盘原因，原因分类只允许 `opening_signal`、`closing_signal` 和 `misoperation`。
 - Read model: `GET /api/trade-groups` 在每个交易组上返回 `review`；`PUT /api/trade-groups/{trade_group_id}/review` 只允许保存 closed 且 PnL 小于 0 的交易组复盘。
-- UI read model: 「成交记录」行只保留 Trade Replay 入口和复盘状态摘要，不提供单独「复盘」操作按钮；「仅看亏损单」过滤当前 `GET /api/trade-groups` read model 中 closed 且 PnL 小于 0 的交易组，并用交易组 `source_batch_ids`、`raw_line_numbers`、账号和标的匹配 `GET /api/fills` read model，让上方分钟蜡烛图只显示对应买卖点；「下钻复盘」外层提供「数据下钻」「盈亏复盘」和「交易总结」。数据下钻读取全部日期的轻量 trade group read model，按全部、本月、本周或特定时间段做前端只读筛选，展示全部订单统计指标和月日历；日历格只展示每日股数与 PnL，点击有订单的日期方块只会选中当前复盘日期并展示该日标的下钻入口，不写入交易组、复盘记录、STP 成交事实或行情归档。盈亏复盘读取同一轻量 trade group read model，默认选中「全部订单」，也可切到「仅看盈利单」或「仅看亏损单」；所选日期范围由父层持有并与交易总结共享，盈亏单单选仍只控制盈亏复盘。所选时间段控制统计指标、热力时间矩阵和订单列表，亏损视图额外展示一级/二级原因分类汇总并支持筛选列表，盈利和全部视图的原因模块保持为空。热力时间矩阵横轴使用美股常规盘五大微观结构窗口；全部订单视图可在 ATR 时间矩阵与股数时间矩阵间切换，ATR 纵轴读取 `position_drawdown.entry_atr_multiple`，股数纵轴读取轻量交易组 `total_quantity` 并按 `≤50`、`51-100`、`101-200`、`201-500`、`>500` 股分档，缺失或非正数进入缺股数证据，右侧 Y 轴按股数档汇总收益、订单数和股数。全部订单两种矩阵只读展示最大盈利区、最大亏损区和时间窗口收益合计；盈利视图和亏损视图继续使用 ATR 时间矩阵，分别展示最大盈利区或最大亏损区，矩阵格不筛选订单明细；复盘原因表单展示在 Trade Replay 弹层订单明细模块下方，并只读取交易组 `review` read model。
+- UI read model: 「成交记录」行只保留 Trade Replay 入口和复盘状态摘要，不提供单独「复盘」操作按钮；「仅看亏损单」过滤当前 `GET /api/trade-groups` read model 中 closed 且 PnL 小于 0 的交易组，并用交易组 `source_batch_ids`、`raw_line_numbers`、账号和标的匹配 `GET /api/fills` read model，让上方分钟蜡烛图只显示对应买卖点；「下钻复盘」外层提供「数据下钻」「盈亏复盘」和「交易总结」。数据下钻读取全部日期的轻量 trade group read model，按全部、本月、本周或特定时间段做前端只读筛选，展示全部订单统计指标和月日历；「月日历下钻」可切换为所选时间段每日表格，并导出同一行列口径的 Excel 兼容工作簿。日历格只展示每日股数与 PnL，表格展示成交数、股数、PnL、胜率、盈亏比、单笔期望值、每股净收益以及后端 excursion read model 的 MFE/MAE；点击有订单的日期方块只会选中当前复盘日期并展示该日标的下钻入口，不写入交易组、复盘记录、STP 成交事实或行情归档。盈亏复盘读取同一轻量 trade group read model，默认选中「全部订单」，也可切到「仅看盈利单」或「仅看亏损单」；所选日期范围由父层持有并与交易总结共享，盈亏单单选仍只控制盈亏复盘。所选时间段控制统计指标、热力时间矩阵和订单列表，亏损视图额外展示一级/二级原因分类汇总并支持筛选列表，盈利和全部视图的原因模块保持为空。热力时间矩阵横轴使用美股常规盘五大微观结构窗口；全部订单视图可在 ATR 时间矩阵与股数时间矩阵间切换，ATR 纵轴读取 `position_drawdown.entry_atr_multiple`，股数纵轴读取轻量交易组 `total_quantity` 并按 `≤50`、`51-100`、`101-200`、`201-500`、`>500` 股分档，缺失或非正数进入缺股数证据，右侧 Y 轴按股数档汇总收益、订单数和股数。全部订单两种矩阵只读展示最大盈利区、最大亏损区和时间窗口收益合计；盈利视图和亏损视图继续使用 ATR 时间矩阵，分别展示最大盈利区或最大亏损区，矩阵格不筛选订单明细；复盘原因表单展示在 Trade Replay 弹层订单明细模块下方，并只读取交易组 `review` read model。
 - Artifact source: 复盘记录保存 `trade_group_id`、交易组 PnL、parser versions、field mapper versions、source batch ids 和 raw line numbers 作为只读追溯证据。
 - Idempotency key: `trade_review_v1 + trade_group_id`，同一交易组重复保存会更新 Review Journal 记录，不新增重复复盘。
 - Failure contract: 盈利、持平、未清仓或不存在的交易组不能写入亏损复盘；不支持的原因分类或原因码返回失败，不落入主观复盘账本。
@@ -89,27 +89,33 @@
 - Version boundary: 本切片不涉及 STP parser 或 field mapper，相关版本保持不变；策略模板版本、参数 hash 和历史 artifact version 继续随原记录保存。
 - Action boundary: 「去策略测试」只切换工作区并带入策略、日期和标的，不触发 POST、不自动运行测试、不套用参数、不下单，也不修改 STP 成交事实或 Review Journal。
 
-## P1 Yahoo 离线分钟线归档事实源
+## P1 本地分钟线归档与备选行情事实源
 
-- Canonical source: `market_minute_archives`。基础目标集合来自已提交 `fills` 的 `trade_date + symbol`；STP TXT 上传成功后会按本批 committed fills 的 `source_batch_id` 推导日期和标的并补缺本地归档；启用 Momentum Mean Reversion 时，同日 QQQ/SMH 作为策略上下文目标加入手工/批量归档队列；外部数据源来自 Yahoo Finance 1 分钟线响应。
-- Read model: `GET /api/market-data/minute-archives` 返回已归档的 symbol/day 分钟线、hash、VWAP、当日高低、成交量上下文和 provider 状态。
+- Canonical source: `market_minute_archives`。基础目标集合来自已提交 `fills` 的 `trade_date + symbol`；STP TXT 上传成功后会按本批 committed fills 的 `source_batch_id` 推导日期和标的并补缺本地归档；启用 Momentum Mean Reversion 时，同日 QQQ/SMH 作为策略上下文目标加入手工/批量归档队列。外部获取顺序为 Yahoo Finance 1 分钟线主源，再到 Futu 历史 1 分钟 K 线备选源；外部响应只是归档输入，落库后的 archive 才是复盘行情事实源。
+- Read model: `GET /api/market-data/minute-archives` 返回已归档的 symbol/day 分钟线、hash、VWAP、当日高低、成交量上下文和 provider 状态；读取时会把与前后行情不连续且显著超过典型分钟振幅的孤立异常柱投影为 `partial`，复盘不锁定 Yahoo，优先选择质量门禁后的 `available`，其次选择 `partial`，并保留同目标下各 provider 记录供追溯。
 - UI read model: 复盘页以 `trade_date + symbol` 选择 archive，把第一笔到最后一笔 committed `fills` 覆盖的 `bars` 画成分钟蜡烛图，并只用 committed `fills` 叠加买卖点；分钟蜡烛复盘、Trade Replay 和策略复盘共享图表组件，鼠标浮层的中文开盘价、最高价、最低价、收盘价和 VWAP 只读当前 archive，买入/卖出价只读映射到该分钟的 committed `fills`。同一分钟多笔同向成交只展示真实价格区间与笔数，不计算平均价，也不回写行情、成交或策略事实。
-- Artifact source: `bars_json` 和 `bars_hash` 是可复查归档内容；`market_data_provider_attempts.request_type='archive_minute_bars'` 记录每次 Yahoo provider 尝试。
+- UI invalidation boundary: 用户显式刷新本地分钟线后，前端必须在同一动作中重新读取 archive、当前日期/标的汇总、日期与标的分组汇总及轻量交易组；不得只替换蜡烛图而保留刷新前的 MFE/MAE read model。
+- Artifact source: `bars_json` 和 `bars_hash` 是可复查归档内容；`market_data_provider_attempts.request_type='archive_minute_bars'` 按 Yahoo / Futu 分别记录每次 provider 尝试。
 - Idempotency key: `provider + symbol + trade_date + requested_start + requested_end`，重复归档默认复用已有记录，`force=true` 才刷新。
 - Upload archive boundary: `POST /api/imports/stp-txt` 只在导入状态为 committed 时触发本批成交的缺失分钟线归档；该动作只写 `market_minute_archives` 和 `market_data_provider_attempts`，并把归档结果附在上传响应中，不修改 `import_batches`、`orders` 或 `fills` 的事实字段。
-- Manual research window: `POST /api/market-data/yahoo-minute-archive` 支持 `symbol + date + window_trading_days`，会按最近自然日生成 symbol/day 归档目标；`window_trading_days` 是兼容字段名，当前业务语义为最近 N 天；`archive_yahoo_minutes_for_symbol_group_window` 和 `scripts/archive-local-minute-db.py` 用同一幂等口径为 MU/NVDA/SPY 等研究标的组批量写入本地 SQLite 归档；启用 Momentum Mean Reversion 时同窗口补 QQQ/SMH 上下文归档。
-- Failure contract: Yahoo 缺数据、网络失败、chart error 或时区冲突必须保存为 `missing`、`provider_failed`、`partial` 或 `timezone_conflict`，不能渲染为成功归档。
-- Boundary: Yahoo 分钟线只能补充行情上下文，不能覆盖 STP TXT 的成交价格、成交数量、成交时间或订单事实。
+- Manual research window: 兼容入口 `POST /api/market-data/yahoo-minute-archive` 支持 `symbol + date + window_trading_days`，会按最近自然日生成 symbol/day 归档目标；`window_trading_days` 是兼容字段名，当前业务语义为最近 N 天；`archive_yahoo_minutes_for_symbol_group_window` 和 `scripts/archive-local-minute-db.py` 用同一幂等口径为 MU/NVDA/SPY 等研究标的组批量写入本地 SQLite 归档；启用 Momentum Mean Reversion 时同窗口补 QQQ/SMH 上下文归档。
+- Local fallback runtime: 只有分钟线归档回退创建的 Futu adapter 会在本机连接失败时尝试启动已安装的 Futu OpenD GUI，并等待本机行情端口；其他 Futu 功能不继承该副作用。该启动只恢复行情通道，不允许交易解锁、下单或把 Futu 数据写回 STP facts。
+- Backend runtime boundary: 后端启动器只选择同时具备 FastAPI、Uvicorn 和 Futu SDK 的 Python；`GRIT_PYTHON` 是显式覆盖入口，项目 `.venv` 是首选本地环境，PATH 只作为兼容候选。缺少任一模块时启动失败，不得把 SDK 缺失延后伪装成 provider failure。
+- Refresh boundary: `force=true` 仍记录新 provider attempt；如果新结果失败、为空，或其状态 / bars 数比既有 `available` / `partial` 归档更差，不能覆盖既有 bars、hash、指标和归档时间，只更新当前目标的 `source_fill_count`。
+- Failure contract: Yahoo 缺数据、网络失败、chart error、成交窗口覆盖不完整、孤立价格断层或时区冲突时保存主源状态，并在该目标确有 committed fills 或主源状态不是纯空研究日时尝试 Futu；Futu OpenD、额度或历史 K 线请求也失败时保存备选失败。历史 `available` 归档若命中当前价格质量门禁，原 bars/hash 继续保留但 read model 降为 `partial`。任何 `missing`、`provider_failed`、`partial` 或 `timezone_conflict` 都不能渲染为成功归档，也不能进入 MFE/MAE、交易评价或新策略 run。
+- Boundary: Yahoo / Futu 分钟线只能补充行情上下文，不能覆盖 STP TXT 的成交价格、成交数量、成交时间或订单事实。STP parser version 和 field mapper version 本切片保持不变。
 
 ## P1 Trade Replay Groups 事实源
 
 - Canonical source: 交易组只从 committed `fills` read model 构建。STP TXT 的成交时间、价格、数量、方向和证据行仍是交易事实源。
 - Read model: `GET /api/trade-groups?date=YYYY-MM-DD&account=&symbol=&include_details=false` 按 `account_canonical + symbol` 和成交时间把仓位从开仓到清仓配成交易组，首屏可返回不含组内 fills 和评价因子明细的轻量列表；`date` 可省略以返回全部日期的轻量交易组，供数据下钻月日历和盈亏复盘读取。数据下钻的时间筛选、统计指标、月日历日格和选中日标的列表都是从轻量 trade group read model 派生的前端只读投影；点击日格只更新当前复盘日期，不写入行情归档、交易组或 Review Journal。盈亏复盘按「全部订单 / 仅看盈利单 / 仅看亏损单」单选投影同一轻量 read model，默认全部订单视图；全部订单热力时间矩阵默认按 `position_drawdown.entry_atr_multiple` 展示 ATR 分层，也可切换为按 `total_quantity` 展示 `≤50`、`51-100`、`101-200`、`201-500`、`>500` 股分层及 Y 轴档位汇总，两个投影都使用相同 closed trade groups 和时间范围。全部订单视图展示最大盈利区、最大亏损区和每个时间窗口的收益合计，盈利视图展示最大盈利区，亏损视图展示最大亏损区；缺 ATR 或缺股数证据行仅在存在对应订单时展示，矩阵格不筛选订单列表。盈利和全部视图不展示原因分类，也不写 Review Journal；亏损视图可用原因分类筛选列表。replay 详情使用 `include_details=true` 读取完整 fills、已实现 PnL、持仓最大回撤、开仓 ATR Multiple 和评分证据。`GET /api/review/summary` 与 `GET /api/review/summary-groups` 只聚合 committed fills 和轻量 closed trade groups，用于全局、日期和标的下钻汇总，并返回单笔期望值、每股净收益和持仓最大回撤。复盘摘要不得触发完整交易评价模型；完整评价只属于交易列表和 replay 详情。
+- Daily table projection: 轻量 trade group 的 `position_drawdown` 同时返回后端按成交路径与分钟归档计算的 MFE/MAE；数据下钻从当前时间筛选后的同一组 closed trade groups 生成每日表格与 Excel 导出。历史日期在读取时按 `trade_group_id + source_archive_id + bars_hash` 确定性回溯计算，不新增第二份成交或 excursion 事实表；`trade_group_excursion_v2` 运行时合同用于阻止旧后端继续返回全空 MFE/MAE。表格和工作簿不是 canonical source，也不回写持久化状态；所选范围无每日数据时禁止导出。
+- Excursion presentation: 头部汇总、当前每日指标和成交记录行统一读取 read model 的 `max_favorable_excursion` / `max_adverse_excursion`，展示为 MFE / MAE，并复用同一名词解释；不得由前端用 PnL、最高最低价或旧 `max_single_day_drawdown` 重新推导。每日列表和导出均为日期、成交数、股数、PnL、胜率、盈亏比、单笔期望值、每股净收益、MFE、MAE 十列，不重复展示 closed/open count；窄屏布局变化不改变字段或事实源。
 - Replay window: Trade Replay 弹层默认按开仓到清仓首尾各 10 分钟显示本地归档分钟线；勾选「查看半小时」只扩大可见图表窗口到开平仓前后各 30 分钟，不触发行情归档、不改变 `bars_hash` 或成交事实。
-- Artifact source: 交易 replay 弹层只读取本地 `market_minute_archives.bars_json` 和 `bars_hash` 作为行情图表来源，打开弹层不会自动触发 provider 拉取；持仓最大回撤按组内成交时间维护实际 open position 与均价，只用开仓到清仓窗口内的分钟 high/low、archive id 和 bars hash 追溯不利波动；评分只读取 archive 中的 VWAP、当日高低、成交量上下文和 provider 状态。
+- Artifact source: 交易 replay 弹层只读取本地 `market_minute_archives.bars_json` 和 `bars_hash` 作为行情图表来源，打开弹层不会自动触发 provider 拉取；MFE、MAE 与持仓最大回撤按组内成交时间维护实际 open position 与均价，只用开仓到清仓窗口内的分钟 high/low、archive id 和 bars hash 追溯有利/不利波动；评分只读取 archive 中的 VWAP、当日高低、成交量上下文和 provider 状态。
 - Idempotency key: `trade_group_id = tg_ + sha256(trade_group_v1 + account + symbol + direction + open/close time + hashed fill idempotency signatures)`。API 不暴露原始 fill idempotency key。
 - Evaluation model: `trade_eval_intraday_v1` 是只读规则评分模型。评分维度包括 VWAP 执行质量、趋势配合、成交量确认、MFE/MAE、清仓效率和 PnL 结果；评分 read model 还返回结构化 `recommendations`，用于展示后续开仓和平仓建议，不修改成交事实。
-- Failure contract: `provider_failed`、`missing`、`timezone_conflict` 或无 bars 时，持仓最大回撤和评价返回 `insufficient_market_data`，不能生成正常评分或成功图表；open group 返回 `not_applicable_open_trade`。
+- Failure contract: `provider_failed`、`missing`、`timezone_conflict` 或无 bars 时，MFE、MAE、持仓最大回撤和评价返回 `insufficient_market_data`，不能生成正常评分或成功图表；open group 返回 `not_applicable_open_trade`。
 - Drilldown failure contract: 没有 committed fills 时，全局汇总返回 0、分组列表为空；UI 不渲染假日期、假标的或成功复盘。
 - Boundary: Trade Group 是 read model，不新增持久化表，不回写 `fills`，不覆盖 parser version、field mapper version 或原始证据链。
 
@@ -283,7 +289,7 @@ P0 允许一种窄口径的 fill-only TXT：文件无表头，基础列顺序固
 
 成交 read-model 必须在不删除证据账本的前提下处理跨批重导：如果同一批成交因补表头、编码变化或尾部空行导致 `file_hash` 改变，`import_batches`、`import_rows` 和底层 `fills` 可保留全部证据；`GET /api/fills` 和 daily summary 只对同一 fallback 成交签名的最新批次计数。同一文件内部重复的 raw rows 仍按出现次数保留，不能被压缩成一笔。
 
-Daily summary 与 review summary 的 PnL、胜率、盈亏比、单笔期望值和每股净收益必须按已平仓 round-trip 计算：同一账号和标的下，仓位从 0 开始，B&S 或 S&B 回到 0 时结算一笔交易；多次开平仓必须拆成多笔。未平仓单边成交不进入胜率、盈亏比、单笔期望值、每股净收益、持仓最大回撤或已实现 PnL。全局、日期和标的下钻汇总都只能读取 committed fills 和 closed trade groups，不得由前端按成交列表自行重算核心 KPI。单笔期望值按 `胜率 * 平均盈利金额 - 败率 * 平均亏损金额` 计算；每股净收益按 `PnL / 成交股数` 计算；持仓最大回撤按 closed trade group 的成交路径维护实际 open position，并引用 `market_minute_archives` 窗口 high/low 计算，汇总取范围内可用成交组的最大值。
+Daily summary 与 review summary 的 PnL、胜率、盈亏比、单笔期望值和每股净收益必须按已平仓 round-trip 计算：同一账号和标的下，仓位从 0 开始，B&S 或 S&B 回到 0 时结算一笔交易；多次开平仓必须拆成多笔。未平仓单边成交不进入胜率、盈亏比、单笔期望值、每股净收益、MFE、MAE、持仓最大回撤或已实现 PnL。全局、日期和标的下钻汇总都只能读取 committed fills 和 closed trade groups，不得由前端按成交列表自行重算核心 KPI。单笔期望值按 `胜率 * 平均盈利金额 - 败率 * 平均亏损金额` 计算；每股净收益按 `PnL / 成交股数` 计算；交易组 MFE/MAE 按成交路径维护实际 open position 和移动均价，并只引用 `market_minute_archives` 开仓至清仓窗口的 high/low；每日汇总分别取可用已平仓交易组的最大有利/不利波动金额。持仓最大回撤继续与 MAE 使用同一不利波动路径金额；缺少可用分钟归档时 MFE/MAE 返回空值，不用 0 伪造成功证据。
 
 ## P1 Market Context Replay 合同
 

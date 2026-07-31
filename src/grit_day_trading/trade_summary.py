@@ -15,6 +15,7 @@ from urllib.parse import urlsplit
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
+from .market_quality import archive_preference_key, archive_quality_projection
 from .service import (
     TRADE_EVALUATION_MODEL_VERSION,
     _clock_minute,
@@ -548,18 +549,21 @@ def _trade_summary_groups(
         return []
 
     archive_keys = {(group["symbol"], str(group["opened_at"])[:10]) for group in groups}
-    archives: dict[tuple[str, str], dict[str, Any]] = {}
+    archive_candidates: dict[tuple[str, str], list[dict[str, Any]]] = {}
     for row in conn.execute(
         """
         SELECT * FROM market_minute_archives
-        WHERE provider = 'yahoo'
         ORDER BY symbol, trade_date, created_at DESC, id DESC
         """
     ).fetchall():
-        archive = row_to_dict(row)
+        archive = archive_quality_projection(row_to_dict(row))
         key = (archive["symbol"], archive["trade_date"])
-        if key in archive_keys and key not in archives:
-            archives[key] = archive
+        if key in archive_keys:
+            archive_candidates.setdefault(key, []).append(archive)
+    archives = {
+        key: min(candidates, key=archive_preference_key)
+        for key, candidates in archive_candidates.items()
+    }
 
     reviews = {
         row["trade_group_id"]: _public_trade_review(row_to_dict(row))
@@ -571,10 +575,12 @@ def _trade_summary_groups(
         archive = archives.get((group["symbol"], str(group["opened_at"])[:10]))
         evaluation = {"evaluation_status": "insufficient_market_data", "factors": []}
         position_drawdown = {"source_archive_id": None, "bars_hash": None}
-        if archive and archive["data_status"] not in {"provider_failed", "missing", "timezone_conflict"}:
+        if archive and archive["data_status"] == "available":
             cached_bars = bars_cache.get(archive["id"])
             if cached_bars is None:
-                bars = json.loads(archive["bars_json"])
+                bars = archive.get("bars")
+                if not isinstance(bars, list):
+                    bars = json.loads(archive["bars_json"])
                 cached_bars = (
                     bars,
                     [(_clock_minute(str(bar.get("timestamp", ""))), bar) for bar in bars],

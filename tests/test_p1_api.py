@@ -20,8 +20,10 @@ def test_healthz_advertises_p1_runtime_routes(tmp_path):
     assert payload["status"] == "ok"
     assert payload["live_signal_contract"] == "live_order_quantity_reason_tags_v1"
     assert payload["trade_eval_contract"] == "trade_eval_recommendation_v1"
+    assert payload["trade_excursion_contract"] == "trade_group_excursion_v2"
     assert payload["ai_strategy_catalog"] == "ai_strategy_catalog_v2"
     assert payload["trade_summary_contract"] == "trade_summary_contract_v3"
+    assert payload["minute_archive_contract"] == "yahoo_futu_quality_fallback_v2"
     assert isinstance(payload["trade_summary_llm_configured"], bool)
     assert "/api/market-data/minute-archives" in payload["required_routes"]
     assert "/api/market-data/yahoo-minute-archive" in payload["required_routes"]
@@ -173,6 +175,44 @@ def test_yahoo_minute_archive_api_archives_manual_symbol_window(tmp_path, monkey
     assert payload["target_count"] == 3
     assert payload["selected_symbol_available_count"] == 3
     assert [item["symbol"] for item in listed.json()["items"]] == ["MSFT", "MSFT", "MSFT"]
+
+
+def test_yahoo_minute_archive_api_returns_futu_fallback_when_primary_fails(tmp_path, monkeypatch):
+    yahoo_provider = FakeMarketDataProvider(minute_status={"AAPL": "provider_failed"})
+    futu_provider = FakeMarketDataProvider(
+        minute_bars={
+            "AAPL": [
+                MarketBar("2026-06-01T09:31:00", 99.5, 101.0, 99.0, 100.0, 100),
+                MarketBar("2026-06-01T10:15:00", 100.5, 103.0, 100.0, 102.0, 300),
+            ]
+        }
+    )
+    monkeypatch.setattr(
+        market_archive,
+        "resolve_provider",
+        lambda provider_name: yahoo_provider if provider_name == "yahoo" else futu_provider,
+    )
+
+    with TestClient(create_app(tmp_path / "p1-archive-fallback.db")) as client:
+        imported = client.post(
+            "/api/imports/stp-txt",
+            files={"file": ("sample.tsv", SAMPLE_PATH.read_bytes(), "text/plain")},
+        ).json()
+        archived = client.post("/api/market-data/yahoo-minute-archive", json={"date": "2026-06-01"})
+        listed = client.get("/api/market-data/minute-archives?date=2026-06-01&symbol=AAPL")
+
+    assert imported["market_archive"]["items"][0]["provider"] == "futu"
+    assert archived.status_code == 200
+    payload = archived.json()
+    assert payload["provider_chain"] == ["yahoo", "futu"]
+    assert payload["fallback_attempted_count"] == 1
+    assert payload["fallback_available_count"] == 1
+    assert payload["items"][0]["provider"] == "futu"
+    assert payload["items"][0]["data_status"] == "available"
+    assert [(item["provider"], item["data_status"]) for item in listed.json()["items"]] == [
+        ("futu", "available"),
+        ("yahoo", "provider_failed"),
+    ]
 
 
 def test_yahoo_minute_archive_api_rejects_window_without_symbol(tmp_path):

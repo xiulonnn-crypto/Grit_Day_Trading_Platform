@@ -156,11 +156,11 @@ h2 {
 }
 
 .reviewDashboard {
-  grid-template-columns: repeat(7, minmax(120px, 1fr));
+  grid-template-columns: repeat(8, minmax(110px, 1fr));
 }
 
 .currentReviewKpis {
-  grid-template-columns: repeat(2, minmax(150px, 1.1fr)) repeat(5, minmax(92px, 0.9fr));
+  grid-template-columns: repeat(2, minmax(150px, 1.1fr)) repeat(6, minmax(86px, 0.9fr));
 }
 
 .dateControl,
@@ -179,6 +179,90 @@ h2 {
   flex-direction: column;
   font-size: 13px;
   gap: 8px;
+}
+
+.metric .metricGlossaryLabel,
+th .metricGlossaryLabel {
+  align-items: center;
+  display: inline-flex;
+  flex-direction: row;
+  gap: 5px;
+  position: relative;
+  width: max-content;
+}
+
+.metric .metricHelp,
+th .metricHelp {
+  align-items: center;
+  background: #eef4f5;
+  border: 1px solid #b8c9cc;
+  border-radius: 50%;
+  color: #44636a;
+  cursor: help;
+  display: inline-grid;
+  flex: 0 0 auto;
+  flex-direction: row;
+  font-size: 10px;
+  font-weight: 900;
+  gap: 0;
+  height: 16px;
+  justify-content: center;
+  line-height: 1;
+  position: relative;
+  width: 16px;
+}
+
+.metricHelp::after {
+  background: #1f2933;
+  border-radius: 7px;
+  color: #ffffff;
+  content: attr(data-tooltip);
+  font-size: 12px;
+  font-weight: 500;
+  left: 50%;
+  line-height: 1.45;
+  max-width: min(280px, calc(100vw - 32px));
+  opacity: 0;
+  padding: 8px 10px;
+  pointer-events: none;
+  position: absolute;
+  text-align: left;
+  top: calc(100% + 8px);
+  transform: translate(-50%, -3px);
+  transition: opacity 120ms ease, transform 120ms ease, visibility 120ms ease;
+  visibility: hidden;
+  white-space: normal;
+  width: max-content;
+  z-index: 40;
+}
+
+.metricHelp:hover::after,
+.metricHelp:focus-visible::after {
+  opacity: 1;
+  transform: translate(-50%, 0);
+  visibility: visible;
+}
+
+.metric:last-child .metricHelp::after,
+.dataReviewDailyTable th .metricHelp::after,
+.tradeGroupTable th .metricHelp::after {
+  left: auto;
+  right: 0;
+  transform: translateY(-3px);
+}
+
+.metric:last-child .metricHelp:hover::after,
+.metric:last-child .metricHelp:focus-visible::after,
+.dataReviewDailyTable th .metricHelp:hover::after,
+.dataReviewDailyTable th .metricHelp:focus-visible::after,
+.tradeGroupTable th .metricHelp:hover::after,
+.tradeGroupTable th .metricHelp:focus-visible::after {
+  transform: translateY(0);
+}
+
+.metricHelp:focus-visible {
+  outline: 2px solid rgba(31, 111, 103, 0.35);
+  outline-offset: 2px;
 }
 
 .dateControl input,
@@ -381,6 +465,24 @@ h2 {
   min-width: 0;
 }
 
+.dataReviewCalendarHeaderActions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.dataReviewViewSwitch button {
+  align-items: center;
+  display: inline-flex;
+  gap: 5px;
+}
+
+.dataReviewExportButton:disabled {
+  cursor: not-allowed;
+}
+
 .dataReviewCalendarHeader h3 {
   align-items: center;
   color: #1f2933;
@@ -482,6 +584,63 @@ h2 {
   display: grid;
   gap: 12px;
   min-width: 0;
+}
+
+.dataReviewDailyTableWrap {
+  background: #ffffff;
+  border: 1px solid #e3e9ed;
+  border-radius: 8px;
+  min-width: 0;
+}
+
+.dataReviewDailyTableWrap.tableWrap {
+  overflow-x: clip;
+}
+
+.dataReviewDailyTable {
+  min-width: 0;
+  table-layout: fixed;
+  width: 100%;
+}
+
+.dataReviewDailyTable th {
+  background: #f6f9fa;
+  overflow-wrap: anywhere;
+  padding: 9px 6px;
+  position: sticky;
+  top: 0;
+  width: auto;
+  z-index: 1;
+}
+
+.dataReviewDailyTable th:first-child,
+.dataReviewDailyTable td:first-child {
+  font-variant-numeric: tabular-nums;
+  width: auto;
+}
+
+.dataReviewDailyTable td {
+  font-variant-numeric: tabular-nums;
+  padding: 9px 6px;
+  white-space: nowrap;
+}
+
+.dataReviewDailyTable td.ok {
+  color: #237804;
+  font-weight: 800;
+}
+
+.dataReviewDailyTable td.bad {
+  color: #a8071a;
+  font-weight: 800;
+}
+
+.dataReviewDailyTableNote {
+  color: #607080;
+  font-size: 12px;
+  line-height: 1.45;
+  margin: 0;
+  padding: 10px 12px;
 }
 
 .reviewDrillDetail {
@@ -4215,11 +4374,12 @@ th:nth-child(8) {
 .tradeGroupTable th:nth-child(5),
 .tradeGroupTable th:nth-child(6),
 .tradeGroupTable th:nth-child(7),
-.tradeGroupTable th:nth-child(8) {
+.tradeGroupTable th:nth-child(8),
+.tradeGroupTable th:nth-child(9) {
   width: 110px;
 }
 
-.tradeGroupTable th:nth-child(9) {
+.tradeGroupTable th:nth-child(10) {
   width: 230px;
 }
 
@@ -5830,7 +5990,7 @@ th:nth-child(8) {
   }
 
   .currentReviewKpis {
-    grid-template-columns: repeat(2, minmax(138px, 1.1fr)) repeat(5, minmax(84px, 0.9fr));
+    grid-template-columns: repeat(2, minmax(138px, 1.1fr)) repeat(6, minmax(78px, 0.9fr));
   }
 
   .reviewWorkspace,
@@ -5909,6 +6069,16 @@ th:nth-child(8) {
   .topbar {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .dataReviewCalendarHeader {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .dataReviewCalendarHeaderActions {
+    justify-content: flex-start;
+    width: 100%;
   }
 
   .uploadButton {
@@ -6074,6 +6244,86 @@ th:nth-child(8) {
     display: grid;
     grid-template-columns: 1fr;
     width: 100%;
+  }
+
+  .dataReviewCalendarHeaderActions,
+  .dataReviewViewSwitch {
+    align-items: stretch;
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .dataReviewViewSwitch,
+  .dataReviewExportButton,
+  .dataReviewCalendarNav {
+    width: 100%;
+  }
+
+  .dataReviewViewSwitch button,
+  .dataReviewExportButton {
+    justify-content: center;
+  }
+
+  .dataReviewDailyTableWrap.tableWrap {
+    overflow-x: clip;
+  }
+
+  .dataReviewDailyTable,
+  .dataReviewDailyTable tbody {
+    display: block;
+    min-width: 0;
+    width: 100%;
+  }
+
+  .dataReviewDailyTable thead {
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    height: 1px;
+    overflow: hidden;
+    position: absolute;
+    white-space: nowrap;
+    width: 1px;
+  }
+
+  .dataReviewDailyTable tbody {
+    display: grid;
+    gap: 10px;
+    padding: 10px;
+  }
+
+  .dataReviewDailyTable tr {
+    border: 1px solid #e1e8ec;
+    border-radius: 8px;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    overflow: hidden;
+    padding: 5px;
+    width: 100%;
+  }
+
+  .dataReviewDailyTable td {
+    border-bottom: 0;
+    display: grid;
+    gap: 3px;
+    min-width: 0;
+    overflow-wrap: anywhere;
+    padding: 7px;
+    white-space: normal;
+    width: auto;
+  }
+
+  .dataReviewDailyTable td::before {
+    color: #607080;
+    content: attr(data-label);
+    font-size: 10px;
+    font-weight: 700;
+  }
+
+  .dataReviewDailyTable td:first-child {
+    background: #f6f9fa;
+    border-bottom: 1px solid #e1e8ec;
+    grid-column: 1 / -1;
+    width: auto;
   }
 
   .reviewDrillSurfaceTab,

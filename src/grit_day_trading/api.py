@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 
 from .ai_strategy import AI_STRATEGY_CATALOG_VERSION, get_ai_strategy_recommendations
 from .market_archive import (
+    MINUTE_ARCHIVE_CONTRACT_VERSION,
     archive_yahoo_minutes_for_committed_fills,
     archive_yahoo_minutes_for_import_batch,
     archive_yahoo_minutes_for_symbol_window,
@@ -74,6 +75,7 @@ REQUIRED_API_ROUTES = (
 )
 LIVE_SIGNAL_CONTRACT_VERSION = "live_order_quantity_reason_tags_v1"
 TRADE_EVALUATION_CONTRACT_VERSION = "trade_eval_recommendation_v1"
+TRADE_EXCURSION_CONTRACT_VERSION = "trade_group_excursion_v2"
 
 
 class MarketContextReplayRequest(BaseModel):
@@ -189,8 +191,10 @@ def create_app(db_path: str | Path | None = None) -> FastAPI:
             "required_routes": list(REQUIRED_API_ROUTES),
             "live_signal_contract": LIVE_SIGNAL_CONTRACT_VERSION,
             "trade_eval_contract": TRADE_EVALUATION_CONTRACT_VERSION,
+            "trade_excursion_contract": TRADE_EXCURSION_CONTRACT_VERSION,
             "ai_strategy_catalog": AI_STRATEGY_CATALOG_VERSION,
             "trade_summary_contract": TRADE_SUMMARY_CONTRACT_VERSION,
+            "minute_archive_contract": MINUTE_ARCHIVE_CONTRACT_VERSION,
             "trade_summary_llm_configured": trade_summary_llm_configured(),
         }
 

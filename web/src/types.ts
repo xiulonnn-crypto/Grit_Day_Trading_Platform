@@ -101,6 +101,10 @@ export interface TradeGroupPositionDrawdown {
   status: "available" | "insufficient_market_data" | "not_applicable_open_trade";
   max_drawdown: number | null;
   max_drawdown_per_share: number | null;
+  max_favorable_excursion: number | null;
+  max_favorable_excursion_per_share: number | null;
+  max_adverse_excursion: number | null;
+  max_adverse_excursion_per_share: number | null;
   source: "market_minute_archives" | null;
   source_archive_id: string | null;
   bars_hash: string | null;
@@ -109,6 +113,7 @@ export interface TradeGroupPositionDrawdown {
   window_end: string | null;
   window_high: number | null;
   window_low: number | null;
+  best_price: number | null;
   worst_price: number | null;
   price_basis: "minute_high_low" | null;
   entry_atr_period: number;
@@ -189,6 +194,8 @@ export interface DailySummary {
   profit_factor: number | null;
   expected_value_per_trade: number | null;
   net_profit_per_share: number | null;
+  max_favorable_excursion: number | null;
+  max_adverse_excursion: number | null;
   max_single_day_drawdown: number;
   quarantine_row_count: number;
   source: "committed_fills_only";
@@ -388,6 +395,7 @@ export interface MarketMinuteArchive {
 export interface YahooMinuteArchiveResult {
   status: "no_targets" | "completed";
   provider: "yahoo";
+  provider_chain: Array<"yahoo" | "futu" | string>;
   archive_version: string;
   batch_id?: string;
   trade_date: string | null;
@@ -399,6 +407,8 @@ export interface YahooMinuteArchiveResult {
   available_count: number;
   non_available_count: number;
   provider_failed_count: number;
+  fallback_attempted_count: number;
+  fallback_available_count: number;
   selected_symbol_available_count?: number;
   items: MarketMinuteArchive[];
 }

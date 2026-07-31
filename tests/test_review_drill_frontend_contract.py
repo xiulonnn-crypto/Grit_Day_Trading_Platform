@@ -11,6 +11,15 @@ STYLES_SOURCE = (ROOT / "web" / "src" / "styles.css").read_text(encoding="utf-8"
 TYPES_SOURCE = (ROOT / "web" / "src" / "types.ts").read_text(encoding="utf-8")
 
 
+def test_workspace_launch_marker_is_consumed_without_dropping_other_url_state():
+    assert 'new URLSearchParams(window.location.search).get("grit_ui")' in APP_SOURCE
+    assert "function clearWorkspaceLaunchMarker()" in APP_SOURCE
+    assert 'url.searchParams.delete("grit_ui")' in APP_SOURCE
+    assert "const nextUrl = `${url.pathname}${url.search}${url.hash}`" in APP_SOURCE
+    assert 'window.history.replaceState(window.history.state, "", nextUrl)' in APP_SOURCE
+    assert "clearWorkspaceLaunchMarker();" in APP_SOURCE
+
+
 def test_review_drill_date_stats_use_selected_date_group_summary():
     assert "const dataReviewSelectedDateSummary = useMemo" in APP_SOURCE
     assert "dataReviewDateSummaryGroups.find((group) => group.group_key === date)" in APP_SOURCE
@@ -107,6 +116,9 @@ def test_archive_failure_reasons_do_not_expose_http_codes_to_operators():
     assert 'return `Yahoo 返回 HTTP ${reason.replace("yahoo_http_", "")}，系统已保存为 provider_failed。`;' not in APP_SOURCE
     assert "Yahoo 未接受 1 分钟历史请求" in APP_SOURCE
     assert "Yahoo 暂时没有接受本次分钟线请求" in APP_SOURCE
+    assert "Futu 备选历史 K 线额度也已用尽" in APP_SOURCE
+    assert "Futu 备选历史 K 线请求也未成功" in APP_SOURCE
+    assert "分钟线包含与前后行情不连续的孤立异常柱" in APP_SOURCE
 
 
 def test_current_review_kpis_do_not_show_fill_count():
@@ -157,7 +169,7 @@ def test_review_drill_daily_data_shows_orders_shares_and_pnl_only():
     assert "订单数 ${formatInteger(summary.fill_count)} · 股数 ${formatInteger(summary.traded_quantity)} · PnL ${formatPnl(summary.pnl)}" in APP_SOURCE
 
 
-def test_current_review_kpis_keep_drawdown_on_same_row():
+def test_current_review_kpis_show_mfe_mae_on_same_row():
     match = re.search(
         r'<section className="kpis currentReviewKpis".*?</section>',
         APP_SOURCE,
@@ -169,20 +181,25 @@ def test_current_review_kpis_keep_drawdown_on_same_row():
     )
     assert match is not None
     assert style_match is not None
-    assert len(re.findall(r"<Metric\s+label=", match.group(0))) == 5
-    assert re.search(r'<Metric\s+label="持仓最大回撤"', match.group(0)) is not None
+    assert len(re.findall(r"<Metric\s+label=", match.group(0))) == 6
+    assert re.search(r'<Metric\s+label="MFE"', match.group(0)) is not None
+    assert re.search(r'<Metric\s+label="MAE"', match.group(0)) is not None
+    assert "持仓最大回撤" not in match.group(0)
     assert "scopedCurrentReviewSummary" in match.group(0)
     assert "summary?." not in match.group(0)
-    assert "repeat(5" in style_match.group(1)
+    assert "repeat(6" in style_match.group(1)
 
 
 def test_trade_replay_surfaces_position_drawdown_trace():
     assert "export interface TradeGroupPositionDrawdown" in TYPES_SOURCE
     assert "position_drawdown: TradeGroupPositionDrawdown" in TYPES_SOURCE
     assert "entry_atr_multiple: number | null" in TYPES_SOURCE
+    assert "max_favorable_excursion: number | null" in TYPES_SOURCE
+    assert "max_adverse_excursion: number | null" in TYPES_SOURCE
     assert 'entry_atr_regime: "extreme" | "high" | "normal" | "low" | "missing"' in TYPES_SOURCE
-    assert "<th>最大回撤</th>" in APP_SOURCE
-    assert "formatPositionDrawdown(group.position_drawdown)" in APP_SOURCE
+    assert "<th>最大回撤</th>" not in APP_SOURCE
+    assert "formatNullable(group.position_drawdown.max_favorable_excursion)" in APP_SOURCE
+    assert "formatNullable(group.position_drawdown.max_adverse_excursion)" in APP_SOURCE
     assert "<small>{formatPositionDrawdownMeta(group.position_drawdown)}</small>" not in APP_SOURCE
     assert "${formatNullable(drawdown.max_drawdown_per_share)}/股" not in APP_SOURCE
     assert ".pnlCell small" not in STYLES_SOURCE
@@ -200,9 +217,22 @@ def test_trade_replay_view_reads_local_archives_without_provider_archive():
     body = match.group("body")
     assert body.index("setSelectedReplayGroup(group)") < body.index("fetchMinuteArchives(")
     assert "archiveYahooMinuteData(" not in body
+    assert 'fetchMinuteArchives(tradeDate, group.symbol, "yahoo")' not in body
+    assert "fetchMinuteArchives(tradeDate, group.symbol)" in body
     assert "fetchTradeGroups(tradeDate, undefined, { includeDetails: true })" in body
     assert "onRefreshReviewMinuteArchives" in APP_SOURCE
     assert "刷新本地分钟线" in APP_SOURCE
+
+
+def test_non_available_minute_archives_never_render_success_charts():
+    assert (
+        'selectedArchive && selectedArchive.data_status === "available" && selectedArchive.bars.length > 0'
+        in APP_SOURCE
+    )
+    assert (
+        'props.archive && props.archive.data_status === "available" && props.archive.bars.length > 0'
+        in APP_SOURCE
+    )
 
 
 def test_review_minute_archive_refresh_force_archives_before_reloading_read_model():
@@ -215,9 +245,21 @@ def test_review_minute_archive_refresh_force_archives_before_reloading_read_mode
     body = match.group("body")
     assert "await archiveYahooMinuteData(date, true, selectedSymbol, 1);" in body
     assert body.index("archiveYahooMinuteData") < body.index("fetchMinuteArchives(")
+    assert 'fetchMinuteArchives(date, selectedSymbol, "yahoo")' not in body
+    assert "fetchMinuteArchives(date, selectedSymbol)" in body
     assert "fetchFills(date, undefined)" in body
     assert body.index("fetchMinuteArchives(") < body.index("fetchFills(")
     assert body.index("fetchFills(") < body.index("fetchTradeGroups(")
+    assert "fetchReviewSummary(date, selectedSymbol)" in body
+    assert "fetchReviewSummary(date, undefined)" in body
+    assert "fetchReviewSummary(undefined, undefined)" in body
+    assert 'fetchReviewSummaryGroups("date", {})' in body
+    assert 'fetchReviewSummaryGroups("symbol", { date })' in body
+    assert "setCurrentReviewSummary(nextCurrentReviewSummary)" in body
+    assert "setSummary(nextSummary)" in body
+    assert "setOverallSummary(nextOverallSummary)" in body
+    assert "setDateSummaryGroups(nextDateGroups)" in body
+    assert "setDateSymbolBreakdownByDate" in body
 
 
 def test_trade_replay_modal_keeps_header_fixed_and_backdrop_closes():
@@ -571,6 +613,93 @@ def test_data_drill_orders_time_filter_metrics_calendar_before_detail():
     assert ".dataReviewDrilldown" in STYLES_SOURCE
     assert ".lossReviewMatrixCell.readOnly" in STYLES_SOURCE
     assert ".lossReviewMatrixColumnSummary" in STYLES_SOURCE
+
+
+def test_data_review_calendar_switches_to_selected_range_daily_table_and_exports_excel():
+    assert 'type DataReviewViewMode = "calendar" | "table"' in APP_SOURCE
+    assert 'useState<DataReviewViewMode>("calendar")' in APP_SOURCE
+    assert 'aria-label="月日历下钻视图切换"' in APP_SOURCE
+    assert "日历视图" in APP_SOURCE
+    assert "表格视图" in APP_SOURCE
+    assert "dailySummaries={dataReviewDateSummaryGroups}" in APP_SOURCE
+    assert "rangeLabel={dataReviewTimeRangeLabel}" in APP_SOURCE
+    assert "function DataReviewDailyTable" in APP_SOURCE
+    assert "props.dailySummaries.map((summary)" in APP_SOURCE
+    for label in [
+        "日期",
+        "股数",
+        "PnL",
+        "胜率",
+        "盈亏比",
+        "单笔期望值",
+        "每股净收益",
+        "MFE",
+        "MAE",
+    ]:
+        assert f"<th" in APP_SOURCE and label in APP_SOURCE
+    assert "summary.traded_quantity" in APP_SOURCE
+    assert "summary.max_favorable_excursion" in APP_SOURCE
+    assert "summary.max_adverse_excursion" in APP_SOURCE
+    assert "<th>已平仓</th>" not in APP_SOURCE
+    assert "<th>未平仓</th>" not in APP_SOURCE
+    assert '"已平仓交易数"' not in APP_SOURCE
+    assert '"未平仓交易数"' not in APP_SOURCE
+    assert "function exportDataReviewDailyMetricsToExcel" in APP_SOURCE
+    assert 'type: "application/vnd.ms-excel;charset=utf-8"' in APP_SOURCE
+    assert "交易复盘每日数据-${fileRange}.xls" in APP_SOURCE
+    assert "props.dailySummaries.length === 0" in APP_SOURCE
+    assert "所选时间段没有每日数据" in APP_SOURCE
+    assert "disabled={props.dailySummaries.length === 0}" in APP_SOURCE
+    assert ".dataReviewDailyTableWrap" in STYLES_SOURCE
+    assert ".dataReviewDailyTable" in STYLES_SOURCE
+    assert "min-width: 1420px" not in STYLES_SOURCE
+    assert ".dataReviewDailyTableWrap.tableWrap" in STYLES_SOURCE
+    assert "overflow-x: clip" in STYLES_SOURCE
+    assert "table-layout: fixed" in STYLES_SOURCE
+    assert 'data-label="MFE"' in APP_SOURCE
+    assert 'data-label="MAE"' in APP_SOURCE
+    assert ".dataReviewDailyTable td::before" in STYLES_SOURCE
+
+
+def test_daily_mfe_mae_are_projected_from_backend_excursion_evidence():
+    assert "max_favorable_excursion: number | null" in TYPES_SOURCE
+    assert "max_adverse_excursion: number | null" in TYPES_SOURCE
+    assert "group.position_drawdown" in APP_SOURCE
+    assert "excursion.status === \"available\"" in APP_SOURCE
+    assert "excursion.max_favorable_excursion" in APP_SOURCE
+    assert "excursion.max_adverse_excursion ?? excursion.max_drawdown" in APP_SOURCE
+    assert "缺少可用分钟归档时显示 N/A" in APP_SOURCE
+
+
+def test_review_mfe_mae_labels_share_hover_and_keyboard_tooltips():
+    summary_match = re.search(
+        r"function SummaryMetricStrip\(.*?\n\}",
+        APP_SOURCE,
+        flags=re.DOTALL,
+    )
+    current_match = re.search(
+        r'<section className="kpis currentReviewKpis".*?</section>',
+        APP_SOURCE,
+        flags=re.DOTALL,
+    )
+    trade_table_match = re.search(
+        r'<table className="tradeGroupTable">.*?</table>',
+        APP_SOURCE,
+        flags=re.DOTALL,
+    )
+    assert summary_match is not None
+    assert current_match is not None
+    assert trade_table_match is not None
+    for body in (summary_match.group(0), current_match.group(0), trade_table_match.group(0)):
+        assert "MFE" in body
+        assert "MAE" in body
+    assert "MFE_TOOLTIP" in APP_SOURCE
+    assert "MAE_TOOLTIP" in APP_SOURCE
+    assert 'className="metricHelp"' in APP_SOURCE
+    assert "data-tooltip={props.tooltip}" in APP_SOURCE
+    assert "tabIndex={0}" in APP_SOURCE
+    assert ".metricHelp:hover::after" in STYLES_SOURCE
+    assert ".metricHelp:focus-visible::after" in STYLES_SOURCE
 
 
 def test_loss_only_filter_also_scopes_main_chart_trade_markers():

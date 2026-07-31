@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from .market_quality import archive_preference_key, archive_quality_projection
 from .parser import FIELD_MAPPER_VERSION, PARSER_VERSION, ParseResult, ParsedRow, parse_stp_txt
 from .storage import dumps_json, new_id, row_to_dict, rows_to_dicts
 
@@ -261,7 +262,8 @@ def _review_summary_from_models(
     expected_value = None if not realized else win_rate * average_profit - loss_rate * average_loss
     pnl = sum(realized)
     net_profit_per_share = None if traded_quantity <= 0 else pnl / traded_quantity
-    max_single_day_drawdown = _max_position_drawdown(conn, closed_groups)
+    max_favorable_excursion, max_adverse_excursion = _max_position_excursions(conn, closed_groups)
+    max_single_day_drawdown = max_adverse_excursion or 0.0
     batch_ids = sorted({fill["source_batch_id"] for fill in fills})
     quarantine_count = 0
     if batch_ids:
@@ -284,6 +286,12 @@ def _review_summary_from_models(
         "profit_factor": None if profit_factor is None else round(profit_factor, 6),
         "expected_value_per_trade": None if expected_value is None else round(expected_value, 6),
         "net_profit_per_share": None if net_profit_per_share is None else round(net_profit_per_share, 6),
+        "max_favorable_excursion": (
+            None if max_favorable_excursion is None else round(max_favorable_excursion, 6)
+        ),
+        "max_adverse_excursion": (
+            None if max_adverse_excursion is None else round(max_adverse_excursion, 6)
+        ),
         "max_single_day_drawdown": round(max_single_day_drawdown, 6),
         "quarantine_row_count": quarantine_count,
         "source": "committed_fills_only",
@@ -520,16 +528,31 @@ def _summary_group_payload(group_by: str, group_key: str, summary: dict[str, Any
 
 
 def _max_position_drawdown(conn: sqlite3.Connection, closed_groups: list[dict[str, Any]]) -> float:
-    drawdowns: list[float] = []
+    _max_favorable_excursion, max_adverse_excursion = _max_position_excursions(conn, closed_groups)
+    return max_adverse_excursion or 0.0
+
+
+def _max_position_excursions(
+    conn: sqlite3.Connection,
+    closed_groups: list[dict[str, Any]],
+) -> tuple[float | None, float | None]:
+    favorable_excursions: list[float] = []
+    adverse_excursions: list[float] = []
     archive_cache: dict[tuple[str, str], dict[str, Any] | None] = {}
     for group in closed_groups:
         position_drawdown = group.get("position_drawdown") or _trade_group_position_drawdown(conn, group, archive_cache=archive_cache)
         if position_drawdown.get("status") != "available":
             continue
-        max_drawdown = position_drawdown.get("max_drawdown")
-        if max_drawdown is not None:
-            drawdowns.append(float(max_drawdown))
-    return max(drawdowns) if drawdowns else 0.0
+        max_favorable_excursion = position_drawdown.get("max_favorable_excursion")
+        max_adverse_excursion = position_drawdown.get("max_adverse_excursion")
+        if max_favorable_excursion is not None:
+            favorable_excursions.append(float(max_favorable_excursion))
+        if max_adverse_excursion is not None:
+            adverse_excursions.append(float(max_adverse_excursion))
+    return (
+        max(favorable_excursions) if favorable_excursions else None,
+        max(adverse_excursions) if adverse_excursions else None,
+    )
 
 
 def _fills_with_internal_signatures(
@@ -798,7 +821,7 @@ def _evaluate_trade_group(conn: sqlite3.Connection, group: dict[str, Any]) -> di
         return base
 
     archive = _find_trade_group_archive(conn, group)
-    if not archive or archive["data_status"] in {"provider_failed", "missing", "timezone_conflict"}:
+    if not archive or archive["data_status"] != "available":
         return base
     bars = json.loads(archive["bars_json"])
     if not bars:
@@ -831,16 +854,30 @@ def _find_trade_group_archive(
     cache_key = (group["symbol"], trade_date)
     if archive_cache is not None and cache_key in archive_cache:
         return archive_cache[cache_key]
-    row = conn.execute(
+    rows = conn.execute(
         """
         SELECT * FROM market_minute_archives
-        WHERE provider = 'yahoo' AND symbol = ? AND trade_date = ?
-        ORDER BY created_at DESC, id DESC
-        LIMIT 1
+        WHERE symbol = ? AND trade_date = ?
+        ORDER BY
+            CASE data_status
+                WHEN 'available' THEN 0
+                WHEN 'partial' THEN 1
+                ELSE 2
+            END,
+            CASE
+                WHEN data_status IN ('available', 'partial') AND provider = 'yahoo' THEN 0
+                WHEN data_status IN ('available', 'partial') AND provider = 'futu' THEN 1
+                WHEN data_status NOT IN ('available', 'partial') AND provider = 'futu' THEN 0
+                WHEN data_status NOT IN ('available', 'partial') AND provider = 'yahoo' THEN 1
+                ELSE 2
+            END,
+            created_at DESC,
+            id DESC
         """,
         (group["symbol"], trade_date),
-    ).fetchone()
-    archive = row_to_dict(row)
+    ).fetchall()
+    candidates = [archive_quality_projection(row_to_dict(row)) for row in rows]
+    archive = min(candidates, key=archive_preference_key) if candidates else None
     if archive_cache is not None:
         archive_cache[cache_key] = archive
     return archive
@@ -856,6 +893,10 @@ def _trade_group_position_drawdown(
         "status": "not_applicable_open_trade" if group["status"] != "closed" else "insufficient_market_data",
         "max_drawdown": None,
         "max_drawdown_per_share": None,
+        "max_favorable_excursion": None,
+        "max_favorable_excursion_per_share": None,
+        "max_adverse_excursion": None,
+        "max_adverse_excursion_per_share": None,
         "source": None,
         "source_archive_id": None,
         "bars_hash": None,
@@ -864,6 +905,7 @@ def _trade_group_position_drawdown(
         "window_end": group["closed_at"],
         "window_high": None,
         "window_low": None,
+        "best_price": None,
         "worst_price": None,
         "price_basis": None,
         "entry_atr_period": TRADE_GROUP_ENTRY_ATR_PERIOD,
@@ -878,7 +920,7 @@ def _trade_group_position_drawdown(
     }
 
     archive = _find_trade_group_archive(conn, group, archive_cache)
-    if not archive or archive["data_status"] in {"provider_failed", "missing", "timezone_conflict"}:
+    if not archive or archive["data_status"] != "available":
         return {**base, "entry_atr_failure_reason": "missing_market_data"}
     bars = json.loads(archive["bars_json"])
     if not bars:
@@ -903,12 +945,17 @@ def _trade_group_position_drawdown(
         "status": "available",
         "max_drawdown": path_drawdown["max_drawdown"],
         "max_drawdown_per_share": path_drawdown["max_drawdown_per_share"],
+        "max_favorable_excursion": path_drawdown["max_favorable_excursion"],
+        "max_favorable_excursion_per_share": path_drawdown["max_favorable_excursion_per_share"],
+        "max_adverse_excursion": path_drawdown["max_adverse_excursion"],
+        "max_adverse_excursion_per_share": path_drawdown["max_adverse_excursion_per_share"],
         "source": "market_minute_archives",
         "source_archive_id": archive["id"],
         "bars_hash": archive["bars_hash"],
         "bar_count": len(scoped),
         "window_high": round(window_high, 6),
         "window_low": round(window_low, 6),
+        "best_price": path_drawdown["best_price"],
         "worst_price": path_drawdown["worst_price"],
         "price_basis": "minute_high_low",
     }
@@ -938,6 +985,9 @@ def _trade_group_path_drawdown(group: dict[str, Any], bars: list[dict[str, Any]]
     fill_index = 0
     max_drawdown = -1.0
     max_drawdown_per_share = 0.0
+    max_favorable_excursion = -1.0
+    max_favorable_excursion_per_share = 0.0
+    best_price: float | None = None
     worst_price: float | None = None
 
     def apply_fill(fill: dict[str, Any]) -> None:
@@ -978,11 +1028,20 @@ def _trade_group_path_drawdown(group: dict[str, Any], bars: list[dict[str, Any]]
         if high is not None and low is not None and open_quantity > 0 and entry_notional > 0:
             avg_entry = entry_notional / open_quantity
             if direction == "SHORT":
+                favorable_price = low
+                favorable_excursion_per_share = max(avg_entry - low, 0.0)
                 adverse_price = high
                 drawdown_per_share = max(high - avg_entry, 0.0)
             else:
+                favorable_price = high
+                favorable_excursion_per_share = max(high - avg_entry, 0.0)
                 adverse_price = low
                 drawdown_per_share = max(avg_entry - low, 0.0)
+            favorable_excursion = favorable_excursion_per_share * open_quantity
+            if favorable_excursion > max_favorable_excursion:
+                max_favorable_excursion = favorable_excursion
+                max_favorable_excursion_per_share = favorable_excursion_per_share
+                best_price = favorable_price
             drawdown = drawdown_per_share * open_quantity
             if drawdown > max_drawdown:
                 max_drawdown = drawdown
@@ -993,11 +1052,21 @@ def _trade_group_path_drawdown(group: dict[str, Any], bars: list[dict[str, Any]]
             if fill["side"] == exit_side:
                 apply_fill(fill)
 
-    if max_drawdown < 0 or worst_price is None:
+    if (
+        max_drawdown < 0
+        or max_favorable_excursion < 0
+        or best_price is None
+        or worst_price is None
+    ):
         return None
     return {
         "max_drawdown": round(max_drawdown, 6),
         "max_drawdown_per_share": round(max_drawdown_per_share, 6),
+        "max_favorable_excursion": round(max_favorable_excursion, 6),
+        "max_favorable_excursion_per_share": round(max_favorable_excursion_per_share, 6),
+        "max_adverse_excursion": round(max_drawdown, 6),
+        "max_adverse_excursion_per_share": round(max_drawdown_per_share, 6),
+        "best_price": round(best_price, 6),
         "worst_price": round(worst_price, 6),
     }
 

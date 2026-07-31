@@ -3,6 +3,7 @@ import json
 import pytest
 from fastapi.testclient import TestClient
 
+from grit_day_trading import market_archive
 from grit_day_trading.api import create_app
 from grit_day_trading.market_archive import archive_market_minutes
 from grit_day_trading.market_provider import FakeMarketDataProvider, MarketBar
@@ -41,6 +42,8 @@ def test_trade_groups_pair_long_short_partial_close_and_open_positions(tmp_path)
     assert aapl["holding_minutes"] == 20
     assert aapl["position_drawdown"]["status"] == "insufficient_market_data"
     assert aapl["position_drawdown"]["max_drawdown"] is None
+    assert aapl["position_drawdown"]["max_favorable_excursion"] is None
+    assert aapl["position_drawdown"]["max_adverse_excursion"] is None
     assert aapl["position_drawdown"]["entry_atr_multiple"] is None
     assert aapl["position_drawdown"]["entry_atr_regime"] == "missing"
     assert aapl["position_drawdown"]["entry_atr_failure_reason"] == "missing_market_data"
@@ -67,6 +70,83 @@ def test_trade_groups_pair_long_short_partial_close_and_open_positions(tmp_path)
     assert summary["trade_group_count"] == 2
     assert summary["traded_quantity"] == 200
     assert summary["pnl"] == 148.5
+    assert summary["max_favorable_excursion"] is None
+    assert summary["max_adverse_excursion"] is None
+
+
+def test_trade_groups_use_available_futu_archive_after_yahoo_failure(tmp_path, monkeypatch):
+    yahoo_provider = FakeMarketDataProvider(
+        minute_status={"AAPL": "provider_failed", "MSFT": "provider_failed", "TSLA": "provider_failed"}
+    )
+    futu_provider = FakeMarketDataProvider()
+    monkeypatch.setattr(
+        market_archive,
+        "resolve_provider",
+        lambda provider_name: yahoo_provider if provider_name == "yahoo" else futu_provider,
+    )
+    db_path = tmp_path / "trade-groups-fallback.db"
+
+    with TestClient(create_app(db_path)) as client:
+        client.post("/api/imports/stp-txt", files={"file": ("groups.tsv", _trade_group_fixture(), "text/plain")})
+        archives = client.get("/api/market-data/minute-archives?date=2026-06-01&symbol=AAPL").json()["items"]
+        groups = client.get("/api/trade-groups?date=2026-06-01&symbol=AAPL").json()["items"]
+
+    assert archives[0]["provider"] == "futu"
+    assert archives[0]["data_status"] == "available"
+    assert groups[0]["position_drawdown"]["status"] == "available"
+    assert groups[0]["position_drawdown"]["source_archive_id"] == archives[0]["archive_id"]
+    assert groups[0]["evaluation"]["evaluation_status"] == "available"
+
+
+def test_trade_groups_skip_legacy_yahoo_archive_with_isolated_price_discontinuity(tmp_path, monkeypatch):
+    yahoo_provider = FakeMarketDataProvider(
+        minute_status={"AAPL": "provider_failed", "MSFT": "provider_failed", "TSLA": "provider_failed"}
+    )
+    futu_provider = FakeMarketDataProvider()
+    monkeypatch.setattr(
+        market_archive,
+        "resolve_provider",
+        lambda provider_name: yahoo_provider if provider_name == "yahoo" else futu_provider,
+    )
+    db_path = tmp_path / "trade-groups-legacy-quality.db"
+
+    with TestClient(create_app(db_path)) as client:
+        client.post("/api/imports/stp-txt", files={"file": ("groups.tsv", _trade_group_fixture(), "text/plain")})
+
+    corrupt_bars = [
+        {"timestamp": "2026-06-01T09:30:00", "open": 10.0, "high": 10.2, "low": 9.9, "close": 10.1, "volume": 1000},
+        {"timestamp": "2026-06-01T09:35:00", "open": 10.1, "high": 10.3, "low": 10.0, "close": 10.2, "volume": 1200},
+        {"timestamp": "2026-06-01T09:40:00", "open": 10.2, "high": 13.0, "low": 10.1, "close": 13.0, "volume": 5000},
+        {"timestamp": "2026-06-01T09:45:00", "open": 10.2, "high": 10.3, "low": 10.0, "close": 10.1, "volume": 1300},
+        {"timestamp": "2026-06-01T09:50:00", "open": 10.1, "high": 10.2, "low": 9.9, "close": 10.0, "volume": 1100},
+    ]
+    conn = connect(db_path)
+    try:
+        with conn:
+            conn.execute(
+                """
+                UPDATE market_minute_archives
+                SET bar_count = ?, bars_hash = 'legacy_corrupt_hash', bars_json = ?,
+                    data_status = 'available', failure_reason = NULL
+                WHERE provider = 'yahoo' AND symbol = 'AAPL' AND trade_date = '2026-06-01'
+                """,
+                (len(corrupt_bars), json.dumps(corrupt_bars)),
+            )
+    finally:
+        conn.close()
+
+    with TestClient(create_app(db_path)) as client:
+        archives = client.get("/api/market-data/minute-archives?date=2026-06-01&symbol=AAPL").json()["items"]
+        groups = client.get("/api/trade-groups?date=2026-06-01&symbol=AAPL").json()["items"]
+
+    assert [(item["provider"], item["data_status"]) for item in archives] == [
+        ("futu", "available"),
+        ("yahoo", "partial"),
+    ]
+    assert archives[1]["failure_reason"] == "isolated_price_discontinuity"
+    assert groups[0]["position_drawdown"]["status"] == "available"
+    assert groups[0]["position_drawdown"]["source_archive_id"] == archives[0]["archive_id"]
+    assert groups[0]["evaluation"]["evaluation_status"] == "available"
 
 
 def test_review_summary_and_drilldown_groups_use_committed_trade_groups(tmp_path):
@@ -88,6 +168,8 @@ def test_review_summary_and_drilldown_groups_use_committed_trade_groups(tmp_path
     assert overall["pnl"] == 148.5
     assert overall["expected_value_per_trade"] == 74.25
     assert overall["net_profit_per_share"] == 0.7425
+    assert overall["max_favorable_excursion"] is None
+    assert overall["max_adverse_excursion"] is None
     assert overall["max_single_day_drawdown"] == 0.0
 
     symbol_groups = {item["group_key"]: item for item in by_symbol}
@@ -98,11 +180,63 @@ def test_review_summary_and_drilldown_groups_use_committed_trade_groups(tmp_path
     assert symbol_groups["TSLA"]["open_trade_group_count"] == 1
     assert symbol_groups["TSLA"]["expected_value_per_trade"] is None
     assert symbol_groups["TSLA"]["net_profit_per_share"] is None
+    assert symbol_groups["TSLA"]["max_favorable_excursion"] is None
+    assert symbol_groups["TSLA"]["max_adverse_excursion"] is None
     assert symbol_groups["TSLA"]["max_single_day_drawdown"] == 0.0
 
     assert [item["group_key"] for item in by_date_for_symbol] == ["2026-06-01"]
     assert by_date_for_symbol[0]["symbol"] == "AAPL"
     assert [item["group_key"] for item in by_symbol_for_date] == ["AAPL", "MSFT", "TSLA"]
+
+
+def test_review_summary_groups_recalculate_historical_excursions_for_every_archived_date(tmp_path):
+    db_path = tmp_path / "review-excursion-history.db"
+    raw = (
+        "Account\tSymbol\tSide\tOrderID\tExecID\tQty\tPrice\tTime\tStatus\n"
+        "acct-history\tMU\tBOT\tO1\tE1\t10\t100.00\t2026-06-01T09:30:10\tFILLED\n"
+        "acct-history\tMU\tSLD\tO2\tE2\t10\t101.00\t2026-06-01T09:32:10\tFILLED\n"
+        "acct-history\tMU\tSLD\tO3\tE3\t20\t102.00\t2026-06-02T09:30:10\tFILLED\n"
+        "acct-history\tMU\tBOT\tO4\tE4\t20\t100.00\t2026-06-02T09:32:10\tFILLED\n"
+    ).encode()
+
+    with TestClient(create_app(db_path)) as client:
+        client.post("/api/imports/stp-txt", files={"file": ("history.tsv", raw, "text/plain")})
+
+    conn = connect(db_path)
+    try:
+        initialize_database(conn)
+        for trade_date, prices in (
+            ("2026-06-01", ((100.0, 100.8, 99.6, 100.4), (100.4, 101.5, 100.2, 101.0))),
+            ("2026-06-02", ((102.0, 102.5, 101.2, 101.8), (101.8, 102.0, 99.4, 100.0))),
+        ):
+            archive_market_minutes(
+                conn,
+                symbol="MU",
+                trade_date=trade_date,
+                source_fill_count=2,
+                force=True,
+                provider=FakeMarketDataProvider(
+                    minute_bars={
+                        "MU": [
+                            MarketBar(f"{trade_date}T09:30:00", *prices[0], 1000),
+                            MarketBar(f"{trade_date}T09:32:00", *prices[1], 1200),
+                        ]
+                    }
+                ),
+            )
+    finally:
+        conn.close()
+
+    with TestClient(create_app(db_path)) as client:
+        by_date = client.get("/api/review/summary-groups?group_by=date").json()["items"]
+
+    assert [item["group_key"] for item in by_date] == ["2026-06-02", "2026-06-01"]
+    assert all(item["max_favorable_excursion"] is not None for item in by_date)
+    assert all(item["max_adverse_excursion"] is not None for item in by_date)
+    assert by_date[0]["max_favorable_excursion"] == pytest.approx(52.0)
+    assert by_date[0]["max_adverse_excursion"] == pytest.approx(10.0)
+    assert by_date[1]["max_favorable_excursion"] == pytest.approx(15.0)
+    assert by_date[1]["max_adverse_excursion"] == pytest.approx(4.0)
 
 
 def test_trade_groups_can_read_all_dates_for_loss_review_tab(tmp_path):
@@ -178,9 +312,16 @@ def test_trade_group_evaluation_uses_minute_archive_without_mutating_fills(tmp_p
     assert drawdown["entry_atr_failure_reason"] == "insufficient_atr_history"
     assert drawdown["window_high"] == 10.9
     assert drawdown["window_low"] == 9.9
+    assert drawdown["best_price"] == 10.8
     assert drawdown["worst_price"] == 9.9
+    assert drawdown["max_favorable_excursion_per_share"] == pytest.approx(0.733333)
+    assert drawdown["max_favorable_excursion"] == pytest.approx(110.0)
+    assert drawdown["max_adverse_excursion_per_share"] == pytest.approx(0.1)
+    assert drawdown["max_adverse_excursion"] == pytest.approx(10.0)
     assert drawdown["max_drawdown_per_share"] == pytest.approx(0.1)
     assert drawdown["max_drawdown"] == pytest.approx(10.0)
+    assert summary["max_favorable_excursion"] == pytest.approx(110.0)
+    assert summary["max_adverse_excursion"] == pytest.approx(10.0)
     assert summary["max_single_day_drawdown"] == pytest.approx(10.0)
     assert evaluation["model_version"] == "trade_eval_intraday_v1"
     assert evaluation["evaluation_status"] == "available"
@@ -325,7 +466,12 @@ def test_short_trade_group_position_drawdown_uses_window_high(tmp_path):
     assert drawdown["status"] == "available"
     assert drawdown["window_high"] == 20.5
     assert drawdown["window_low"] == 18.4
+    assert drawdown["best_price"] == 18.4
     assert drawdown["worst_price"] == 20.5
+    assert drawdown["max_favorable_excursion_per_share"] == 1.6
+    assert drawdown["max_favorable_excursion"] == 40.0
+    assert drawdown["max_adverse_excursion_per_share"] == 0.5
+    assert drawdown["max_adverse_excursion"] == 25.0
     assert drawdown["max_drawdown_per_share"] == 0.5
     assert drawdown["max_drawdown"] == 25.0
 
@@ -375,9 +521,14 @@ def test_trade_group_position_drawdown_uses_open_position_path(tmp_path):
     assert drawdown["status"] == "available"
     assert drawdown["window_high"] == 110.0
     assert drawdown["window_low"] == 93.5
+    assert drawdown["best_price"] == 93.5
     assert drawdown["worst_price"] == 110.0
+    assert drawdown["max_favorable_excursion"] == 200.0
+    assert drawdown["max_adverse_excursion"] == 100.0
     assert drawdown["max_drawdown_per_share"] == 10.0
     assert drawdown["max_drawdown"] == 100.0
+    assert summary["max_favorable_excursion"] == 200.0
+    assert summary["max_adverse_excursion"] == 100.0
     assert summary["max_single_day_drawdown"] == 100.0
 
 
@@ -410,6 +561,8 @@ def test_trade_group_evaluation_does_not_score_failed_archives(tmp_path):
     assert group["evaluation"]["factors"] == []
     assert group["position_drawdown"]["status"] == "insufficient_market_data"
     assert group["position_drawdown"]["max_drawdown"] is None
+    assert group["position_drawdown"]["max_favorable_excursion"] is None
+    assert group["position_drawdown"]["max_adverse_excursion"] is None
 
 
 def test_loss_trade_review_persists_reason_without_mutating_fills(tmp_path):

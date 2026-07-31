@@ -1,4 +1,5 @@
 from pathlib import Path
+import tomllib
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -30,8 +31,10 @@ def test_login_launcher_auto_fallbacks_when_default_backend_is_stale():
     assert "REQUIRED_AI_STRATEGY_ROUTE=/api/ai-strategy-recommendations" in launcher
     assert "REQUIRED_LIVE_SIGNAL_CONTRACT=live_order_quantity_reason_tags_v1" in launcher
     assert "REQUIRED_TRADE_EVAL_CONTRACT=trade_eval_recommendation_v1" in launcher
+    assert "REQUIRED_TRADE_EXCURSION_CONTRACT=trade_group_excursion_v2" in launcher
     assert "REQUIRED_AI_STRATEGY_CATALOG=ai_strategy_catalog_v2" in launcher
     assert "REQUIRED_TRADE_SUMMARY_CONTRACT=trade_summary_contract_v3" in launcher
+    assert "REQUIRED_MINUTE_ARCHIVE_CONTRACT=yahoo_futu_quality_fallback_v2" in launcher
     assert "REQUIRED_FRONTEND_MARKER=AiStrategyWorkspace" in launcher
     assert "REQUIRED_TRADE_SUMMARY_FRONTEND_MARKER=TradeSummaryPanel" in launcher
     assert "FRONTEND_CACHE_BUSTER=ai-strategy-recommendation-v2" in launcher
@@ -44,8 +47,10 @@ def test_login_launcher_auto_fallbacks_when_default_backend_is_stale():
     assert "%FRONTEND_URL%/openapi.json" in launcher
     assert "$h.live_signal_contract -ne '%REQUIRED_LIVE_SIGNAL_CONTRACT%'" in launcher
     assert "$h.trade_eval_contract -ne '%REQUIRED_TRADE_EVAL_CONTRACT%'" in launcher
+    assert "$h.trade_excursion_contract -ne '%REQUIRED_TRADE_EXCURSION_CONTRACT%'" in launcher
     assert "$h.ai_strategy_catalog -ne '%REQUIRED_AI_STRATEGY_CATALOG%'" in launcher
     assert "$h.trade_summary_contract -ne '%REQUIRED_TRADE_SUMMARY_CONTRACT%'" in launcher
+    assert "$h.minute_archive_contract -ne '%REQUIRED_MINUTE_ARCHIVE_CONTRACT%'" in launcher
     assert "%FRONTEND_URL%/src/App.tsx" in launcher
     assert ".Contains('%REQUIRED_FRONTEND_MARKER%')" in launcher
     assert "%FRONTEND_URL%/?grit_ui=%FRONTEND_CACHE_BUSTER%" in launcher
@@ -65,3 +70,19 @@ def test_login_launcher_reports_port_owner_for_runtime_failures():
     assert "Port %~1 owner PID" in launcher
     assert ":backend_runtime_failed" in launcher
     assert "The data DB may be locked by another backend process" in launcher
+
+
+def test_backend_launcher_requires_futu_capable_python_runtime():
+    launcher = (ROOT / "scripts" / "run-backend.cmd").read_text(encoding="utf-8")
+    resolver_path = ROOT / "scripts" / "resolve-backend-python.ps1"
+    resolver = resolver_path.read_text(encoding="utf-8")
+    project = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+
+    assert "resolve-backend-python.ps1" in launcher
+    assert "GRIT_BACKEND_PYTHON" in launcher
+    assert '"%GRIT_BACKEND_PYTHON%" -m uvicorn' in launcher
+    assert "import fastapi, uvicorn, importlib.util, sys" in resolver
+    assert "find_spec('futu')" in resolver
+    assert "GRIT_PYTHON" in resolver
+    assert ".venv" in resolver
+    assert "futu-api" in project["project"]["dependencies"]

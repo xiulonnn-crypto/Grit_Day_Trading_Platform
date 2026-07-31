@@ -10,6 +10,7 @@ import {
   CheckCircle2,
   CircleSlash,
   Clock3,
+  Download,
   FileText,
   FileUp,
   Hash,
@@ -135,6 +136,10 @@ const watchlistStatusMeta: Record<WatchlistRunStatus, { label: string; tone: "in
 
 const minuteCandleEdgeBufferBars = 10;
 const tradeReplayHalfHourWindowMinutes = 30;
+const MFE_TOOLTIP =
+  "MFE（最大有利波动）：从开仓到清仓期间，按实际持仓路径与已归档分钟线计算的最大浮盈金额。";
+const MAE_TOOLTIP =
+  "MAE（最大不利波动）：从开仓到清仓期间，按实际持仓路径与已归档分钟线计算的最大浮亏金额。";
 
 type LossReviewReasonOption = {
   code: string;
@@ -406,12 +411,23 @@ function isAbortError(err: unknown) {
 type StrategyParamValue = number | string;
 type StrategyConfigMode = "edit" | "create";
 type WorkspaceTab = "review" | "strategy" | "ai_strategy" | "live";
+type DataReviewViewMode = "calendar" | "table";
 
 function initialWorkspaceTab(): WorkspaceTab {
   if (typeof window === "undefined") return "review";
   const marker = new URLSearchParams(window.location.search).get("grit_ui") ?? "";
   return marker.startsWith("ai-strategy-recommendation-") ? "ai_strategy" : "review";
 }
+
+function clearWorkspaceLaunchMarker() {
+  if (typeof window === "undefined") return;
+  const url = new URL(window.location.href);
+  if (!url.searchParams.has("grit_ui")) return;
+  url.searchParams.delete("grit_ui");
+  const nextUrl = `${url.pathname}${url.search}${url.hash}`;
+  window.history.replaceState(window.history.state, "", nextUrl);
+}
+
 type LiveProvider = "futu" | "yahoo" | "fake";
 type ReviewDrillSurfaceTab = "data" | "loss" | "summary";
 type StrategyFeedbackTone = "info" | "ok" | "warn" | "danger";
@@ -1075,11 +1091,19 @@ function buildReviewSummaryFromTradeGroups(
   const grossLoss = Math.abs(losses.reduce((total, pnl) => total + pnl, 0));
   const totalPnl = realizedPnls.reduce((total, pnl) => total + pnl, 0);
   const tradedQuantity = closedGroups.reduce((total, group) => total + group.total_quantity, 0);
-  const maxDrawdown = closedGroups.reduce((currentMax, group) => {
-    const drawdown = group.position_drawdown;
-    if (drawdown.status !== "available" || drawdown.max_drawdown === null) return currentMax;
-    return Math.max(currentMax, drawdown.max_drawdown);
-  }, 0);
+  const availableExcursions = closedGroups
+    .map((group) => group.position_drawdown)
+    .filter((excursion) => excursion.status === "available");
+  const favorableExcursions = availableExcursions
+    .map((excursion) => excursion.max_favorable_excursion)
+    .filter((value): value is number => value !== null && value !== undefined && Number.isFinite(value));
+  const adverseExcursions = availableExcursions
+    .map((excursion) => excursion.max_adverse_excursion ?? excursion.max_drawdown)
+    .filter((value): value is number => value !== null && value !== undefined && Number.isFinite(value));
+  const maxFavorableExcursion =
+    favorableExcursions.length > 0 ? Math.max(...favorableExcursions) : null;
+  const maxAdverseExcursion =
+    adverseExcursions.length > 0 ? Math.max(...adverseExcursions) : null;
   const winRate = realizedPnls.length > 0 ? wins.length / realizedPnls.length : 0;
   const lossRate = realizedPnls.length > 0 ? losses.length / realizedPnls.length : 0;
   const averageProfit = wins.length > 0 ? grossProfit / wins.length : 0;
@@ -1091,7 +1115,9 @@ function buildReviewSummaryFromTradeGroups(
     date,
     expected_value_per_trade: expectedValue,
     fill_count: groups.reduce((total, group) => total + group.fill_count, 0),
-    max_single_day_drawdown: maxDrawdown,
+    max_adverse_excursion: maxAdverseExcursion,
+    max_favorable_excursion: maxFavorableExcursion,
+    max_single_day_drawdown: maxAdverseExcursion ?? 0,
     net_profit_per_share: tradedQuantity > 0 ? totalPnl / tradedQuantity : null,
     open_trade_group_count: openGroups.length,
     pnl: totalPnl,
@@ -1445,6 +1471,7 @@ export default function App() {
   const [activeWorkspaceTab, setActiveWorkspaceTab] = useState<WorkspaceTab>(initialWorkspaceTab);
   const [activeReviewDrillSurfaceTab, setActiveReviewDrillSurfaceTab] = useState<ReviewDrillSurfaceTab>("data");
   const [dataReviewTimeFilterMode, setDataReviewTimeFilterMode] = useState<LossReviewTimeFilterMode>("all");
+  const [dataReviewViewMode, setDataReviewViewMode] = useState<DataReviewViewMode>("calendar");
   const [dataReviewCalendarMonth, setDataReviewCalendarMonth] = useState(() =>
     monthStartDateKey(getDefaultReviewDate())
   );
@@ -1784,7 +1811,7 @@ export default function App() {
       return;
     }
     try {
-      setMinuteArchives(await fetchMinuteArchives(date, symbol, "yahoo"));
+      setMinuteArchives(await fetchMinuteArchives(date, symbol));
     } catch (err) {
       setMinuteArchives([]);
       setError(err instanceof Error ? err.message : "分钟线归档读取失败");
@@ -2006,6 +2033,10 @@ export default function App() {
   }
 
   useEffect(() => {
+    clearWorkspaceLaunchMarker();
+  }, []);
+
+  useEffect(() => {
     setSelectedReplayGroup(null);
     void refresh();
   }, [date]);
@@ -2216,7 +2247,7 @@ export default function App() {
     try {
       setSelectedSymbol(group.symbol);
       const tradeDate = group.opened_at.slice(0, 10);
-      const archives = await fetchMinuteArchives(tradeDate, group.symbol, "yahoo");
+      const archives = await fetchMinuteArchives(tradeDate, group.symbol);
       setMinuteArchives(archives);
       const refreshedGroups = await fetchTradeGroups(tradeDate, undefined, { includeDetails: true });
       setTradeGroups(refreshedGroups);
@@ -2289,14 +2320,42 @@ export default function App() {
     setError(null);
     try {
       await archiveYahooMinuteData(date, true, selectedSymbol, 1);
-      const [nextArchives, nextFills, nextTradeGroups] = await Promise.all([
-        fetchMinuteArchives(date, selectedSymbol, "yahoo"),
+      const [
+        nextArchives,
+        nextFills,
+        nextTradeGroups,
+        nextCurrentReviewSummary,
+        nextSummary,
+        nextOverallSummary,
+        nextDateGroups,
+        nextSymbolGroups,
+        nextDateSymbolBreakdown,
+        nextSymbolDateBreakdown,
+        nextAllTradeGroups
+      ] = await Promise.all([
+        fetchMinuteArchives(date, selectedSymbol),
         fetchFills(date, undefined),
-        fetchTradeGroups(date)
+        fetchTradeGroups(date),
+        fetchReviewSummary(date, selectedSymbol),
+        fetchReviewSummary(date, undefined),
+        fetchReviewSummary(undefined, undefined),
+        fetchReviewSummaryGroups("date", {}),
+        fetchReviewSummaryGroups("symbol", {}),
+        fetchReviewSummaryGroups("symbol", { date }),
+        fetchReviewSummaryGroups("date", { symbol: selectedSymbol }),
+        fetchTradeGroups(undefined, undefined, { includeDetails: false })
       ]);
       setMinuteArchives(nextArchives);
       setFills(nextFills);
       setTradeGroups(nextTradeGroups);
+      setCurrentReviewSummary(nextCurrentReviewSummary);
+      setSummary(nextSummary);
+      setOverallSummary(nextOverallSummary);
+      setDateSummaryGroups(nextDateGroups);
+      setSymbolSummaryGroups(nextSymbolGroups);
+      setDateSymbolBreakdownByDate((current) => ({ ...current, [date]: nextDateSymbolBreakdown }));
+      setSymbolDateBreakdown(nextSymbolDateBreakdown);
+      setAllTradeGroups(nextAllTradeGroups);
     } catch (err) {
       setError(err instanceof Error ? err.message : "本地分钟线归档读取失败");
     } finally {
@@ -2940,13 +2999,17 @@ export default function App() {
 
           <DataReviewCalendar
             calendarMonth={dataReviewCalendarMonth}
+            dailySummaries={dataReviewDateSummaryGroups}
             days={dataReviewCalendarDays}
             onEnterReviewContext={enterReviewContext}
             onMonthChange={setDataReviewCalendarMonth}
             onSelectDate={setDate}
+            onViewModeChange={setDataReviewViewMode}
+            rangeLabel={dataReviewTimeRangeLabel}
             selectedDate={date}
             selectedDateSummary={dataReviewSelectedDateSummary}
             symbolBreakdown={dataReviewVisibleDateSymbolBreakdown}
+            viewMode={dataReviewViewMode}
           />
 
           <section className="kpis currentReviewKpis" aria-label="当前复盘模块指标">
@@ -2968,7 +3031,18 @@ export default function App() {
             <Metric label="PnL" value={formatPnl(scopedCurrentReviewSummary?.pnl ?? 0)} tone={summaryTone(scopedCurrentReviewSummary?.pnl ?? 0)} />
             <Metric label="胜率" value={formatWinRate(scopedCurrentReviewSummary)} />
             <Metric label="盈亏比" value={formatProfitFactor(scopedCurrentReviewSummary)} />
-            <Metric label="持仓最大回撤" value={formatNullable(scopedCurrentReviewSummary?.max_single_day_drawdown)} tone={(scopedCurrentReviewSummary?.max_single_day_drawdown ?? 0) > 0 ? "warn" : "neutral"} />
+            <Metric
+              label="MFE"
+              tooltip={MFE_TOOLTIP}
+              value={formatNullable(scopedCurrentReviewSummary?.max_favorable_excursion)}
+              tone={(scopedCurrentReviewSummary?.max_favorable_excursion ?? 0) > 0 ? "ok" : "neutral"}
+            />
+            <Metric
+              label="MAE"
+              tooltip={MAE_TOOLTIP}
+              value={formatNullable(scopedCurrentReviewSummary?.max_adverse_excursion)}
+              tone={(scopedCurrentReviewSummary?.max_adverse_excursion ?? 0) > 0 ? "bad" : "neutral"}
+            />
           </section>
         </div>
           </>
@@ -3027,7 +3101,7 @@ export default function App() {
             </div>
           </header>
 
-          {selectedArchive && selectedArchive.bars.length > 0 ? (
+          {selectedArchive && selectedArchive.data_status === "available" && selectedArchive.bars.length > 0 ? (
             <>
               <div className="chartMeta" aria-label="分钟线摘要">
                 <span>{selectedArchive.symbol}</span>
@@ -3220,7 +3294,12 @@ export default function App() {
                     <th>方向</th>
                     <th>数量</th>
                     <th>PnL</th>
-                    <th>最大回撤</th>
+                    <th>
+                      <MetricGlossaryLabel label="MFE" tooltip={MFE_TOOLTIP} />
+                    </th>
+                    <th>
+                      <MetricGlossaryLabel label="MAE" tooltip={MAE_TOOLTIP} />
+                    </th>
                     <th>评价</th>
                     <th>追溯</th>
                   </tr>
@@ -3272,8 +3351,11 @@ export default function App() {
                         <td className={group.pnl !== null ? `pnlCell ${summaryTone(group.pnl)}` : "pnlCell"}>
                           {group.pnl === null ? "N/A" : formatPnl(group.pnl)}
                         </td>
-                        <td className={`pnlCell ${positionDrawdownTone(group.position_drawdown)}`}>
-                          <strong>{formatPositionDrawdown(group.position_drawdown)}</strong>
+                        <td className="pnlCell ok">
+                          <strong>{formatNullable(group.position_drawdown.max_favorable_excursion)}</strong>
+                        </td>
+                        <td className="pnlCell bad">
+                          <strong>{formatNullable(group.position_drawdown.max_adverse_excursion)}</strong>
                         </td>
                         <td>
                           <span className={`gradePill ${evaluationTone(evaluation.evaluation_status, evaluation.grade)}`}>
@@ -5385,6 +5467,12 @@ function formatSymbolCoverageFailure(rawCoverage: string) {
 
 function formatArchiveFailureReason(reason: string | null | undefined): string | null {
   if (!reason) return null;
+  if (reason === "isolated_price_discontinuity") {
+    return "分钟线包含与前后行情不连续的孤立异常柱，系统已停止使用该归档并尝试 Futu 备选源。";
+  }
+  if (reason === "invalid_minute_bar") {
+    return "分钟线包含无效价格或 OHLC 关系，系统已停止使用该归档并尝试备选源。";
+  }
   if (reason === "yahoo_http_422") {
     return "Yahoo 未接受 1 分钟历史请求，常见于日期超出可取窗口或 provider 不接受该请求范围；系统已保存为行情不可用，不会渲染成功图。";
   }
@@ -5396,6 +5484,21 @@ function formatArchiveFailureReason(reason: string | null | undefined): string |
   }
   if (reason.startsWith("yahoo_chart_error:")) {
     return `Yahoo chart 响应失败：${reason.replace("yahoo_chart_error:", "")}。`;
+  }
+  if (reason === "futu_history_quota_exhausted") {
+    return "Yahoo 未返回可用分钟线，Futu 备选历史 K 线额度也已用尽；系统保留失败证据，不会渲染成功图。";
+  }
+  if (reason === "futu_history_quota_check_failed" || reason === "futu_history_quota_check_unavailable") {
+    return "Yahoo 未返回可用分钟线，Futu 备选源的历史 K 线额度检查失败；请确认 OpenD 版本和连接状态。";
+  }
+  if (reason === "futu_history_kline_failed") {
+    return "Yahoo 未返回可用分钟线，Futu 备选历史 K 线请求也未成功；系统已保留两次 provider attempt。";
+  }
+  if (reason === "futu_sdk_not_installed") {
+    return "Yahoo 未返回可用分钟线，Futu 备选 SDK 尚未安装。";
+  }
+  if (reason.startsWith("futu_exception:")) {
+    return `Yahoo 未返回可用分钟线，Futu 备选源连接失败：${reason.replace("futu_exception:", "")}。`;
   }
   if (reason === "no_bars_returned") {
     return "provider 没有返回分钟线 bars，系统不会渲染成功图。";
@@ -6017,7 +6120,7 @@ function TradeReplayModal(props: {
         <div className="replayModalBody">
           <div className="replayGrid">
             <section className="replayChartPane">
-              {props.archive && props.archive.bars.length > 0 ? (
+              {props.archive && props.archive.data_status === "available" && props.archive.bars.length > 0 ? (
                 <>
                   <div className="replayChartToolbar">
                     <div className="chartMeta" aria-label="Replay 分钟线摘要">
@@ -7331,10 +7434,36 @@ function StrategySignalOrderDetails(props: { group: StrategySignalGroup }) {
   );
 }
 
-function Metric(props: { label: string; value: number | string; note?: string; tone?: "neutral" | "ok" | "warn" | "bad" }) {
+function MetricGlossaryLabel(props: { label: string; tooltip: string }) {
+  return (
+    <span className="metricGlossaryLabel">
+      {props.label}
+      <span
+        aria-label={`${props.label} 名词解释：${props.tooltip}`}
+        className="metricHelp"
+        data-tooltip={props.tooltip}
+        tabIndex={0}
+      >
+        ?
+      </span>
+    </span>
+  );
+}
+
+function Metric(props: {
+  label: string;
+  value: number | string;
+  note?: string;
+  tone?: "neutral" | "ok" | "warn" | "bad";
+  tooltip?: string;
+}) {
   return (
     <div className={`metric ${props.tone ?? "neutral"}`}>
-      <span>{props.label}</span>
+      {props.tooltip ? (
+        <MetricGlossaryLabel label={props.label} tooltip={props.tooltip} />
+      ) : (
+        <span>{props.label}</span>
+      )}
       <strong>{props.value}</strong>
       {props.note ? <small>{props.note}</small> : null}
     </div>
@@ -7351,7 +7480,18 @@ function SummaryMetricStrip(props: { className: string; note: string; summary: R
       <Metric label="盈亏比" value={formatProfitFactor(summary)} />
       <Metric label="单笔期望值" value={formatSignedNullable(summary?.expected_value_per_trade)} tone={summaryTone(summary?.expected_value_per_trade ?? 0)} />
       <Metric label="每股净收益" value={formatSignedNullable(summary?.net_profit_per_share)} tone={summaryTone(summary?.net_profit_per_share ?? 0)} />
-      <Metric label="持仓最大回撤" value={formatNullable(summary?.max_single_day_drawdown)} tone={(summary?.max_single_day_drawdown ?? 0) > 0 ? "warn" : "neutral"} />
+      <Metric
+        label="MFE"
+        tooltip={MFE_TOOLTIP}
+        value={formatNullable(summary?.max_favorable_excursion)}
+        tone={(summary?.max_favorable_excursion ?? 0) > 0 ? "ok" : "neutral"}
+      />
+      <Metric
+        label="MAE"
+        tooltip={MAE_TOOLTIP}
+        value={formatNullable(summary?.max_adverse_excursion)}
+        tone={(summary?.max_adverse_excursion ?? 0) > 0 ? "bad" : "neutral"}
+      />
     </section>
   );
 }
@@ -7651,15 +7791,179 @@ function LossReviewMarketRegimeMatrix(props: {
   );
 }
 
+type DataReviewExcelCell = {
+  style?: "Decimal" | "Integer" | "Percent";
+  type: "Number" | "String";
+  value: number | string | null;
+};
+
+function escapeSpreadsheetXml(value: string) {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&apos;");
+}
+
+function dataReviewExcelCell(cell: DataReviewExcelCell) {
+  if (cell.value === null || cell.value === undefined || (cell.type === "Number" && !Number.isFinite(cell.value))) {
+    return '<Cell><Data ss:Type="String">N/A</Data></Cell>';
+  }
+  const styleAttribute = cell.style ? ` ss:StyleID="${cell.style}"` : "";
+  return `<Cell${styleAttribute}><Data ss:Type="${cell.type}">${escapeSpreadsheetXml(String(cell.value))}</Data></Cell>`;
+}
+
+function exportDataReviewDailyMetricsToExcel(summaries: ReviewSummaryGroup[], rangeLabel: string) {
+  if (summaries.length === 0) return;
+  const headerCells = [
+    "日期",
+    "成交数",
+    "股数",
+    "PnL",
+    "胜率",
+    "盈亏比",
+    "单笔期望值",
+    "每股净收益",
+    "MFE（最大有利波动）",
+    "MAE（最大不利波动）"
+  ].map((value) => `<Cell ss:StyleID="Header"><Data ss:Type="String">${escapeSpreadsheetXml(value)}</Data></Cell>`);
+  const rows = summaries.map((summary) => {
+    const cells: DataReviewExcelCell[] = [
+      { type: "String", value: summary.group_key },
+      { style: "Integer", type: "Number", value: summary.fill_count },
+      { style: "Decimal", type: "Number", value: summary.traded_quantity },
+      { style: "Decimal", type: "Number", value: summary.pnl },
+      {
+        style: "Percent",
+        type: "Number",
+        value: summary.trade_group_count > 0 ? summary.win_rate : null
+      },
+      { style: "Decimal", type: "Number", value: summary.profit_factor },
+      { style: "Decimal", type: "Number", value: summary.expected_value_per_trade },
+      { style: "Decimal", type: "Number", value: summary.net_profit_per_share },
+      { style: "Decimal", type: "Number", value: summary.max_favorable_excursion },
+      { style: "Decimal", type: "Number", value: summary.max_adverse_excursion }
+    ];
+    return `<Row>${cells.map(dataReviewExcelCell).join("")}</Row>`;
+  });
+  const worksheetName = "每日复盘数据";
+  const workbook = `<?xml version="1.0"?>
+<?mso-application progid="Excel.Sheet"?>
+<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:o="urn:schemas-microsoft-com:office:office"
+ xmlns:x="urn:schemas-microsoft-com:office:excel"
+ xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+ <DocumentProperties xmlns="urn:schemas-microsoft-com:office:office">
+  <Title>交易复盘每日数据</Title>
+  <Description>${escapeSpreadsheetXml(rangeLabel)}</Description>
+ </DocumentProperties>
+ <Styles>
+  <Style ss:ID="Default" ss:Name="Normal"><Alignment ss:Vertical="Center"/></Style>
+  <Style ss:ID="Header"><Font ss:Bold="1"/><Interior ss:Color="#E8F2F1" ss:Pattern="Solid"/></Style>
+  <Style ss:ID="Integer"><NumberFormat ss:Format="0"/></Style>
+  <Style ss:ID="Decimal"><NumberFormat ss:Format="0.0000"/></Style>
+  <Style ss:ID="Percent"><NumberFormat ss:Format="0.00%"/></Style>
+ </Styles>
+ <Worksheet ss:Name="${worksheetName}">
+  <Table>
+   <Row>${headerCells.join("")}</Row>
+   ${rows.join("\n   ")}
+  </Table>
+  <WorksheetOptions xmlns="urn:schemas-microsoft-com:office:excel">
+   <FreezePanes/><FrozenNoSplit/><SplitHorizontal>1</SplitHorizontal><TopRowBottomPane>1</TopRowBottomPane>
+  </WorksheetOptions>
+ </Worksheet>
+</Workbook>`;
+  const blob = new Blob([`\ufeff${workbook}`], {
+    type: "application/vnd.ms-excel;charset=utf-8"
+  });
+  const downloadUrl = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  const fileRange = rangeLabel.replaceAll(/[^0-9A-Za-z\u4e00-\u9fff-]+/g, "-").replaceAll(/^-|-$/g, "") || "全部订单";
+  anchor.href = downloadUrl;
+  anchor.download = `交易复盘每日数据-${fileRange}.xls`;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  window.setTimeout(() => URL.revokeObjectURL(downloadUrl), 1000);
+}
+
+function DataReviewDailyTable(props: {
+  dailySummaries: ReviewSummaryGroup[];
+  rangeLabel: string;
+}) {
+  if (props.dailySummaries.length === 0) {
+    return (
+      <EmptyState
+        icon={<CircleSlash size={18} />}
+        title="所选时间段没有每日数据"
+        detail="当前范围没有 committed 成交，不能生成表格或 Excel 文件"
+      />
+    );
+  }
+  return (
+    <div className="dataReviewDailyTableWrap tableWrap">
+      <table className="dataReviewDailyTable" aria-label={`每日复盘数据表格 ${props.rangeLabel}`}>
+        <thead>
+          <tr>
+            <th>日期</th>
+            <th>成交数</th>
+            <th>股数</th>
+            <th>PnL</th>
+            <th>胜率</th>
+            <th>盈亏比</th>
+            <th>单笔期望值</th>
+            <th>每股净收益</th>
+            <th>
+              <MetricGlossaryLabel label="MFE" tooltip={MFE_TOOLTIP} />
+            </th>
+            <th>
+              <MetricGlossaryLabel label="MAE" tooltip={MAE_TOOLTIP} />
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {props.dailySummaries.map((summary) => (
+            <tr key={summary.group_key}>
+              <td data-label="日期">{summary.group_key}</td>
+              <td data-label="成交数">{formatInteger(summary.fill_count)}</td>
+              <td data-label="股数">{formatInteger(summary.traded_quantity)}</td>
+              <td className={summaryTone(summary.pnl)} data-label="PnL">{formatPnl(summary.pnl)}</td>
+              <td data-label="胜率">{formatWinRate(summary)}</td>
+              <td data-label="盈亏比">{formatProfitFactor(summary)}</td>
+              <td className={summaryTone(summary.expected_value_per_trade ?? 0)} data-label="单笔期望值">
+                {formatSignedNullable(summary.expected_value_per_trade)}
+              </td>
+              <td className={summaryTone(summary.net_profit_per_share ?? 0)} data-label="每股净收益">
+                {formatSignedNullable(summary.net_profit_per_share)}
+              </td>
+              <td className="ok" data-label="MFE">{formatNullable(summary.max_favorable_excursion)}</td>
+              <td className="bad" data-label="MAE">{formatNullable(summary.max_adverse_excursion)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <p className="dataReviewDailyTableNote">
+        MFE / MAE 为所选日期内单笔已平仓交易的最大有利 / 不利波动金额；缺少可用分钟归档时显示 N/A。
+      </p>
+    </div>
+  );
+}
+
 function DataReviewCalendar(props: {
   calendarMonth: string;
+  dailySummaries: ReviewSummaryGroup[];
   days: DataReviewCalendarDay[];
   onEnterReviewContext: (dateKey: string, symbol: string) => void;
   onMonthChange: (monthDateKey: string) => void;
   onSelectDate: (dateKey: string) => void;
+  onViewModeChange: (mode: DataReviewViewMode) => void;
+  rangeLabel: string;
   selectedDate: string;
   selectedDateSummary: ReviewSummaryGroup | null;
   symbolBreakdown: ReviewSummaryGroup[];
+  viewMode: DataReviewViewMode;
 }) {
   return (
     <section className="dataReviewCalendarPanel" aria-label="数据下钻月日历">
@@ -7669,110 +7973,151 @@ function DataReviewCalendar(props: {
             <CalendarDays size={17} />
             月日历下钻
           </h3>
-          <p className="panelNote">点击有订单的日期方块，右侧立即切到该日标的下钻</p>
+          <p className="panelNote">
+            {props.viewMode === "calendar"
+              ? "点击有订单的日期方块，右侧立即切到该日标的下钻"
+              : `${props.rangeLabel} · 按日查看完整交易指标`}
+          </p>
         </div>
-        <div className="dataReviewCalendarNav" aria-label="月份切换">
+        <div className="dataReviewCalendarHeaderActions">
+          <div className="segmentedControl dataReviewViewSwitch" role="group" aria-label="月日历下钻视图切换">
+            <button
+              aria-pressed={props.viewMode === "calendar"}
+              className={props.viewMode === "calendar" ? "active" : ""}
+              onClick={() => props.onViewModeChange("calendar")}
+              type="button"
+            >
+              <CalendarDays size={14} />
+              日历视图
+            </button>
+            <button
+              aria-pressed={props.viewMode === "table"}
+              className={props.viewMode === "table" ? "active" : ""}
+              onClick={() => props.onViewModeChange("table")}
+              type="button"
+            >
+              <TableProperties size={14} />
+              表格视图
+            </button>
+          </div>
           <button
-            aria-label="上个月"
-            className="smallButton iconOnly"
-            onClick={() => props.onMonthChange(shiftMonthDateKey(props.calendarMonth, -1))}
+            className="smallButton dataReviewExportButton"
+            disabled={props.dailySummaries.length === 0}
+            onClick={() => exportDataReviewDailyMetricsToExcel(props.dailySummaries, props.rangeLabel)}
             type="button"
           >
-            <ChevronLeft size={15} />
+            <Download size={14} />
+            导出 Excel
           </button>
-          <strong>{dataReviewCalendarMonthLabel(props.calendarMonth)}</strong>
-          <button
-            aria-label="下个月"
-            className="smallButton iconOnly"
-            onClick={() => props.onMonthChange(shiftMonthDateKey(props.calendarMonth, 1))}
-            type="button"
-          >
-            <ChevronRight size={15} />
-          </button>
-        </div>
-      </header>
-      <div className="dataReviewCalendarLayout">
-        <div className="dataReviewCalendarGrid" role="grid" aria-label="每日订单日历">
-          {dataReviewWeekdayLabels.map((label) => (
-            <div className="dataReviewCalendarWeekday" key={label}>
-              {label}
-            </div>
-          ))}
-          {props.days.map((day) => {
-            const isActive = day.dateKey === props.selectedDate;
-            const hasSummary = day.summary !== null;
-            const className = [
-              "dataReviewCalendarDay",
-              isActive ? "active" : "",
-              day.isCurrentMonth ? "" : "outside",
-              hasSummary ? "" : "empty"
-            ]
-              .filter(Boolean)
-              .join(" ");
-            return (
+          {props.viewMode === "calendar" ? (
+            <div className="dataReviewCalendarNav" aria-label="月份切换">
               <button
-                aria-pressed={isActive}
-                className={className}
-                disabled={!hasSummary}
-                key={day.dateKey}
-                onClick={() => props.onSelectDate(day.dateKey)}
+                aria-label="上个月"
+                className="smallButton iconOnly"
+                onClick={() => props.onMonthChange(shiftMonthDateKey(props.calendarMonth, -1))}
                 type="button"
               >
-                <strong>{day.dayNumber}</strong>
-                {day.summary ? (
-                  <>
-                    <small>{formatInteger(day.summary.traded_quantity)} 股</small>
-                    <span className={summaryTone(day.summary.pnl)}>{formatPnl(day.summary.pnl)}</span>
-                  </>
-                ) : (
-                  <small>无订单</small>
-                )}
+                <ChevronLeft size={15} />
               </button>
-            );
-          })}
-        </div>
-        <div className="dataReviewCalendarDetail">
-          <div className="drillDetailHead">
-            <div>
-              <strong>{props.selectedDate} 日统计</strong>
-              <small>选择标的进入当前复盘模块</small>
+              <strong>{dataReviewCalendarMonthLabel(props.calendarMonth)}</strong>
+              <button
+                aria-label="下个月"
+                className="smallButton iconOnly"
+                onClick={() => props.onMonthChange(shiftMonthDateKey(props.calendarMonth, 1))}
+                type="button"
+              >
+                <ChevronRight size={15} />
+              </button>
             </div>
-            <span className="sourcePill">{formatInteger(props.symbolBreakdown.length)} 个标的</span>
-          </div>
-
-          <SummaryMiniFacts summary={props.selectedDateSummary} />
-
-          <div className="drillSecondaryList">
-            {props.symbolBreakdown.length > 0 ? (
-              props.symbolBreakdown.map((group) => (
-                <article
-                  className="drillSecondaryItem"
-                  key={group.group_key}
+          ) : null}
+        </div>
+      </header>
+      {props.viewMode === "calendar" ? (
+        <div className="dataReviewCalendarLayout">
+          <div className="dataReviewCalendarGrid" role="grid" aria-label="每日订单日历">
+            {dataReviewWeekdayLabels.map((label) => (
+              <div className="dataReviewCalendarWeekday" key={label}>
+                {label}
+              </div>
+            ))}
+            {props.days.map((day) => {
+              const isActive = day.dateKey === props.selectedDate;
+              const hasSummary = day.summary !== null;
+              const className = [
+                "dataReviewCalendarDay",
+                isActive ? "active" : "",
+                day.isCurrentMonth ? "" : "outside",
+                hasSummary ? "" : "empty"
+              ]
+                .filter(Boolean)
+                .join(" ");
+              return (
+                <button
+                  aria-pressed={isActive}
+                  className={className}
+                  disabled={!hasSummary}
+                  key={day.dateKey}
+                  onClick={() => props.onSelectDate(day.dateKey)}
+                  type="button"
                 >
-                  <div>
-                    <strong>{group.group_label}</strong>
-                    <small>{formatReviewGroupMeta(group)}</small>
-                  </div>
-                  <button
-                    className="linkButton"
-                    onClick={() => props.onEnterReviewContext(props.selectedDate, group.group_key)}
-                    type="button"
+                  <strong>{day.dayNumber}</strong>
+                  {day.summary ? (
+                    <>
+                      <small>{formatInteger(day.summary.traded_quantity)} 股</small>
+                      <span className={summaryTone(day.summary.pnl)}>{formatPnl(day.summary.pnl)}</span>
+                    </>
+                  ) : (
+                    <small>无订单</small>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+          <div className="dataReviewCalendarDetail">
+            <div className="drillDetailHead">
+              <div>
+                <strong>{props.selectedDate} 日统计</strong>
+                <small>选择标的进入当前复盘模块</small>
+              </div>
+              <span className="sourcePill">{formatInteger(props.symbolBreakdown.length)} 个标的</span>
+            </div>
+
+            <SummaryMiniFacts summary={props.selectedDateSummary} />
+
+            <div className="drillSecondaryList">
+              {props.symbolBreakdown.length > 0 ? (
+                props.symbolBreakdown.map((group) => (
+                  <article
+                    className="drillSecondaryItem"
+                    key={group.group_key}
                   >
-                    <Play size={14} />
-                    进入复盘
-                  </button>
-                </article>
-              ))
-            ) : (
-              <EmptyState
-                icon={<CircleSlash size={18} />}
-                title="该日没有标的"
-                detail="当前时间范围没有 committed 成交可用于标的下钻"
-              />
-            )}
+                    <div>
+                      <strong>{group.group_label}</strong>
+                      <small>{formatReviewGroupMeta(group)}</small>
+                    </div>
+                    <button
+                      className="linkButton"
+                      onClick={() => props.onEnterReviewContext(props.selectedDate, group.group_key)}
+                      type="button"
+                    >
+                      <Play size={14} />
+                      进入复盘
+                    </button>
+                  </article>
+                ))
+              ) : (
+                <EmptyState
+                  icon={<CircleSlash size={18} />}
+                  title="该日没有标的"
+                  detail="当前时间范围没有 committed 成交可用于标的下钻"
+                />
+              )}
+            </div>
           </div>
         </div>
-      </div>
+      ) : (
+        <DataReviewDailyTable dailySummaries={props.dailySummaries} rangeLabel={props.rangeLabel} />
+      )}
     </section>
   );
 }

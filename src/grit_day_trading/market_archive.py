@@ -6,7 +6,9 @@ import sqlite3
 from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
+from .futu_provider import FutuMarketDataProvider
 from .market_provider import MarketBar, MarketDataProvider, MinuteBarResponse
+from .market_quality import archive_preference_key, archive_quality_projection, minute_bar_quality_issue
 from .service import list_fills
 from .storage import dumps_json, new_id
 from .strategy import MOMENTUM_CONTEXT_SYMBOLS, MOMENTUM_MEAN_REVERSION_TEMPLATE_KEY
@@ -14,7 +16,10 @@ from .yahoo_provider import YahooFinanceMarketDataProvider
 
 
 YAHOO_ARCHIVE_PROVIDER = "yahoo"
+FUTU_ARCHIVE_PROVIDER = "futu"
+ARCHIVE_PROVIDER_CHAIN = (YAHOO_ARCHIVE_PROVIDER, FUTU_ARCHIVE_PROVIDER)
 MARKET_MINUTE_ARCHIVE_VERSION = "market_minute_archive_v1"
+MINUTE_ARCHIVE_CONTRACT_VERSION = "yahoo_futu_quality_fallback_v2"
 REGULAR_SESSION_START = "04:00:00"
 REGULAR_SESSION_END = "20:00:00"
 SOURCE_FILL_MARKER_TOLERANCE_MINUTES = 1
@@ -26,32 +31,32 @@ def archive_yahoo_minutes_for_committed_fills(
     trade_date: str | None = None,
     force: bool = False,
     provider: MarketDataProvider | None = None,
+    fallback_provider: MarketDataProvider | None = None,
 ) -> dict[str, Any]:
     targets = _archive_targets(conn, trade_date=trade_date)
     items = [
-        archive_market_minutes(
+        _archive_market_minutes_with_fallback(
             conn,
             symbol=target["symbol"],
             trade_date=target["trade_date"],
             source_fill_count=target["source_fill_count"],
-            provider_name=YAHOO_ARCHIVE_PROVIDER,
             force=force,
-            provider=provider,
+            primary_provider=provider,
+            fallback_provider=fallback_provider,
         )
         for target in targets
     ]
-    return {
-        "status": "no_targets" if not targets else "completed",
-        "provider": YAHOO_ARCHIVE_PROVIDER,
-        "archive_version": MARKET_MINUTE_ARCHIVE_VERSION,
-        "trade_date": trade_date,
-        "target_count": len(targets),
-        "stored_count": len(items),
-        "available_count": sum(1 for item in items if item["data_status"] == "available"),
-        "non_available_count": sum(1 for item in items if item["data_status"] != "available"),
-        "provider_failed_count": sum(1 for item in items if item["data_status"] == "provider_failed"),
-        "items": items,
-    }
+    return _archive_summary(
+        {
+            "status": "no_targets" if not targets else "completed",
+            "provider": YAHOO_ARCHIVE_PROVIDER,
+            "archive_version": MARKET_MINUTE_ARCHIVE_VERSION,
+            "trade_date": trade_date,
+            "target_count": len(targets),
+            "stored_count": len(items),
+        },
+        items,
+    )
 
 
 def archive_yahoo_minutes_for_import_batch(
@@ -60,33 +65,33 @@ def archive_yahoo_minutes_for_import_batch(
     batch_id: str,
     force: bool = False,
     provider: MarketDataProvider | None = None,
+    fallback_provider: MarketDataProvider | None = None,
 ) -> dict[str, Any]:
     targets = _archive_targets(conn, trade_date=None, source_batch_id=batch_id, include_momentum_context=False)
     items = [
-        archive_market_minutes(
+        _archive_market_minutes_with_fallback(
             conn,
             symbol=target["symbol"],
             trade_date=target["trade_date"],
             source_fill_count=target["source_fill_count"],
-            provider_name=YAHOO_ARCHIVE_PROVIDER,
             force=force,
-            provider=provider,
+            primary_provider=provider,
+            fallback_provider=fallback_provider,
         )
         for target in targets
     ]
-    return {
-        "status": "no_targets" if not targets else "completed",
-        "provider": YAHOO_ARCHIVE_PROVIDER,
-        "archive_version": MARKET_MINUTE_ARCHIVE_VERSION,
-        "batch_id": batch_id,
-        "trade_date": None,
-        "target_count": len(targets),
-        "stored_count": len(items),
-        "available_count": sum(1 for item in items if item["data_status"] == "available"),
-        "non_available_count": sum(1 for item in items if item["data_status"] != "available"),
-        "provider_failed_count": sum(1 for item in items if item["data_status"] == "provider_failed"),
-        "items": items,
-    }
+    return _archive_summary(
+        {
+            "status": "no_targets" if not targets else "completed",
+            "provider": YAHOO_ARCHIVE_PROVIDER,
+            "archive_version": MARKET_MINUTE_ARCHIVE_VERSION,
+            "batch_id": batch_id,
+            "trade_date": None,
+            "target_count": len(targets),
+            "stored_count": len(items),
+        },
+        items,
+    )
 
 
 def archive_yahoo_minutes_for_symbol_window(
@@ -97,6 +102,7 @@ def archive_yahoo_minutes_for_symbol_window(
     window_trading_days: int = 30,
     force: bool = False,
     provider: MarketDataProvider | None = None,
+    fallback_provider: MarketDataProvider | None = None,
 ) -> dict[str, Any]:
     canonical_symbol = symbol.strip().upper()
     if not canonical_symbol:
@@ -122,34 +128,35 @@ def archive_yahoo_minutes_for_symbol_window(
         for target_symbol in target_symbols
     ]
     items = [
-        archive_market_minutes(
+        _archive_market_minutes_with_fallback(
             conn,
             symbol=target["symbol"],
             trade_date=target["trade_date"],
             source_fill_count=target["source_fill_count"],
-            provider_name=YAHOO_ARCHIVE_PROVIDER,
             force=force,
-            provider=provider,
+            primary_provider=provider,
+            fallback_provider=fallback_provider,
         )
         for target in targets
     ]
     selected_items = [item for item in items if item["symbol"] == canonical_symbol]
-    return {
-        "status": "completed",
-        "provider": YAHOO_ARCHIVE_PROVIDER,
-        "archive_version": MARKET_MINUTE_ARCHIVE_VERSION,
-        "trade_date": end_date,
-        "symbol": canonical_symbol,
-        "window_trading_days": window,
-        "requested_trade_dates": trade_dates,
-        "target_count": len(targets),
-        "stored_count": len(items),
-        "available_count": sum(1 for item in items if item["data_status"] == "available"),
-        "non_available_count": sum(1 for item in items if item["data_status"] != "available"),
-        "provider_failed_count": sum(1 for item in items if item["data_status"] == "provider_failed"),
-        "selected_symbol_available_count": sum(1 for item in selected_items if item["data_status"] == "available"),
-        "items": items,
-    }
+    return _archive_summary(
+        {
+            "status": "completed",
+            "provider": YAHOO_ARCHIVE_PROVIDER,
+            "archive_version": MARKET_MINUTE_ARCHIVE_VERSION,
+            "trade_date": end_date,
+            "symbol": canonical_symbol,
+            "window_trading_days": window,
+            "requested_trade_dates": trade_dates,
+            "target_count": len(targets),
+            "stored_count": len(items),
+            "selected_symbol_available_count": sum(
+                1 for item in selected_items if item["data_status"] == "available"
+            ),
+        },
+        items,
+    )
 
 
 def archive_yahoo_minutes_for_symbol_group_window(
@@ -160,6 +167,7 @@ def archive_yahoo_minutes_for_symbol_group_window(
     window_trading_days: int = 1,
     force: bool = False,
     provider: MarketDataProvider | None = None,
+    fallback_provider: MarketDataProvider | None = None,
 ) -> dict[str, Any]:
     target_symbols = _canonical_symbols(symbols)
     if not target_symbols:
@@ -185,44 +193,107 @@ def archive_yahoo_minutes_for_symbol_group_window(
         for target_symbol in all_symbols
     ]
     items = [
-        archive_market_minutes(
+        _archive_market_minutes_with_fallback(
             conn,
             symbol=target["symbol"],
             trade_date=target["trade_date"],
             source_fill_count=target["source_fill_count"],
-            provider_name=YAHOO_ARCHIVE_PROVIDER,
             force=force,
-            provider=provider,
+            primary_provider=provider,
+            fallback_provider=fallback_provider,
         )
         for target in targets
     ]
     selected_items = [item for item in items if item["symbol"] in target_symbols]
+    return _archive_summary(
+        {
+            "status": "completed",
+            "provider": YAHOO_ARCHIVE_PROVIDER,
+            "archive_version": MARKET_MINUTE_ARCHIVE_VERSION,
+            "trade_date": end_date,
+            "symbols": target_symbols,
+            "window_trading_days": window,
+            "requested_trade_dates": trade_dates,
+            "target_count": len(targets),
+            "stored_count": len(items),
+            "selected_symbol_available_count": sum(
+                1 for item in selected_items if item["data_status"] == "available"
+            ),
+            "per_symbol": {
+                symbol: {
+                    "target_count": sum(1 for item in selected_items if item["symbol"] == symbol),
+                    "available_count": sum(
+                        1
+                        for item in selected_items
+                        if item["symbol"] == symbol and item["data_status"] == "available"
+                    ),
+                    "non_available_count": sum(
+                        1
+                        for item in selected_items
+                        if item["symbol"] == symbol and item["data_status"] != "available"
+                    ),
+                }
+                for symbol in target_symbols
+            },
+        },
+        items,
+    )
+
+
+def _archive_market_minutes_with_fallback(
+    conn: sqlite3.Connection,
+    *,
+    symbol: str,
+    trade_date: str,
+    source_fill_count: int,
+    force: bool,
+    primary_provider: MarketDataProvider | None,
+    fallback_provider: MarketDataProvider | None,
+) -> dict[str, Any]:
+    primary_archive = archive_market_minutes(
+        conn,
+        symbol=symbol,
+        trade_date=trade_date,
+        source_fill_count=source_fill_count,
+        provider_name=YAHOO_ARCHIVE_PROVIDER,
+        force=force,
+        provider=primary_provider,
+    )
+    if primary_archive["data_status"] == "available":
+        return primary_archive
+    if primary_archive["data_status"] == "missing" and source_fill_count <= 0:
+        return primary_archive
+
+    selected_fallback = fallback_provider
+    if primary_provider is None and fallback_provider is None:
+        selected_fallback = resolve_provider(FUTU_ARCHIVE_PROVIDER)
+    if selected_fallback is None:
+        return primary_archive
+
+    return archive_market_minutes(
+        conn,
+        symbol=symbol,
+        trade_date=trade_date,
+        source_fill_count=source_fill_count,
+        provider_name=FUTU_ARCHIVE_PROVIDER,
+        force=force,
+        provider=selected_fallback,
+    )
+
+
+def _archive_summary(base: dict[str, Any], items: list[dict[str, Any]]) -> dict[str, Any]:
     return {
-        "status": "completed",
-        "provider": YAHOO_ARCHIVE_PROVIDER,
-        "archive_version": MARKET_MINUTE_ARCHIVE_VERSION,
-        "trade_date": end_date,
-        "symbols": target_symbols,
-        "window_trading_days": window,
-        "requested_trade_dates": trade_dates,
-        "target_count": len(targets),
-        "stored_count": len(items),
+        **base,
+        "provider_chain": list(ARCHIVE_PROVIDER_CHAIN),
         "available_count": sum(1 for item in items if item["data_status"] == "available"),
         "non_available_count": sum(1 for item in items if item["data_status"] != "available"),
         "provider_failed_count": sum(1 for item in items if item["data_status"] == "provider_failed"),
-        "selected_symbol_available_count": sum(1 for item in selected_items if item["data_status"] == "available"),
-        "per_symbol": {
-            symbol: {
-                "target_count": sum(1 for item in selected_items if item["symbol"] == symbol),
-                "available_count": sum(
-                    1 for item in selected_items if item["symbol"] == symbol and item["data_status"] == "available"
-                ),
-                "non_available_count": sum(
-                    1 for item in selected_items if item["symbol"] == symbol and item["data_status"] != "available"
-                ),
-            }
-            for symbol in target_symbols
-        },
+        "fallback_attempted_count": sum(1 for item in items if item["provider"] == FUTU_ARCHIVE_PROVIDER),
+        "fallback_available_count": sum(
+            1
+            for item in items
+            if item["provider"] == FUTU_ARCHIVE_PROVIDER and item["data_status"] == "available"
+        ),
         "items": items,
     }
 
@@ -254,6 +325,9 @@ def archive_market_minutes(
     bars_hash = _sha256_text(bars_json)
     payload_hash = _sha256_text(bars_json if response.bars else (response.error_code or response.status))
     data_status = _data_status(response)
+    quality_issue = minute_bar_quality_issue(response.bars)
+    if data_status in {"available", "partial"} and quality_issue:
+        data_status = "partial"
     source_fill_window_covered = _bars_cover_source_fill_times(response.bars, source_fill_times)
     if data_status == "available" and not source_fill_window_covered:
         data_status = "partial"
@@ -263,8 +337,14 @@ def archive_market_minutes(
         response,
         data_status,
         source_fill_window_covered=source_fill_window_covered,
+        quality_issue=quality_issue,
     )
     created_at = _now()
+    preserve_existing = _should_preserve_existing_archive(
+        existing,
+        next_status=data_status,
+        next_bar_count=len(response.bars),
+    )
 
     with conn:
         conn.execute(
@@ -281,38 +361,44 @@ def archive_market_minutes(
                 requested_start,
                 requested_end,
                 _provider_attempt_status(data_status),
-                response.error_code,
+                response.error_code or quality_issue,
                 payload_hash,
                 created_at,
             ),
         )
         if existing:
             archive_id = existing["id"]
-            conn.execute(
-                """
-                UPDATE market_minute_archives
-                SET provider_timezone = ?, bar_count = ?, bars_hash = ?, bars_json = ?,
-                    vwap = ?, day_high = ?, day_low = ?, volume_context = ?, data_status = ?,
-                    failure_reason = ?, source_fill_count = ?, archive_version = ?, created_at = ?
-                WHERE id = ?
-                """,
-                (
-                    response.provider_timezone,
-                    len(response.bars),
-                    bars_hash,
-                    bars_json,
-                    metrics["vwap"],
-                    metrics["day_high"],
-                    metrics["day_low"],
-                    dumps_json(volume_context),
-                    data_status,
-                    failure_reason,
-                    int(source_fill_count),
-                    MARKET_MINUTE_ARCHIVE_VERSION,
-                    created_at,
-                    archive_id,
-                ),
-            )
+            if preserve_existing:
+                conn.execute(
+                    "UPDATE market_minute_archives SET source_fill_count = ? WHERE id = ?",
+                    (int(source_fill_count), archive_id),
+                )
+            else:
+                conn.execute(
+                    """
+                    UPDATE market_minute_archives
+                    SET provider_timezone = ?, bar_count = ?, bars_hash = ?, bars_json = ?,
+                        vwap = ?, day_high = ?, day_low = ?, volume_context = ?, data_status = ?,
+                        failure_reason = ?, source_fill_count = ?, archive_version = ?, created_at = ?
+                    WHERE id = ?
+                    """,
+                    (
+                        response.provider_timezone,
+                        len(response.bars),
+                        bars_hash,
+                        bars_json,
+                        metrics["vwap"],
+                        metrics["day_high"],
+                        metrics["day_low"],
+                        dumps_json(volume_context),
+                        data_status,
+                        failure_reason,
+                        int(source_fill_count),
+                        MARKET_MINUTE_ARCHIVE_VERSION,
+                        created_at,
+                        archive_id,
+                    ),
+                )
         else:
             archive_id = new_id("minbar")
             conn.execute(
@@ -374,11 +460,35 @@ def list_market_minute_archives(
         f"""
         SELECT * FROM market_minute_archives
         {where}
-        ORDER BY trade_date DESC, symbol, provider
+        ORDER BY
+            trade_date DESC,
+            symbol,
+            CASE data_status
+                WHEN 'available' THEN 0
+                WHEN 'partial' THEN 1
+                ELSE 2
+            END,
+            CASE
+                WHEN data_status IN ('available', 'partial') AND provider = 'yahoo' THEN 0
+                WHEN data_status IN ('available', 'partial') AND provider = 'futu' THEN 1
+                WHEN data_status NOT IN ('available', 'partial') AND provider = 'futu' THEN 0
+                WHEN data_status NOT IN ('available', 'partial') AND provider = 'yahoo' THEN 1
+                ELSE 2
+            END,
+            created_at DESC,
+            id DESC
         """,
         params,
     ).fetchall()
-    return [_public_archive(row) for row in rows]
+    grouped: dict[tuple[str, str], list[dict[str, Any]]] = {}
+    for row in rows:
+        item = _public_archive(row)
+        grouped.setdefault((item["trade_date"], item["symbol"]), []).append(item)
+    return [
+        item
+        for group in grouped.values()
+        for item in sorted(group, key=archive_preference_key)
+    ]
 
 
 def get_market_minute_archive(conn: sqlite3.Connection, archive_id: str) -> dict[str, Any]:
@@ -391,6 +501,8 @@ def get_market_minute_archive(conn: sqlite3.Connection, archive_id: str) -> dict
 def resolve_provider(provider_name: str) -> MarketDataProvider:
     if provider_name == YAHOO_ARCHIVE_PROVIDER:
         return YahooFinanceMarketDataProvider()
+    if provider_name == FUTU_ARCHIVE_PROVIDER:
+        return FutuMarketDataProvider(auto_start_opend=True)
     raise ValueError("unsupported_archive_provider")
 
 
@@ -483,6 +595,30 @@ def _refresh_source_fill_count(conn: sqlite3.Connection, idempotency_key: str, s
         )
 
 
+def _should_preserve_existing_archive(
+    existing: sqlite3.Row | None,
+    *,
+    next_status: str,
+    next_bar_count: int,
+) -> bool:
+    if existing is None:
+        return False
+    current_bar_count = int(existing["bar_count"])
+    current_status = str(existing["data_status"])
+    if current_bar_count > 0 and next_bar_count <= 0:
+        return True
+    status_rank = {
+        "available": 0,
+        "partial": 1,
+        "missing": 2,
+        "timezone_conflict": 3,
+        "provider_failed": 4,
+    }
+    if status_rank.get(next_status, 5) > status_rank.get(current_status, 5):
+        return True
+    return current_status == next_status == "partial" and next_bar_count < current_bar_count
+
+
 def _data_status(response: MinuteBarResponse) -> str:
     if response.status == "provider_failed":
         return "provider_failed"
@@ -500,9 +636,12 @@ def _failure_reason(
     data_status: str,
     *,
     source_fill_window_covered: bool = True,
+    quality_issue: str | None = None,
 ) -> str | None:
     if data_status == "available":
         return None
+    if quality_issue:
+        return quality_issue
     if response.error_code:
         return response.error_code
     if data_status == "partial" and not source_fill_window_covered:
@@ -596,7 +735,7 @@ def _public_archive(row: sqlite3.Row) -> dict[str, Any]:
     payload["volume_context"] = json.loads(payload["volume_context"])
     for key in ("vwap", "day_high", "day_low"):
         payload[key] = None if payload[key] is None else float(payload[key])
-    return payload
+    return archive_quality_projection(payload)
 
 
 def _idempotency_key(

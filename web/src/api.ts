@@ -396,9 +396,10 @@ export async function fetchMarketContext(fillId: string): Promise<MarketContextS
 export async function fetchMinuteArchives(
   date?: string | null,
   symbol?: string,
-  provider = "yahoo"
+  provider?: string
 ): Promise<MarketMinuteArchive[]> {
-  const params = new URLSearchParams({ provider });
+  const params = new URLSearchParams();
+  if (provider) params.set("provider", provider);
   if (date) params.set("date", date);
   if (symbol) params.set("symbol", symbol);
   const payload = await readGetJson<{ items: MarketMinuteArchive[] }>(`/api/market-data/minute-archives?${params.toString()}`);

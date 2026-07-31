@@ -9,6 +9,7 @@ from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
 from .market_provider import FakeMarketDataProvider, MarketDataProvider, MinuteBarResponse
+from .market_quality import archive_quality_projection
 from .storage import dumps_json, new_id, row_to_dict, rows_to_dicts
 
 
@@ -5873,7 +5874,8 @@ def _find_archive(conn: sqlite3.Connection, *, provider: str, symbol: str, trade
         """,
         (provider, symbol, trade_date),
     ).fetchone()
-    return row_to_dict(row)
+    archive = row_to_dict(row)
+    return archive_quality_projection(archive) if archive else None
 
 
 def _find_strategy_context_archives(

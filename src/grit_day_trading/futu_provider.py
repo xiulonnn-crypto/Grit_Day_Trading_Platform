@@ -1,7 +1,11 @@
 from __future__ import annotations
 
 import os
+import socket
+import subprocess
+import time
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 
 from .market_provider import MarketBar, MinuteBarResponse, WatchlistCandidate, WatchlistProviderResponse
@@ -10,10 +14,18 @@ from .market_provider import MarketBar, MinuteBarResponse, WatchlistCandidate, W
 class FutuMarketDataProvider:
     name = "futu"
 
-    def __init__(self, *, host: str | None = None, port: int | None = None, market_prefix: str | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        host: str | None = None,
+        port: int | None = None,
+        market_prefix: str | None = None,
+        auto_start_opend: bool = False,
+    ) -> None:
         self._host = host or os.getenv("FUTU_HOST", "127.0.0.1")
         self._port = int(port or os.getenv("FUTU_PORT", "11111"))
         self._market_prefix = (market_prefix or os.getenv("FUTU_DEFAULT_MARKET", "US")).upper()
+        self._auto_start_opend = auto_start_opend
 
     def fetch_minute_bars(self, symbol: str, requested_start: str, requested_end: str) -> MinuteBarResponse:
         futu = _import_futu()
@@ -22,17 +34,27 @@ class FutuMarketDataProvider:
         code = self._normalize_code(symbol)
         quote_ctx = None
         try:
-            quote_ctx = futu.OpenQuoteContext(host=self._host, port=self._port)
-            ret, data = quote_ctx.request_history_kline(
+            quote_ctx = _open_quote_context(
+                futu,
+                host=self._host,
+                port=self._port,
+                auto_start_opend=self._auto_start_opend,
+            )
+            quota_error = _history_quota_error(quote_ctx, futu, code)
+            if quota_error:
+                return _failed_minute(quota_error)
+            history_result = quote_ctx.request_history_kline(
                 code,
                 start=requested_start[:10],
                 end=requested_end[:10],
                 ktype=futu.KLType.K_1M,
                 autype=futu.AuType.NONE,
+                max_count=1000,
                 extended_time=True,
             )
+            ret, data = _result_pair(history_result)
             if ret != futu.RET_OK:
-                return _failed_minute(str(data) or "futu_minute_bars_failed")
+                return _failed_minute("futu_history_kline_failed")
             bars = _bars_from_dataframe(data, requested_start, requested_end)
             if not bars:
                 return MinuteBarResponse(status="missing", bars=[], provider_timezone="America/New_York")
@@ -91,6 +113,109 @@ def _failed_minute(error_code: str) -> MinuteBarResponse:
         provider_timezone="America/New_York",
         error_code=error_code,
     )
+
+
+def _open_quote_context(futu: Any, *, host: str, port: int, auto_start_opend: bool) -> Any:
+    try:
+        return futu.OpenQuoteContext(host=host, port=port)
+    except Exception:
+        if not auto_start_opend or not _start_futu_opend(host, port):
+            raise
+    return futu.OpenQuoteContext(host=host, port=port)
+
+
+def _start_futu_opend(host: str, port: int) -> bool:
+    if os.name != "nt" or host.strip().lower() not in {"127.0.0.1", "localhost"}:
+        return False
+    if os.getenv("FUTU_AUTO_START_OPEND", "1").strip().lower() in {"0", "false", "no", "off"}:
+        return False
+    appdata = os.getenv("APPDATA", "").strip()
+    if not appdata:
+        return False
+    executable = Path(appdata) / "Futu_OpenD" / "Futu_OpenD.exe"
+    if not executable.is_file():
+        return False
+
+    creation_flags = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0) | getattr(
+        subprocess,
+        "DETACHED_PROCESS",
+        0,
+    )
+    try:
+        subprocess.Popen(
+            [str(executable)],
+            cwd=str(executable.parent),
+            close_fds=True,
+            creationflags=creation_flags,
+        )
+    except OSError:
+        return False
+
+    deadline = time.monotonic() + 15.0
+    while time.monotonic() < deadline:
+        if _port_is_listening(host, port):
+            return True
+        time.sleep(0.25)
+    return False
+
+
+def _port_is_listening(host: str, port: int) -> bool:
+    try:
+        with socket.create_connection((host, port), timeout=0.25):
+            return True
+    except OSError:
+        return False
+
+
+def _history_quota_error(quote_ctx: Any, futu: Any, code: str) -> str | None:
+    get_quota = getattr(quote_ctx, "get_history_kl_quota", None)
+    if not callable(get_quota):
+        return "futu_history_quota_check_unavailable"
+    quota_result = get_quota(get_detail=True)
+    ret, data = _result_pair(quota_result)
+    if ret != futu.RET_OK:
+        return "futu_history_quota_check_failed"
+
+    remaining = _quota_remaining(data)
+    if remaining is None or remaining > 0:
+        return None
+    if code in _quota_codes(data):
+        return None
+    return "futu_history_quota_exhausted"
+
+
+def _result_pair(result: Any) -> tuple[Any, Any]:
+    if not isinstance(result, tuple) or len(result) < 2:
+        return None, result
+    return result[0], result[1]
+
+
+def _quota_remaining(data: Any) -> int | None:
+    if isinstance(data, dict):
+        raw = data.get("remain_quota", data.get("remainQuota"))
+        return _safe_int(raw)
+    if isinstance(data, tuple) and len(data) >= 2:
+        return _safe_int(data[1])
+    return None
+
+
+def _quota_codes(data: Any) -> set[str]:
+    codes: set[str] = set()
+
+    def visit(value: Any) -> None:
+        if isinstance(value, dict):
+            raw_code = value.get("code")
+            if raw_code:
+                codes.add(str(raw_code).strip().upper())
+            for nested in value.values():
+                if isinstance(nested, (dict, list, tuple)):
+                    visit(nested)
+        elif isinstance(value, (list, tuple)):
+            for nested in value:
+                visit(nested)
+
+    visit(data)
+    return codes
 
 
 def _bars_from_dataframe(data: Any, requested_start: str, requested_end: str) -> list[MarketBar]:
@@ -152,6 +277,13 @@ def _safe_float(value: Any) -> float:
         return float(value)
     except (TypeError, ValueError):
         return 0.0
+
+
+def _safe_int(value: Any) -> int | None:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def _parse_iso(value: str) -> datetime:
