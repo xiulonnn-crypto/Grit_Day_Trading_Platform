@@ -209,6 +209,169 @@ export interface ReviewSummaryGroup extends ReviewSummary {
   group_label: string;
 }
 
+export type TradeBacktestScenarioKey = "baseline" | "rule_a" | "rule_b" | "rule_c";
+export type TradeBacktestRunStatus = "completed" | "partial_failed" | "failed";
+export type TradeBacktestScenarioStatus =
+  | "completed"
+  | "no_trades"
+  | "missing_archive"
+  | "non_available_archive"
+  | "invalid_archive"
+  | "insufficient_archive_coverage"
+  | "unsupported_cross_day_position"
+  | "open_trade_group"
+  | "failed";
+
+export interface TradeBacktestPreset {
+  scenario_key: TradeBacktestScenarioKey;
+  label: string;
+  description: string;
+  preset_version: string;
+  params: Record<string, string | number | boolean>;
+}
+
+export interface TradeBacktestPresetCatalog {
+  contract_version: "trade_backtest_contract_v5" | string;
+  rule_catalog_version: "trade_backtest_rule_catalog_v5" | string;
+  engine_version: "trade_backtest_engine_v4" | string;
+  items: TradeBacktestPreset[];
+}
+
+export interface TradeBacktestMetrics {
+  pnl: number;
+  delta_vs_baseline: number;
+  closed_trade_count: number;
+  traded_quantity: number;
+  win_rate: number;
+  profit_factor: number | null;
+  expected_value_per_trade: number | null;
+  net_profit_per_share: number | null;
+  worst_intraday_pnl: number | null;
+  capped_open_quantity: number;
+  forced_exit_count: number;
+  stop_trigger_days: number;
+  blocked_open_quantity: number;
+  blocked_open_trade_count: number;
+  ignored_incomplete_archive_target_count?: number;
+}
+
+export interface TradeBacktestScenarioResult {
+  scenario_key: TradeBacktestScenarioKey;
+  label: string;
+  description: string;
+  preset_version: string;
+  params: Record<string, string | number | boolean>;
+  status: TradeBacktestScenarioStatus;
+  failure_reason: string | null;
+  metrics: TradeBacktestMetrics | Record<string, never>;
+  evidence: Record<string, unknown>;
+  result_hash: string;
+}
+
+export interface TradeBacktestRun {
+  id: string;
+  run_id: string;
+  contract_version: "trade_backtest_contract_v5" | string;
+  start_date: string | null;
+  end_date: string | null;
+  status: TradeBacktestRunStatus;
+  failure_reason: string | null;
+  rule_catalog_version: string;
+  engine_version: string;
+  source_fill_count: number;
+  source_fill_hash: string;
+  archive_target_count: number;
+  archive_scope_hash: string;
+  parser_versions: string[];
+  field_mapper_versions: string[];
+  scenario_count: number;
+  idempotency_key: string;
+  created_at: string;
+  scenarios: TradeBacktestScenarioResult[];
+}
+
+export interface TradeBacktestOptimizationPresetCatalog {
+  contract_version: "trade_backtest_optimization_contract_v1" | string;
+  optimization_engine_version: string;
+  objective: {
+    objective_version: "maximize_pnl_v1" | string;
+    label: string;
+    description: string;
+  };
+  default_max_position_quantities: number[];
+  default_daily_loss_limits: number[];
+  max_candidate_count: number;
+  bounds: {
+    max_position_quantity: { min: number; max: number };
+    daily_loss_limit: { min: number; max: number };
+  };
+}
+
+export type TradeBacktestOptimizationStatus = "completed" | "partial_failed" | "no_trades" | "failed";
+export type TradeBacktestOptimizationCandidateTone = "best" | "strong" | "neutral" | "weak";
+
+export interface TradeBacktestOptimizationCandidate {
+  id: string;
+  candidate_id: string;
+  rank: number | null;
+  tone: TradeBacktestOptimizationCandidateTone;
+  status: "completed" | "failed";
+  failure_reason: string | null;
+  max_position_quantity: number;
+  daily_loss_limit: number;
+  params: { max_live_position_quantity: number; daily_loss_limit: number };
+  params_hash: string;
+  metrics: TradeBacktestMetrics | Record<string, never>;
+  evidence: Record<string, unknown>;
+  result_hash: string;
+}
+
+export interface TradeBacktestOptimizationRun {
+  id: string;
+  run_id: string;
+  job_id: string;
+  current_batch_id: string;
+  artifact_id: string;
+  source_job_id: string;
+  source_trade_backtest_run_id: string;
+  contract_version: "trade_backtest_optimization_contract_v1" | string;
+  start_date: string | null;
+  end_date: string | null;
+  status: TradeBacktestOptimizationStatus;
+  failure_reason: string | null;
+  objective_version: string;
+  optimization_engine_version: string;
+  parameter_space: {
+    max_position_quantities: number[];
+    daily_loss_limits: number[];
+  };
+  parameter_space_hash: string;
+  requested_candidate_count: number;
+  total_candidates: number;
+  returned_candidate_count: number;
+  completed_candidate_count: number;
+  failed_candidate_count: number;
+  source_fill_count: number;
+  source_fill_hash: string;
+  archive_target_count: number;
+  archive_scope_hash: string;
+  source_manifest: Record<string, unknown>;
+  candidate_manifest: Record<string, unknown>;
+  parser_versions: string[];
+  field_mapper_versions: string[];
+  idempotency_key: string;
+  created_at: string;
+  is_preview: false;
+  source_reason: string;
+  best_candidate: TradeBacktestOptimizationCandidate | null;
+  top_candidates: TradeBacktestOptimizationCandidate[];
+  matrix: Array<{
+    daily_loss_limit: number;
+    cells: Array<TradeBacktestOptimizationCandidate | null>;
+  }>;
+  candidates: TradeBacktestOptimizationCandidate[];
+}
+
 export type TradeSummaryEvidenceStatus = "no_trades" | "insufficient_sample" | "eligible";
 export type TradeSummaryGenerationStatus =
   | "not_requested"

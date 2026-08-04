@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 
-STORAGE_SCHEMA_VERSION = 9
+STORAGE_SCHEMA_VERSION = 11
 ACCOUNT_STRIP_CHARS_SQL = "char(9) || char(10) || char(11) || char(12) || char(13) || char(32)"
 
 
@@ -421,6 +421,98 @@ CREATE TABLE IF NOT EXISTS trade_summary_generations (
     updated_at TEXT NOT NULL DEFAULT (datetime('now')),
     completed_at TEXT
 );
+
+CREATE TABLE IF NOT EXISTS trade_backtest_runs (
+    id TEXT PRIMARY KEY,
+    start_date TEXT,
+    end_date TEXT,
+    status TEXT NOT NULL CHECK (status IN ('completed', 'partial_failed', 'failed')),
+    failure_reason TEXT,
+    rule_catalog_version TEXT NOT NULL,
+    engine_version TEXT NOT NULL,
+    source_fill_count INTEGER NOT NULL DEFAULT 0,
+    source_fill_hash TEXT NOT NULL,
+    source_manifest_json TEXT NOT NULL,
+    archive_target_count INTEGER NOT NULL DEFAULT 0,
+    archive_scope_hash TEXT NOT NULL,
+    parser_versions_json TEXT NOT NULL DEFAULT '[]',
+    field_mapper_versions_json TEXT NOT NULL DEFAULT '[]',
+    scenario_count INTEGER NOT NULL DEFAULT 0,
+    idempotency_key TEXT NOT NULL UNIQUE,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS trade_backtest_scenario_results (
+    id TEXT PRIMARY KEY,
+    run_id TEXT NOT NULL REFERENCES trade_backtest_runs(id) ON DELETE CASCADE,
+    scenario_key TEXT NOT NULL CHECK (scenario_key IN ('baseline', 'rule_a', 'rule_b', 'rule_c')),
+    preset_version TEXT NOT NULL,
+    params_json TEXT NOT NULL,
+    params_hash TEXT NOT NULL,
+    status TEXT NOT NULL CHECK (
+        status IN (
+            'completed',
+            'no_trades',
+            'missing_archive',
+            'non_available_archive',
+            'invalid_archive',
+            'insufficient_archive_coverage',
+            'unsupported_cross_day_position',
+            'open_trade_group',
+            'failed'
+        )
+    ),
+    failure_reason TEXT,
+    metrics_json TEXT NOT NULL DEFAULT '{}',
+    evidence_json TEXT NOT NULL DEFAULT '{}',
+    result_hash TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(run_id, scenario_key)
+);
+
+CREATE TABLE IF NOT EXISTS trade_backtest_optimization_runs (
+    id TEXT PRIMARY KEY,
+    start_date TEXT,
+    end_date TEXT,
+    status TEXT NOT NULL CHECK (status IN ('completed', 'partial_failed', 'no_trades', 'failed')),
+    failure_reason TEXT,
+    source_trade_backtest_run_id TEXT NOT NULL REFERENCES trade_backtest_runs(id),
+    objective_version TEXT NOT NULL,
+    optimization_engine_version TEXT NOT NULL,
+    parameter_space_json TEXT NOT NULL,
+    parameter_space_hash TEXT NOT NULL,
+    requested_candidate_count INTEGER NOT NULL DEFAULT 0,
+    completed_candidate_count INTEGER NOT NULL DEFAULT 0,
+    failed_candidate_count INTEGER NOT NULL DEFAULT 0,
+    best_candidate_id TEXT,
+    source_fill_count INTEGER NOT NULL DEFAULT 0,
+    source_fill_hash TEXT NOT NULL,
+    archive_target_count INTEGER NOT NULL DEFAULT 0,
+    archive_scope_hash TEXT NOT NULL,
+    source_manifest_json TEXT NOT NULL,
+    candidate_manifest_json TEXT NOT NULL,
+    parser_versions_json TEXT NOT NULL DEFAULT '[]',
+    field_mapper_versions_json TEXT NOT NULL DEFAULT '[]',
+    idempotency_key TEXT NOT NULL UNIQUE,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS trade_backtest_optimization_candidates (
+    id TEXT PRIMARY KEY,
+    optimization_run_id TEXT NOT NULL REFERENCES trade_backtest_optimization_runs(id) ON DELETE CASCADE,
+    rank INTEGER,
+    status TEXT NOT NULL CHECK (status IN ('completed', 'failed')),
+    failure_reason TEXT,
+    max_position_quantity REAL NOT NULL CHECK (max_position_quantity > 0),
+    daily_loss_limit REAL NOT NULL CHECK (daily_loss_limit > 0),
+    params_json TEXT NOT NULL,
+    params_hash TEXT NOT NULL,
+    metrics_json TEXT NOT NULL DEFAULT '{}',
+    evidence_json TEXT NOT NULL DEFAULT '{}',
+    result_hash TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(optimization_run_id, params_hash)
+);
 """
 
 STORAGE_CONTRACT_SQL = f"""
@@ -604,6 +696,30 @@ ON trade_summary_generations(summary_key, updated_at);
 
 CREATE INDEX IF NOT EXISTS ix_trade_summary_generations_scope
 ON trade_summary_generations(start_date, end_date, updated_at);
+
+CREATE UNIQUE INDEX IF NOT EXISTS ux_trade_backtest_runs_idempotency
+ON trade_backtest_runs(idempotency_key);
+
+CREATE INDEX IF NOT EXISTS ix_trade_backtest_runs_scope
+ON trade_backtest_runs(start_date, end_date, created_at);
+
+CREATE UNIQUE INDEX IF NOT EXISTS ux_trade_backtest_scenarios_run_key
+ON trade_backtest_scenario_results(run_id, scenario_key);
+
+CREATE INDEX IF NOT EXISTS ix_trade_backtest_scenarios_run
+ON trade_backtest_scenario_results(run_id, created_at);
+
+CREATE UNIQUE INDEX IF NOT EXISTS ux_trade_backtest_optimization_runs_idempotency
+ON trade_backtest_optimization_runs(idempotency_key);
+
+CREATE INDEX IF NOT EXISTS ix_trade_backtest_optimization_runs_scope
+ON trade_backtest_optimization_runs(start_date, end_date, created_at);
+
+CREATE UNIQUE INDEX IF NOT EXISTS ux_trade_backtest_optimization_candidates_params
+ON trade_backtest_optimization_candidates(optimization_run_id, params_hash);
+
+CREATE INDEX IF NOT EXISTS ix_trade_backtest_optimization_candidates_rank
+ON trade_backtest_optimization_candidates(optimization_run_id, rank);
 """
 
 
@@ -683,6 +799,20 @@ def initialize_database(conn: sqlite3.Connection) -> None:
         VALUES (?, ?)
         """,
         (9, "p3_trade_summary_generation_contract_v9"),
+    )
+    conn.execute(
+        """
+        INSERT OR IGNORE INTO storage_migrations (version, description)
+        VALUES (?, ?)
+        """,
+        (10, "p3_trade_backtest_contract_v10"),
+    )
+    conn.execute(
+        """
+        INSERT OR IGNORE INTO storage_migrations (version, description)
+        VALUES (?, ?)
+        """,
+        (11, "p3_trade_backtest_optimization_contract_v11"),
     )
     conn.execute(f"PRAGMA user_version = {STORAGE_SCHEMA_VERSION}")
     conn.commit()

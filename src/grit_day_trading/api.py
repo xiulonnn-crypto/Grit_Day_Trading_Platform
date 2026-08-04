@@ -36,6 +36,19 @@ from .trade_summary import (
     get_trade_summary,
     trade_summary_llm_configured,
 )
+from .trade_backtest import (
+    TRADE_BACKTEST_CONTRACT_VERSION,
+    TRADE_BACKTEST_OBJECTIVE_VERSION,
+    TRADE_BACKTEST_OPTIMIZATION_CONTRACT_VERSION,
+    get_trade_backtest_optimization,
+    get_trade_backtest_optimization_presets,
+    get_trade_backtest,
+    get_trade_backtest_presets,
+    list_trade_backtest_optimizations,
+    list_trade_backtests,
+    run_trade_backtest_optimization,
+    run_trade_backtest,
+)
 from .strategy import (
     BB_SQUEEZE_TEMPLATE_KEY,
     LIQUIDITY_SWEEP_TEMPLATE_KEY,
@@ -72,6 +85,12 @@ REQUIRED_API_ROUTES = (
     "/api/trade-groups/{trade_group_id}/review",
     "/api/review/trade-summary",
     "/api/review/trade-summary/generations",
+    "/api/review/trade-backtest-presets",
+    "/api/review/trade-backtests",
+    "/api/review/trade-backtests/{run_id}",
+    "/api/review/trade-backtest-optimization-presets",
+    "/api/review/trade-backtest-optimizations",
+    "/api/review/trade-backtest-optimizations/{run_id}",
 )
 LIVE_SIGNAL_CONTRACT_VERSION = "live_order_quantity_reason_tags_v1"
 TRADE_EVALUATION_CONTRACT_VERSION = "trade_eval_recommendation_v1"
@@ -144,6 +163,17 @@ class TradeSummaryGenerationRequest(BaseModel):
     end_date: str | None = Field(default=None, pattern=r"^\d{4}-\d{2}-\d{2}$")
 
 
+class TradeBacktestRunRequest(BaseModel):
+    start_date: str | None = Field(default=None, pattern=r"^\d{4}-\d{2}-\d{2}$")
+    end_date: str | None = Field(default=None, pattern=r"^\d{4}-\d{2}-\d{2}$")
+
+
+class TradeBacktestOptimizationRequest(TradeBacktestRunRequest):
+    max_position_quantities: list[int | float] | None = Field(default=None, min_length=1, max_length=120)
+    daily_loss_limits: list[int | float] | None = Field(default=None, min_length=1, max_length=120)
+    objective: str = Field(default=TRADE_BACKTEST_OBJECTIVE_VERSION, pattern=r"^maximize_pnl_v1$")
+
+
 class LiveStrategySignalRequest(BaseModel):
     symbol: str = Field(min_length=1, max_length=16)
     provider: str = Field(default="yahoo", pattern=r"^(fake|futu|yahoo)$")
@@ -194,6 +224,8 @@ def create_app(db_path: str | Path | None = None) -> FastAPI:
             "trade_excursion_contract": TRADE_EXCURSION_CONTRACT_VERSION,
             "ai_strategy_catalog": AI_STRATEGY_CATALOG_VERSION,
             "trade_summary_contract": TRADE_SUMMARY_CONTRACT_VERSION,
+            "trade_backtest_contract": TRADE_BACKTEST_CONTRACT_VERSION,
+            "trade_backtest_optimization_contract": TRADE_BACKTEST_OPTIMIZATION_CONTRACT_VERSION,
             "minute_archive_contract": MINUTE_ARCHIVE_CONTRACT_VERSION,
             "trade_summary_llm_configured": trade_summary_llm_configured(),
         }
@@ -280,6 +312,97 @@ def create_app(db_path: str | Path | None = None) -> FastAPI:
             detail = str(exc)
             status_code = 422 if detail == "trade_summary_personalization_insufficient" else 503
             raise HTTPException(status_code=status_code, detail=detail) from exc
+
+    @app.get("/api/review/trade-backtest-presets")
+    def review_trade_backtest_presets():
+        return get_trade_backtest_presets()
+
+    @app.post("/api/review/trade-backtests")
+    def review_trade_backtest_run(
+        request: TradeBacktestRunRequest,
+        conn=Depends(get_conn),
+    ):
+        try:
+            return run_trade_backtest(
+                conn,
+                start_date=request.start_date,
+                end_date=request.end_date,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    @app.get("/api/review/trade-backtests")
+    def review_trade_backtests(
+        start_date: Annotated[str | None, Query(pattern=r"^\d{4}-\d{2}-\d{2}$")] = None,
+        end_date: Annotated[str | None, Query(pattern=r"^\d{4}-\d{2}-\d{2}$")] = None,
+        limit: Annotated[int, Query(ge=1, le=100)] = 20,
+        conn=Depends(get_conn),
+    ):
+        try:
+            return {
+                "items": list_trade_backtests(
+                    conn,
+                    start_date=start_date,
+                    end_date=end_date,
+                    limit=limit,
+                )
+            }
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    @app.get("/api/review/trade-backtests/{run_id}")
+    def review_trade_backtest_detail(run_id: str, conn=Depends(get_conn)):
+        try:
+            return get_trade_backtest(conn, run_id)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="trade_backtest_not_found") from exc
+
+    @app.get("/api/review/trade-backtest-optimization-presets")
+    def review_trade_backtest_optimization_presets():
+        return get_trade_backtest_optimization_presets()
+
+    @app.post("/api/review/trade-backtest-optimizations")
+    def review_trade_backtest_optimization_run(
+        request: TradeBacktestOptimizationRequest,
+        conn=Depends(get_conn),
+    ):
+        try:
+            return run_trade_backtest_optimization(
+                conn,
+                start_date=request.start_date,
+                end_date=request.end_date,
+                max_position_quantities=request.max_position_quantities,
+                daily_loss_limits=request.daily_loss_limits,
+                objective=request.objective,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    @app.get("/api/review/trade-backtest-optimizations")
+    def review_trade_backtest_optimizations(
+        start_date: Annotated[str | None, Query(pattern=r"^\d{4}-\d{2}-\d{2}$")] = None,
+        end_date: Annotated[str | None, Query(pattern=r"^\d{4}-\d{2}-\d{2}$")] = None,
+        limit: Annotated[int, Query(ge=1, le=100)] = 20,
+        conn=Depends(get_conn),
+    ):
+        try:
+            return {
+                "items": list_trade_backtest_optimizations(
+                    conn,
+                    start_date=start_date,
+                    end_date=end_date,
+                    limit=limit,
+                )
+            }
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    @app.get("/api/review/trade-backtest-optimizations/{run_id}")
+    def review_trade_backtest_optimization_detail(run_id: str, conn=Depends(get_conn)):
+        try:
+            return get_trade_backtest_optimization(conn, run_id)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="trade_backtest_optimization_not_found") from exc
 
     @app.get("/api/trade-groups")
     def trade_groups(

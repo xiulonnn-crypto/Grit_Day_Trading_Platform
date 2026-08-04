@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>交易回测</title>
+  <style>
+    :root { color-scheme: light; font-family: Inter, "Segoe UI", "Microsoft YaHei", sans-serif; color: #172033; background: #f3f6fb; }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 28px; }
+    main { max-width: 1180px; margin: 0 auto; }
+    .tabs { display: inline-grid; grid-template-columns: repeat(4, minmax(104px, 1fr)); gap: 4px; padding: 4px; border: 1px solid #dce3ef; border-radius: 12px; background: #fff; }
+    .tab { padding: 10px 14px; border-radius: 8px; color: #667085; text-align: center; font-size: 14px; font-weight: 650; }
+    .tab.active { color: #155eef; background: #eef4ff; box-shadow: inset 0 0 0 1px #b2ccff; }
+    .panel { margin-top: 16px; padding: 22px; border: 1px solid #dce3ef; border-radius: 16px; background: #fff; box-shadow: 0 10px 30px rgba(31, 42, 68, .06); }
+    header { display: flex; justify-content: space-between; gap: 20px; align-items: flex-start; }
+    h1 { margin: 0; font-size: 22px; }
+    .sub { margin: 7px 0 0; color: #667085; font-size: 14px; }
+    button { border: 0; border-radius: 9px; padding: 11px 16px; background: #155eef; color: #fff; font-weight: 700; white-space: nowrap; }
+    .filters { display: flex; gap: 8px; margin-top: 18px; }
+    .filter { padding: 7px 12px; border: 1px solid #d0d5dd; border-radius: 8px; color: #475467; font-size: 13px; }
+    .filter.active { border-color: #84adff; color: #155eef; background: #f5f8ff; }
+    .rules { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 18px 0; }
+    .rule { padding: 13px; border: 1px solid #e4e7ec; border-radius: 10px; background: #fafbfc; }
+    .rule strong { display: block; margin-bottom: 5px; font-size: 14px; }
+    .rule span { color: #667085; font-size: 12px; line-height: 1.55; }
+    .status { display: flex; justify-content: space-between; padding: 10px 12px; margin-bottom: 12px; border-radius: 9px; background: #f7f9fc; color: #475467; font-size: 12px; }
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td { padding: 12px 10px; border-bottom: 1px solid #eaecf0; text-align: right; white-space: nowrap; }
+    th:first-child, td:first-child { text-align: left; }
+    th { color: #667085; font-size: 12px; font-weight: 650; background: #fafbfc; }
+    .scenario { font-weight: 700; color: #344054; }
+    .positive { color: #067647; font-weight: 700; }
+    .negative { color: #b42318; font-weight: 700; }
+    @media (max-width: 680px) {
+      body { padding: 14px; }
+      .tabs { width: 100%; grid-template-columns: repeat(2, 1fr); }
+      .panel { padding: 16px; }
+      header { display: block; }
+      button { width: 100%; margin-top: 14px; }
+      .rules { grid-template-columns: 1fr; }
+      .status { display: grid; gap: 5px; }
+      table, thead, tbody, tr, th, td { display: block; }
+      thead { display: none; }
+      tr { margin: 10px 0; padding: 13px; border: 1px solid #e4e7ec; border-radius: 10px; }
+      td { display: flex; justify-content: space-between; padding: 6px 0; border: 0; text-align: right; }
+      td::before { content: attr(data-label); color: #667085; font-weight: 500; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <nav class="tabs" aria-label="下钻复盘模块">
+      <span class="tab">数据下钻</span><span class="tab">盈亏复盘</span><span class="tab">交易总结</span><span class="tab active">交易回测</span>
+    </nav>
+    <section class="panel">
+      <header><div><h1>历史交易规则回测</h1><p class="sub">用同一批 committed fills 比较基准与三组交易纪律，不修改成交事实。</p></div><button>运行四组回测</button></header>
+      <div class="filters"><span class="filter active">全部</span><span class="filter">本月</span><span class="filter">本周</span><span class="filter">特定时间段</span></div>
+      <div class="rules"><article class="rule"><strong>规则 A · 200 股上限</strong><span>每轮交易的实时绝对持仓不超过 200 股，平仓后恢复额度。</span></article><article class="rule"><strong>规则 B · 每日亏损控制</strong><span>全账户当日盈亏达到 -1000 USD 后立即清仓，并停止当日开仓；不完整时段隔离后继续。</span></article><article class="rule"><strong>规则 C · 组合规则</strong><span>先限制持仓数量，再按限仓后的组合执行每日亏损控制。</span></article></div>
+      <div class="status"><span>范围：全部历史</span><span>规则库：v5 · 状态：已完成</span></div>
+      <div class="table-wrap"><table><thead><tr><th>场景</th><th>总盈亏</th><th>较基准</th><th>交易轮数</th><th>交易股数</th><th>胜率</th><th>盈亏比</th><th>止损天数</th><th>忽略不完整时段</th></tr></thead><tbody>
+        <tr><td class="scenario" data-label="场景">基准</td><td data-label="总盈亏">-$10,402.42</td><td data-label="较基准">—</td><td data-label="交易轮数">1,634</td><td data-label="交易股数">142,221</td><td data-label="胜率">80.60%</td><td data-label="盈亏比">0.93</td><td data-label="止损天数">0</td><td data-label="忽略不完整时段">2 个日期/标的</td></tr>
+        <tr><td class="scenario" data-label="场景">规则 A · 200 股上限</td><td data-label="总盈亏">-$8,790.01</td><td class="positive" data-label="较基准">+$1,612.41</td><td data-label="交易轮数">1,649</td><td data-label="交易股数">98,789</td><td data-label="胜率">80.05%</td><td data-label="盈亏比">0.92</td><td data-label="止损天数">0</td><td data-label="忽略不完整时段">2 个日期/标的</td></tr>
+        <tr><td class="scenario" data-label="场景">规则 B · 每日亏损控制</td><td data-label="总盈亏">-$2,623.82</td><td class="positive" data-label="较基准">+$7,778.60</td><td data-label="交易轮数">1,094</td><td data-label="交易股数">44,050</td><td data-label="胜率">81.90%</td><td data-label="盈亏比">0.95</td><td data-label="止损天数">20</td><td data-label="忽略不完整时段">2 个日期/标的</td></tr>
+        <tr><td class="scenario" data-label="场景">规则 C · 组合规则</td><td data-label="总盈亏">-$2,632.57</td><td class="positive" data-label="较基准">+$7,769.85</td><td data-label="交易轮数">1,094</td><td data-label="交易股数">43,542</td><td data-label="胜率">81.81%</td><td data-label="盈亏比">0.95</td><td data-label="止损天数">20</td><td data-label="忽略不完整时段">2 个日期/标的</td></tr>
+      </tbody></table></div>
+    </section>
+  </main>
+</body>
+</html>

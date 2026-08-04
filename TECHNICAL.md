@@ -1,5 +1,32 @@
 # Technical Plan
 
+## 当前 P3 切片：交易回测
+
+目标：在本地「交易复盘」的第四个「交易回测」tab 中，除固定基准/A/B/C 对比外，把 A 持仓上限和 B 每日组合亏损线参数化，通过完整组合回测寻找总盈亏最高的候选；不生成策略信号、不自动下单、不修改 P2 策略配置。GitHub Pages 静态快照保持现有三个模块。
+
+范围：
+
+- 存储版本升级到 v11：既有 `trade_backtest_runs` / `trade_backtest_scenario_results` 保留四场景结果，新增 `trade_backtest_optimization_runs` / `trade_backtest_optimization_candidates` 固化来源 run、搜索空间、目标、完整候选、排名、指标、聚合证据和 hash。
+- 四场景合同升级为 `trade_backtest_contract_v5` / `trade_backtest_rule_catalog_v5`，计算算法保持 `trade_backtest_engine_v4`；固定预设为 A=200 股、B=1000 USD、C=A+B。组合优化维持 `trade_backtest_optimization_contract_v1` / `trade_backtest_optimization_engine_v1` 与回退后的 70 组范围，继续提供独立 presets、运行/复用、历史列表和详情 API，并纳入 `/api/healthz` 与 Windows 启动器的陈旧运行时检查。
+- 默认优化搜索空间恢复为 A=`[50,100,150,200,300,500,1000]`、B=`[500,1000,1500,2000,2500,3000,3500,4000,4500,5000]`，共 70 组；自定义输入使用 A 不超过 100000 股、B 不超过 1000000 USD 的安全边界，规范化后去重排序，候选总数仍设 120 上限。`maximize_pnl_v1` 先按总盈亏降序，再按更低 A、更低 B 和参数 hash 稳定破平局。
+- `trade_backtest_engine_v4` 接受每个候选的 A/B 参数，继续负责组合 PnL、分钟级阈值插值、开盘跳空、全部清仓、当日禁开、次日重置，以及覆盖缺口跳过和局部质量异常 target 隔离；不额外模拟佣金或滑点。
+- 本地 UI 复用既有时间筛选。进入 tab 时只 GET 最近结果，点击主操作后才 POST；桌面显示四行对比表，移动端用 CSS 转为四张场景卡，指标只读取 API read model。
+- 四场景设计包位于 `designs/2026-08-03-trade-backtest-tab/`；组合优化设计包位于 `designs/2026-08-03-trade-backtest-optimization/`，均包含 `spec.md`、`spec.html`、`spec.png` 和 `trace-matrix.md`。本切片沿用现有复盘设计系统，不新增全局 `DESIGN.md`。
+
+事实源矩阵：
+
+| 层次 | 来源/产物 | 约束 |
+| --- | --- | --- |
+| Canonical source | 去重后的 committed fills | 只读，不修改订单、成交或 Trade Groups |
+| Market artifact source | `market_minute_archives` 的结构/hash、质量投影及覆盖状态 | 只读；覆盖缺口跳过、局部质量异常 target 隔离并留证，不在回测中拉行情 |
+| Read model | 四场景 API 与优化 best/matrix/Top 10 | 前端不计算指标、排名或色阶 |
+| Artifact source | 四场景与优化 run/candidate 四张表 | 版本化、hash 化、保留完整候选历史 |
+| Idempotency key | 日期范围、规则/优化引擎/目标版本、精确来源 run、成交/归档/参数空间 hash | 相同证据复用，任一来源或搜索空间变化新建 |
+
+Owner files：后端合同与引擎为 `storage.py`、`trade_backtest.py`、`api.py`；前端 read model 为 `types.ts`、`api.ts`、`App.tsx`、`styles.css`；focused test owner slice 为 trade-backtest/storage/API、review frontend 和 launcher contract 测试。
+
+负向路径：日期范围非法返回 422，run 不存在返回 404；优化参数为空、非正数、A 非整数、A 超过 100000、B 超过 1000000 或组合超过 120 返回 422；缺失、provider 不可用或 hash/JSON 无效归档不得让规则 B/C 或组合优化成功；结构/hash 有效但覆盖不足时跳过缺失分钟，局部质量异常时隔离整个日期/标的，继续运行并令最差日内组合 PnL 为 N/A；跨日持仓和未闭合轮次返回明确不支持状态且优化不生成最佳值。parser version 与 field mapper version 不变，但来源版本集合随四场景和优化 run 保存。
+
 ## 当前 P3 切片：GitHub Pages 交易复盘一致性
 
 目标：把本地交易复盘的「数据下钻」「盈亏复盘」「交易总结」同步到 GitHub Pages 根入口，保留三模块切换、月份/日期选择和本地样式语义，同时严格保持公开页面只读和证据脱敏。

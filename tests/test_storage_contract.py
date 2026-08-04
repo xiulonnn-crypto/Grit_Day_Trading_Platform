@@ -23,6 +23,8 @@ def test_storage_contract_creates_required_indexes_triggers_and_migration_marker
             7: "p2_strategy_config_history_rollback_contract_v7",
             8: "p3_trade_review_journal_contract_v8",
             9: "p3_trade_summary_generation_contract_v9",
+            10: "p3_trade_backtest_contract_v10",
+            11: "p3_trade_backtest_optimization_contract_v11",
         }
         assert migration["description"] == expected_current_migrations[STORAGE_SCHEMA_VERSION]
         p0_migration = conn.execute("SELECT description FROM storage_migrations WHERE version = 1").fetchone()
@@ -53,6 +55,14 @@ def test_storage_contract_creates_required_indexes_triggers_and_migration_marker
         if STORAGE_SCHEMA_VERSION >= 9:
             trade_summary_migration = conn.execute("SELECT description FROM storage_migrations WHERE version = 9").fetchone()
             assert trade_summary_migration["description"] == "p3_trade_summary_generation_contract_v9"
+        if STORAGE_SCHEMA_VERSION >= 10:
+            trade_backtest_migration = conn.execute("SELECT description FROM storage_migrations WHERE version = 10").fetchone()
+            assert trade_backtest_migration["description"] == "p3_trade_backtest_contract_v10"
+        if STORAGE_SCHEMA_VERSION >= 11:
+            trade_backtest_optimization_migration = conn.execute(
+                "SELECT description FROM storage_migrations WHERE version = 11"
+            ).fetchone()
+            assert trade_backtest_optimization_migration["description"] == "p3_trade_backtest_optimization_contract_v11"
         assert {
             "ux_import_batches_file_hash",
             "ux_import_rows_batch_line_hash",
@@ -95,6 +105,14 @@ def test_storage_contract_creates_required_indexes_triggers_and_migration_marker
             "ux_trade_summary_generations_idempotency",
             "ix_trade_summary_generations_summary",
             "ix_trade_summary_generations_scope",
+            "ux_trade_backtest_runs_idempotency",
+            "ix_trade_backtest_runs_scope",
+            "ux_trade_backtest_scenarios_run_key",
+            "ix_trade_backtest_scenarios_run",
+            "ux_trade_backtest_optimization_runs_idempotency",
+            "ix_trade_backtest_optimization_runs_scope",
+            "ux_trade_backtest_optimization_candidates_params",
+            "ix_trade_backtest_optimization_candidates_rank",
         }.issubset(
             _index_names(conn, "market_context_snapshots")
             | _index_names(conn, "market_minute_archives")
@@ -111,6 +129,10 @@ def test_storage_contract_creates_required_indexes_triggers_and_migration_marker
             | _index_names(conn, "strategy_config_history")
             | _index_names(conn, "trade_reviews")
             | _index_names(conn, "trade_summary_generations")
+            | _index_names(conn, "trade_backtest_runs")
+            | _index_names(conn, "trade_backtest_scenario_results")
+            | _index_names(conn, "trade_backtest_optimization_runs")
+            | _index_names(conn, "trade_backtest_optimization_candidates")
         )
         assert "params_json" in _column_names(conn, "strategy_signal_runs")
         assert {"previous_params_json", "next_params_json", "source_history_id"}.issubset(
@@ -142,6 +164,49 @@ def test_storage_contract_creates_required_indexes_triggers_and_migration_marker
             "parser_versions_json",
             "field_mapper_versions_json",
         }.issubset(_column_names(conn, "trade_summary_generations"))
+        assert {
+            "rule_catalog_version",
+            "engine_version",
+            "source_fill_hash",
+            "source_manifest_json",
+            "archive_scope_hash",
+            "parser_versions_json",
+            "field_mapper_versions_json",
+            "idempotency_key",
+        }.issubset(_column_names(conn, "trade_backtest_runs"))
+        assert {
+            "run_id",
+            "scenario_key",
+            "preset_version",
+            "params_hash",
+            "metrics_json",
+            "evidence_json",
+            "result_hash",
+        }.issubset(_column_names(conn, "trade_backtest_scenario_results"))
+        assert {
+            "source_trade_backtest_run_id",
+            "objective_version",
+            "optimization_engine_version",
+            "parameter_space_hash",
+            "requested_candidate_count",
+            "best_candidate_id",
+            "source_fill_hash",
+            "archive_scope_hash",
+            "candidate_manifest_json",
+            "parser_versions_json",
+            "field_mapper_versions_json",
+            "idempotency_key",
+        }.issubset(_column_names(conn, "trade_backtest_optimization_runs"))
+        assert {
+            "optimization_run_id",
+            "rank",
+            "max_position_quantity",
+            "daily_loss_limit",
+            "params_hash",
+            "metrics_json",
+            "evidence_json",
+            "result_hash",
+        }.issubset(_column_names(conn, "trade_backtest_optimization_candidates"))
         conn.execute(
             """
             INSERT INTO strategy_configs (

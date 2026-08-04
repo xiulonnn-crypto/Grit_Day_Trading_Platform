@@ -316,7 +316,7 @@ def test_loss_trade_review_action_and_reason_catalog_are_visible():
 
 
 def test_profit_loss_review_drill_tab_reads_profit_and_loss_trade_groups():
-    assert 'type ReviewDrillSurfaceTab = "data" | "loss" | "summary";' in APP_SOURCE
+    assert 'type ReviewDrillSurfaceTab = "data" | "loss" | "summary" | "backtest";' in APP_SOURCE
     assert 'const [activeReviewDrillSurfaceTab, setActiveReviewDrillSurfaceTab] = useState<ReviewDrillSurfaceTab>("data")' in APP_SOURCE
     assert "const [allTradeGroups, setAllTradeGroups] = useState<TradeGroup[]>([])" in APP_SOURCE
     assert "fetchTradeGroups(undefined, undefined, { ...requestOptions, includeDetails: false })" in APP_SOURCE
@@ -380,6 +380,59 @@ def test_profit_loss_review_drill_tab_reads_profit_and_loss_trade_groups():
     assert ".lossReviewTradeItem" in STYLES_SOURCE
     assert "date?: string" in API_SOURCE
     assert 'if (date) params.set("date", date);' in API_SOURCE
+
+
+def test_trade_backtest_is_fourth_read_model_tab_with_responsive_api_only_results():
+    assert 'setActiveReviewDrillSurfaceTab("backtest")' in APP_SOURCE
+    assert "交易回测" in APP_SOURCE
+    assert "function TradeBacktestPanel" in APP_SOURCE
+    assert "function TradeBacktestScenarioRow" in APP_SOURCE
+    assert "fetchTradeBacktestPresets" in API_SOURCE
+    assert "fetchTradeBacktests" in API_SOURCE
+    assert "runTradeBacktest" in API_SOURCE
+    assert 'readGetJson<TradeBacktestPresetCatalog>("/api/review/trade-backtest-presets"' in API_SOURCE
+    assert '`/api/review/trade-backtests?${search.toString()}`' in API_SOURCE
+    assert 'fetch("/api/review/trade-backtests", {' in API_SOURCE
+    assert "fetchTradeBacktestPresets({ signal: controller.signal })" in APP_SOURCE
+    assert "fetchTradeBacktests(timeRange.startDate ?? undefined, timeRange.endDate ?? undefined" in APP_SOURCE
+    assert "await runTradeBacktest(timeRange.startDate ?? undefined, timeRange.endDate ?? undefined)" in APP_SOURCE
+    assert "metrics.delta_vs_baseline" in APP_SOURCE
+    assert "metrics.worst_intraday_pnl" in APP_SOURCE
+    assert "metrics.capped_open_quantity" in APP_SOURCE
+    assert "metrics.forced_exit_count" in APP_SOURCE
+    assert "metrics.blocked_open_quantity" in APP_SOURCE
+    assert "metrics.ignored_incomplete_archive_target_count" in APP_SOURCE
+    assert "忽略不完整时段" in APP_SOURCE
+    assert "tradeBacktestScenarioStatusMeta" in APP_SOURCE
+    assert "function tradeBacktestScenarioDetail" in APP_SOURCE
+    assert "scenario.evidence.failed_archive_target" in APP_SOURCE
+    assert ".tradeBacktestTable" in STYLES_SOURCE
+    assert ".tradeBacktestRules" in STYLES_SOURCE
+    assert "grid-template-columns: repeat(2, minmax(0, 1fr));" in STYLES_SOURCE
+    assert "content: attr(data-label);" in STYLES_SOURCE
+    assert "function TradeBacktestOptimizationWorkbench" in APP_SOURCE
+    assert "function TradeBacktestOptimizationMatrixCell" in APP_SOURCE
+    assert "fetchTradeBacktestOptimizationPresets" in API_SOURCE
+    assert "fetchTradeBacktestOptimizations" in API_SOURCE
+    assert "runTradeBacktestOptimization" in API_SOURCE
+    assert '"/api/review/trade-backtest-optimization-presets"' in API_SOURCE
+    assert '`/api/review/trade-backtest-optimizations?${search.toString()}`' in API_SOURCE
+    assert 'fetch("/api/review/trade-backtest-optimizations", {' in API_SOURCE
+    assert "best_candidate" in APP_SOURCE
+    assert "run.matrix.map" in APP_SOURCE
+    assert "run.top_candidates.map" in APP_SOURCE
+    assert "cell.tone" in APP_SOURCE
+    assert "不自动套用" in APP_SOURCE
+    assert "单轮单边持仓上限不得超过" in APP_SOURCE
+    assert "每日组合亏损线不得超过" in APP_SOURCE
+    assert "已实现与浮动盈亏触线即清仓并停止当日开仓" in APP_SOURCE
+    assert "item.optimization_engine_version === nextCatalog.optimization_engine_version" in APP_SOURCE
+    assert 'placeholder="50, 100, 150, 200, 300, 500, 1000"' in APP_SOURCE
+    assert 'placeholder="500, 1000, 1500, 2000, 2500, 3000, 3500, 4000, 4500, 5000"' in APP_SOURCE
+    assert ".tradeBacktestOptimizationControls" in STYLES_SOURCE
+    assert ".tradeBacktestBest" in STYLES_SOURCE
+    assert ".tradeBacktestMatrixCell.best" in STYLES_SOURCE
+    assert ".tradeBacktestRankingTable" in STYLES_SOURCE
 
 
 def test_trade_summary_third_tab_uses_shared_scope_session_summary_and_executable_rules():

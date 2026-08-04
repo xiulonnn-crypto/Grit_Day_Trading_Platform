@@ -697,6 +697,446 @@ th .metricHelp {
   min-width: 0;
 }
 
+.tradeBacktestPanel {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+
+.tradeBacktestHeader {
+  align-items: flex-start;
+  display: flex;
+  gap: 14px;
+  justify-content: space-between;
+}
+
+.tradeBacktestHeader h2 {
+  align-items: center;
+  color: #1f2933;
+  display: flex;
+  font-size: 18px;
+  gap: 7px;
+  margin: 0;
+}
+
+.tradeBacktestHeader .primaryButton {
+  flex: 0 0 auto;
+}
+
+.tradeBacktestRules {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.tradeBacktestRules article {
+  background: #fbfcfd;
+  border: 1px solid #dce3e8;
+  border-radius: 8px;
+  min-width: 0;
+  padding: 12px;
+}
+
+.tradeBacktestRules strong {
+  color: #1f2933;
+  display: block;
+  font-size: 13px;
+}
+
+.tradeBacktestRules p,
+.tradeBacktestScenarioName small {
+  color: #607080;
+  font-size: 11px;
+  line-height: 1.5;
+  margin: 5px 0 0;
+}
+
+.tradeBacktestLoading {
+  align-items: center;
+  color: #405160;
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  min-height: 180px;
+}
+
+.tradeBacktestRunMeta {
+  align-items: center;
+  background: #f8fafb;
+  border: 1px solid #e3e9ed;
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) auto;
+  padding: 10px;
+}
+
+.tradeBacktestRunMeta > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.tradeBacktestRunMeta span:not(.statusPill) {
+  color: #607080;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.tradeBacktestRunMeta strong {
+  color: #273848;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.tradeBacktestWarning {
+  align-items: center;
+  background: #fffaf0;
+  border: 1px solid #ecd9a3;
+  border-radius: 8px;
+  color: #775a12;
+  display: flex;
+  font-size: 12px;
+  gap: 8px;
+  padding: 10px 12px;
+}
+
+.tradeBacktestTableWrap {
+  border: 1px solid #dce3e8;
+  border-radius: 8px;
+}
+
+.tradeBacktestTable {
+  min-width: 1640px;
+}
+
+.tradeBacktestTable th,
+.tradeBacktestTable td {
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.tradeBacktestTable th:first-child,
+.tradeBacktestTable td:first-child {
+  min-width: 220px;
+  position: sticky;
+  left: 0;
+  z-index: 1;
+}
+
+.tradeBacktestTable th:first-child {
+  background: #eef3f4;
+}
+
+.tradeBacktestTable td:first-child {
+  background: #ffffff;
+}
+
+.tradeBacktestTable .tradeBacktestScenarioName {
+  white-space: normal;
+}
+
+.tradeBacktestScenarioName strong,
+.tradeBacktestScenarioName small {
+  display: block;
+}
+
+.tradeBacktestOptimization {
+  background: #f9fbfb;
+  border: 1px solid #cfdedd;
+  border-radius: 10px;
+  display: grid;
+  gap: 14px;
+  margin-top: 4px;
+  min-width: 0;
+  padding: 14px;
+}
+
+.tradeBacktestOptimizationHeader,
+.tradeBacktestMatrixSection > header,
+.tradeBacktestRankingSection > header {
+  align-items: flex-start;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.tradeBacktestOptimizationEyebrow {
+  align-items: center;
+  color: #1f6f67;
+  display: inline-flex;
+  font-size: 11px;
+  font-weight: 900;
+  gap: 5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.tradeBacktestOptimizationHeader h3,
+.tradeBacktestMatrixSection h4,
+.tradeBacktestRankingSection h4 {
+  color: #1f2933;
+  font-size: 16px;
+  margin: 5px 0 0;
+}
+
+.tradeBacktestOptimizationHeader p,
+.tradeBacktestMatrixSection header p,
+.tradeBacktestRankingSection header p {
+  color: #607080;
+  font-size: 12px;
+  line-height: 1.5;
+  margin: 4px 0 0;
+}
+
+.tradeBacktestOptimizationControls {
+  align-items: stretch;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(240px, 1fr) minmax(240px, 1fr) minmax(170px, 0.52fr);
+}
+
+.tradeBacktestOptimizationControls label,
+.tradeBacktestOptimizationAction {
+  background: #ffffff;
+  border: 1px solid #dce3e8;
+  border-radius: 8px;
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  padding: 11px;
+}
+
+.tradeBacktestOptimizationControls label > span,
+.tradeBacktestOptimizationAction > span {
+  color: #344658;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.tradeBacktestOptimizationControls input {
+  background: #ffffff;
+  border: 1px solid #c8d1d9;
+  border-radius: 7px;
+  color: #1f2933;
+  font: inherit;
+  min-height: 38px;
+  min-width: 0;
+  padding: 8px 9px;
+  width: 100%;
+}
+
+.tradeBacktestOptimizationControls small,
+.tradeBacktestOptimizationScope {
+  color: #607080;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.tradeBacktestOptimizationAction {
+  align-content: space-between;
+}
+
+.tradeBacktestOptimizationAction strong {
+  color: #1f6f67;
+  font-size: 14px;
+}
+
+.tradeBacktestOptimizationAction .primaryButton {
+  justify-content: center;
+  width: 100%;
+}
+
+.tradeBacktestOptimizationScope {
+  margin: -4px 0 0;
+}
+
+.tradeBacktestOptimizationLoading,
+.tradeBacktestOptimizationEmpty {
+  align-items: center;
+  background: #ffffff;
+  border: 1px dashed #cbd7dc;
+  border-radius: 8px;
+  color: #405160;
+  display: flex;
+  gap: 9px;
+  justify-content: center;
+  min-height: 92px;
+  padding: 14px;
+}
+
+.tradeBacktestOptimizationEmpty > div {
+  display: grid;
+  gap: 3px;
+}
+
+.tradeBacktestOptimizationEmpty span {
+  color: #607080;
+  font-size: 12px;
+}
+
+.tradeBacktestOptimizationEmpty.danger {
+  background: #fffafa;
+  border-color: #eccaca;
+  color: #a8071a;
+}
+
+.tradeBacktestOptimizationMeta {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+}
+
+.tradeBacktestOptimizationMeta > span:not(.statusPill) {
+  color: #607080;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.tradeBacktestBest {
+  background: linear-gradient(135deg, #edf8f5 0%, #ffffff 100%);
+  border: 1px solid #b9ddd5;
+  border-radius: 9px;
+  display: grid;
+  gap: 14px;
+  grid-template-columns: minmax(190px, 0.5fr) minmax(0, 1.5fr);
+  padding: 13px;
+}
+
+.tradeBacktestBestLead {
+  border-right: 1px solid #cfe4df;
+  display: grid;
+  gap: 4px;
+  padding-right: 14px;
+}
+
+.tradeBacktestBestLead span,
+.tradeBacktestBest dt {
+  color: #607080;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.tradeBacktestBestLead strong {
+  color: #145c55;
+  font-size: 18px;
+}
+
+.tradeBacktestBestLead small {
+  color: #607080;
+  font-size: 11px;
+}
+
+.tradeBacktestBest dl {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 0;
+}
+
+.tradeBacktestBest dl > div {
+  background: rgba(255, 255, 255, 0.82);
+  border: 1px solid #dbe9e6;
+  border-radius: 7px;
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 8px;
+}
+
+.tradeBacktestBest dd {
+  color: #1f2933;
+  font-size: 14px;
+  font-weight: 900;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.tradeBacktestMatrixSection,
+.tradeBacktestRankingSection {
+  display: grid;
+  gap: 9px;
+  min-width: 0;
+}
+
+.tradeBacktestMatrixWrap {
+  border: 1px solid #dce3e8;
+  border-radius: 8px;
+}
+
+.tradeBacktestMatrix {
+  min-width: 780px;
+  table-layout: auto;
+}
+
+.tradeBacktestMatrix th,
+.tradeBacktestMatrix td {
+  min-width: 92px;
+  padding: 8px;
+  text-align: center;
+}
+
+.tradeBacktestMatrix th:first-child {
+  background: #eef3f4;
+  left: 0;
+  min-width: 110px;
+  position: sticky;
+  z-index: 1;
+}
+
+.tradeBacktestMatrixCell strong,
+.tradeBacktestMatrixCell small {
+  display: block;
+}
+
+.tradeBacktestMatrixCell strong {
+  font-size: 12px;
+}
+
+.tradeBacktestMatrixCell small {
+  font-size: 10px;
+  margin-top: 2px;
+  opacity: 0.72;
+}
+
+.tradeBacktestMatrixCell.best {
+  background: #d9f1e9;
+  color: #145c55;
+  box-shadow: inset 0 0 0 2px #2f8d80;
+}
+
+.tradeBacktestMatrixCell.strong {
+  background: #edf8f5;
+  color: #1f6f67;
+}
+
+.tradeBacktestMatrixCell.neutral {
+  background: #fffdf5;
+  color: #775a12;
+}
+
+.tradeBacktestMatrixCell.weak,
+.tradeBacktestMatrixCell.unavailable {
+  background: #fff3f1;
+  color: #9b3d35;
+}
+
+.tradeBacktestRankingSection .tableWrap {
+  border: 1px solid #dce3e8;
+  border-radius: 8px;
+}
+
+.tradeBacktestRankingTable {
+  min-width: 940px;
+}
+
+.tradeBacktestRankingTable th,
+.tradeBacktestRankingTable td {
+  font-size: 11px;
+  white-space: nowrap;
+}
+
 .tradeSummaryLoading {
   align-items: center;
   color: #405160;
@@ -6242,8 +6682,180 @@ th:nth-child(8) {
   .reviewDrillSurfaceTabs {
     align-items: stretch;
     display: grid;
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     width: 100%;
+  }
+
+  .tradeBacktestHeader {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .tradeBacktestHeader .primaryButton,
+  .tradeBacktestHeader > div {
+    width: 100%;
+  }
+
+  .tradeBacktestRules,
+  .tradeBacktestRunMeta {
+    grid-template-columns: 1fr;
+  }
+
+  .tradeBacktestRunMeta > .statusPill {
+    width: fit-content;
+  }
+
+  .tradeBacktestTableWrap.tableWrap {
+    overflow-x: clip;
+  }
+
+  .tradeBacktestTable,
+  .tradeBacktestTable tbody {
+    display: block;
+    min-width: 0;
+    width: 100%;
+  }
+
+  .tradeBacktestTable thead {
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    height: 1px;
+    overflow: hidden;
+    position: absolute;
+    white-space: nowrap;
+    width: 1px;
+  }
+
+  .tradeBacktestTable tbody {
+    display: grid;
+    gap: 10px;
+    padding: 10px;
+  }
+
+  .tradeBacktestTable tr {
+    border: 1px solid #e1e8ec;
+    border-radius: 8px;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    overflow: hidden;
+    padding: 5px;
+  }
+
+  .tradeBacktestTable td,
+  .tradeBacktestTable td:first-child {
+    background: transparent;
+    border-bottom: 0;
+    display: grid;
+    gap: 3px;
+    left: auto;
+    min-width: 0;
+    overflow-wrap: anywhere;
+    padding: 7px;
+    position: static;
+    white-space: normal;
+  }
+
+  .tradeBacktestTable td::before {
+    color: #607080;
+    content: attr(data-label);
+    font-size: 10px;
+    font-weight: 700;
+  }
+
+  .tradeBacktestTable td:first-child {
+    background: #f6f9fa;
+    border-bottom: 1px solid #e1e8ec;
+    grid-column: 1 / -1;
+  }
+
+  .tradeBacktestOptimization {
+    padding: 11px;
+  }
+
+  .tradeBacktestOptimizationHeader {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .tradeBacktestOptimizationControls,
+  .tradeBacktestBest {
+    grid-template-columns: 1fr;
+  }
+
+  .tradeBacktestBestLead {
+    border-bottom: 1px solid #cfe4df;
+    border-right: 0;
+    padding-bottom: 10px;
+    padding-right: 0;
+  }
+
+  .tradeBacktestBest dl {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .tradeBacktestOptimizationMeta {
+    align-items: flex-start;
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .tradeBacktestMatrixWrap,
+  .tradeBacktestRankingSection .tableWrap {
+    max-width: 100%;
+    overflow-x: auto;
+  }
+
+  .tradeBacktestRankingSection .tableWrap {
+    overflow-x: clip;
+  }
+
+  .tradeBacktestRankingTable,
+  .tradeBacktestRankingTable tbody {
+    display: block;
+    min-width: 0;
+    width: 100%;
+  }
+
+  .tradeBacktestRankingTable thead {
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    height: 1px;
+    overflow: hidden;
+    position: absolute;
+    white-space: nowrap;
+    width: 1px;
+  }
+
+  .tradeBacktestRankingTable tbody {
+    display: grid;
+    gap: 8px;
+    padding: 8px;
+  }
+
+  .tradeBacktestRankingTable tr {
+    border: 1px solid #e1e8ec;
+    border-radius: 8px;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    overflow: hidden;
+    padding: 5px;
+  }
+
+  .tradeBacktestRankingTable td {
+    border-bottom: 0;
+    display: grid;
+    gap: 3px;
+    min-width: 0;
+    overflow-wrap: anywhere;
+    padding: 7px;
+    white-space: normal;
+  }
+
+  .tradeBacktestRankingTable td::before {
+    color: #607080;
+    content: attr(data-label);
+    font-size: 10px;
+    font-weight: 700;
   }
 
   .dataReviewCalendarHeaderActions,

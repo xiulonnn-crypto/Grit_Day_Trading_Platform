@@ -46,6 +46,10 @@ import {
   fetchQuarantine,
   fetchReviewSummary,
   fetchReviewSummaryGroups,
+  fetchTradeBacktestPresets,
+  fetchTradeBacktestOptimizationPresets,
+  fetchTradeBacktestOptimizations,
+  fetchTradeBacktests,
   fetchTradeSummary,
   fetchStrategies,
   fetchStrategyHistory,
@@ -59,6 +63,8 @@ import {
   fetchWatchlist,
   generateWatchlist,
   runLiveStrategySignal,
+  runTradeBacktest,
+  runTradeBacktestOptimization,
   runStrategyOptimization,
   runStrategyReplay,
   runStrategyTestBatch,
@@ -94,6 +100,13 @@ import type {
   StrategyTemplate,
   TradeGroup,
   TradeGroupFill,
+  TradeBacktestMetrics,
+  TradeBacktestOptimizationCandidate,
+  TradeBacktestOptimizationPresetCatalog,
+  TradeBacktestOptimizationRun,
+  TradeBacktestPresetCatalog,
+  TradeBacktestRun,
+  TradeBacktestScenarioResult,
   TradeEvaluationRecommendation,
   TradeReviewReasonCategory,
   TradeSummary,
@@ -429,7 +442,7 @@ function clearWorkspaceLaunchMarker() {
 }
 
 type LiveProvider = "futu" | "yahoo" | "fake";
-type ReviewDrillSurfaceTab = "data" | "loss" | "summary";
+type ReviewDrillSurfaceTab = "data" | "loss" | "summary" | "backtest";
 type StrategyFeedbackTone = "info" | "ok" | "warn" | "danger";
 type StrategyRunFeedback = {
   tone: StrategyFeedbackTone;
@@ -2944,6 +2957,17 @@ export default function App() {
             <ListChecks size={15} />
             交易总结
           </button>
+          <button
+            aria-pressed={activeReviewDrillSurfaceTab === "backtest"}
+            className={
+              activeReviewDrillSurfaceTab === "backtest" ? "reviewDrillSurfaceTab active" : "reviewDrillSurfaceTab"
+            }
+            onClick={() => setActiveReviewDrillSurfaceTab("backtest")}
+            type="button"
+          >
+            <Activity size={15} />
+            交易回测
+          </button>
         </div>
         {activeReviewDrillSurfaceTab === "data" ? (
           <>
@@ -3058,8 +3082,17 @@ export default function App() {
             timeFilterMode={profitLossReviewTimeFilterMode}
             tradeGroups={profitLossReviewTradeGroups}
           />
-        ) : (
+        ) : activeReviewDrillSurfaceTab === "summary" ? (
           <TradeSummaryPanel
+            customEndDate={customProfitLossReviewEndDate}
+            customStartDate={customProfitLossReviewStartDate}
+            setCustomEndDate={setCustomProfitLossReviewEndDate}
+            setCustomStartDate={setCustomProfitLossReviewStartDate}
+            setTimeFilterMode={setProfitLossReviewTimeFilterMode}
+            timeFilterMode={profitLossReviewTimeFilterMode}
+          />
+        ) : (
+          <TradeBacktestPanel
             customEndDate={customProfitLossReviewEndDate}
             customStartDate={customProfitLossReviewStartDate}
             setCustomEndDate={setCustomProfitLossReviewEndDate}
@@ -8568,6 +8601,443 @@ function LossReviewDrilldown(props: {
       )}
     </div>
   );
+}
+
+const tradeBacktestScenarioStatusMeta: Record<
+  TradeBacktestScenarioResult["status"],
+  { label: string; detail: string; tone: "info" | "ok" | "warn" | "danger" }
+> = {
+  completed: { label: "已完成", detail: "场景结果已由后端回测引擎生成。", tone: "ok" },
+  no_trades: { label: "暂无交易", detail: "当前范围没有可结算的闭合交易。", tone: "info" },
+  missing_archive: { label: "缺少分钟线", detail: "当前范围缺少每日亏损控制所需的分钟线归档。", tone: "danger" },
+  non_available_archive: { label: "分钟线不可用", detail: "归档存在，但状态不允许用于实时盈亏检查。", tone: "danger" },
+  invalid_archive: { label: "分钟线证据无效", detail: "归档 hash、数量或质量校验未通过。", tone: "danger" },
+  insufficient_archive_coverage: { label: "分钟线覆盖不足", detail: "分钟线没有完整覆盖持仓窗口。", tone: "danger" },
+  unsupported_cross_day_position: { label: "暂不支持跨日仓位", detail: "交易回测首版只处理日内闭合仓位。", tone: "warn" },
+  open_trade_group: { label: "存在未闭合交易", detail: "当前范围含未闭合交易，四组场景均不会输出伪成功结果。", tone: "warn" },
+  failed: { label: "回测失败", detail: "执行引擎未生成可用场景结果。", tone: "danger" }
+};
+
+function TradeBacktestPanel(props: {
+  customEndDate: string;
+  customStartDate: string;
+  setCustomEndDate: (value: string) => void;
+  setCustomStartDate: (value: string) => void;
+  setTimeFilterMode: (value: LossReviewTimeFilterMode) => void;
+  timeFilterMode: LossReviewTimeFilterMode;
+}) {
+  const todayDateKey = useMemo(() => dateKeyFromDate(new Date()), []);
+  const [catalog, setCatalog] = useState<TradeBacktestPresetCatalog | null>(null);
+  const [run, setRun] = useState<TradeBacktestRun | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [running, setRunning] = useState(false);
+  const [backtestError, setBacktestError] = useState<string | null>(null);
+  const timeRange = useMemo(
+    () => lossReviewTimeFilterRange(props.timeFilterMode, props.customStartDate, props.customEndDate, todayDateKey),
+    [props.customEndDate, props.customStartDate, props.timeFilterMode, todayDateKey]
+  );
+  const rangeLabel = lossReviewTimeRangeLabel(timeRange.startDate, timeRange.endDate, "全部闭合交易");
+
+  useEffect(() => {
+    const controller = new AbortController();
+    setLoading(true);
+    setRun(null);
+    setBacktestError(null);
+    void Promise.all([
+      fetchTradeBacktestPresets({ signal: controller.signal }),
+      fetchTradeBacktests(timeRange.startDate ?? undefined, timeRange.endDate ?? undefined, {
+        signal: controller.signal
+      })
+    ])
+      .then(([nextCatalog, runs]) => {
+        setCatalog(nextCatalog);
+        setRun(
+          runs.find(
+            (item) => item.start_date === timeRange.startDate && item.end_date === timeRange.endDate
+          ) ?? null
+        );
+      })
+      .catch((error: unknown) => {
+        if (error instanceof DOMException && error.name === "AbortError") return;
+        setBacktestError(error instanceof Error ? error.message : "交易回测读取失败，请稍后重试。");
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
+      });
+    return () => controller.abort();
+  }, [timeRange.endDate, timeRange.startDate]);
+
+  async function onRunBacktest() {
+    setRunning(true);
+    setBacktestError(null);
+    try {
+      const result = await runTradeBacktest(timeRange.startDate ?? undefined, timeRange.endDate ?? undefined);
+      setRun(result);
+    } catch (error) {
+      setBacktestError(error instanceof Error ? error.message : "交易回测运行失败，请稍后重试。");
+    } finally {
+      setRunning(false);
+    }
+  }
+
+  return (
+    <div className="tradeBacktestPanel">
+      <header className="tradeBacktestHeader">
+        <div>
+          <h2><Activity size={18} />历史交易规则回测</h2>
+          <p className="panelNote">用同一批 committed fills 比较基准与三组交易纪律，不修改成交事实</p>
+        </div>
+        <button className="primaryButton" disabled={loading || running || !catalog} onClick={() => void onRunBacktest()} type="button">
+          <Play size={15} />
+          {running ? "回测运行中…" : "运行四组回测"}
+        </button>
+      </header>
+
+      <ReviewSharedTimeFilter
+        ariaLabel="交易回测共享日期筛选"
+        customEndDate={props.customEndDate}
+        customStartDate={props.customStartDate}
+        rangeLabel={rangeLabel}
+        setCustomEndDate={props.setCustomEndDate}
+        setCustomStartDate={props.setCustomStartDate}
+        setTimeFilterMode={props.setTimeFilterMode}
+        timeFilterMode={props.timeFilterMode}
+      />
+
+      {catalog ? (
+        <section className="tradeBacktestRules" aria-label="交易回测规则预设">
+          {catalog.items.filter((item) => item.scenario_key !== "baseline").map((preset) => (
+            <article key={preset.scenario_key}>
+              <strong>{preset.label}</strong>
+              <p>{preset.description}</p>
+            </article>
+          ))}
+        </section>
+      ) : null}
+
+      {loading ? (
+        <div className="tradeBacktestLoading" aria-live="polite"><RefreshCw className="spin" size={18} /><strong>正在读取当前范围的回测记录</strong></div>
+      ) : backtestError && !run ? (
+        <EmptyState detail={backtestError} icon={<AlertTriangle size={18} />} title="交易回测不可用" />
+      ) : !run ? (
+        <EmptyState detail="点击“运行四组回测”后，系统会保存并展示基准、规则 A、规则 B 和规则 C 的汇总结果。" icon={<Activity size={18} />} title="当前范围尚无回测结果" />
+      ) : (
+        <>
+          <section className="tradeBacktestRunMeta" aria-label="交易回测运行状态" aria-live="polite">
+            <div><span>范围</span><strong>{rangeLabel}</strong></div>
+            <div><span>规则库</span><strong>{run.rule_catalog_version}</strong></div>
+            <div><span>来源成交</span><strong>{formatInteger(run.source_fill_count)} 笔</strong></div>
+            <div><span>生成时间</span><strong>{formatDateTime(run.created_at)}</strong></div>
+            <span className={`statusPill ${run.status === "completed" ? "ok" : run.status === "partial_failed" ? "warn" : "danger"}`}>
+              {run.status === "completed" ? "四组已完成" : run.status === "partial_failed" ? "部分规则不可用" : "运行失败"}
+            </span>
+          </section>
+          {backtestError ? <p className="formError">{backtestError}</p> : null}
+          {run.status === "partial_failed" ? (
+            <div className="tradeBacktestWarning"><AlertTriangle size={16} /><span>部分规则缺少可用分钟线证据；成功场景仍保留，失败场景不会显示伪造指标。</span></div>
+          ) : null}
+          <div className="tableWrap tradeBacktestTableWrap">
+            <table className="tradeBacktestTable">
+              <thead><tr>
+                <th>场景</th><th>状态</th><th>总盈亏</th><th>较基准</th><th>交易轮数</th><th>交易股数</th>
+                <th>胜率</th><th>盈亏比</th><th>单笔期望</th><th>每股净收益</th><th>最差日内盈亏</th>
+                <th>限仓忽略股数</th><th>强制清仓</th><th>止损天数</th><th>止损后拦截</th><th>忽略不完整时段</th>
+              </tr></thead>
+              <tbody>{run.scenarios.map((scenario) => <TradeBacktestScenarioRow key={scenario.scenario_key} scenario={scenario} />)}</tbody>
+            </table>
+          </div>
+        </>
+      )}
+      <TradeBacktestOptimizationWorkbench
+        endDate={timeRange.endDate ?? undefined}
+        rangeLabel={rangeLabel}
+        startDate={timeRange.startDate ?? undefined}
+      />
+    </div>
+  );
+}
+
+function TradeBacktestOptimizationWorkbench(props: {
+  endDate?: string;
+  rangeLabel: string;
+  startDate?: string;
+}) {
+  const [catalog, setCatalog] = useState<TradeBacktestOptimizationPresetCatalog | null>(null);
+  const [run, setRun] = useState<TradeBacktestOptimizationRun | null>(null);
+  const [positionValues, setPositionValues] = useState("");
+  const [lossValues, setLossValues] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [running, setRunning] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    setLoading(true);
+    setRun(null);
+    setError(null);
+    void Promise.all([
+      fetchTradeBacktestOptimizationPresets({ signal: controller.signal }),
+      fetchTradeBacktestOptimizations(props.startDate, props.endDate, { signal: controller.signal })
+    ])
+      .then(([nextCatalog, runs]) => {
+        setCatalog(nextCatalog);
+        setPositionValues((current) => current || nextCatalog.default_max_position_quantities.join(", "));
+        setLossValues((current) => current || nextCatalog.default_daily_loss_limits.join(", "));
+        setRun(
+          runs.find(
+            (item) => item.start_date === (props.startDate ?? null)
+              && item.end_date === (props.endDate ?? null)
+              && item.optimization_engine_version === nextCatalog.optimization_engine_version
+          ) ?? null
+        );
+      })
+      .catch((nextError: unknown) => {
+        if (nextError instanceof DOMException && nextError.name === "AbortError") return;
+        setError(nextError instanceof Error ? nextError.message : "组合回测优化读取失败，请稍后重试。");
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
+      });
+    return () => controller.abort();
+  }, [props.endDate, props.startDate]);
+
+  async function onRunOptimization() {
+    setError(null);
+    let maxPositionQuantities: number[];
+    let dailyLossLimits: number[];
+    try {
+      maxPositionQuantities = parseTradeBacktestOptimizationValues(positionValues, true);
+      dailyLossLimits = parseTradeBacktestOptimizationValues(lossValues, false);
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : "参数格式不正确，请检查后重试。");
+      return;
+    }
+    if (catalog && maxPositionQuantities.some((value) => value > catalog.bounds.max_position_quantity.max)) {
+      setError(`规则 A 单轮单边持仓上限不得超过 ${catalog.bounds.max_position_quantity.max} 股。`);
+      return;
+    }
+    if (catalog && dailyLossLimits.some((value) => value > catalog.bounds.daily_loss_limit.max)) {
+      setError(`规则 B 每日组合亏损线不得超过 ${catalog.bounds.daily_loss_limit.max} USD。`);
+      return;
+    }
+    setRunning(true);
+    try {
+      const result = await runTradeBacktestOptimization({
+        startDate: props.startDate,
+        endDate: props.endDate,
+        maxPositionQuantities,
+        dailyLossLimits
+      });
+      setRun(result);
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : "组合回测优化失败，请稍后重试。");
+    } finally {
+      setRunning(false);
+    }
+  }
+
+  const best = run?.best_candidate ?? null;
+  const bestMetrics = best?.status === "completed" ? (best.metrics as TradeBacktestMetrics) : null;
+
+  return (
+    <section className="tradeBacktestOptimization" aria-label="规则参数组合回测优化">
+      <header className="tradeBacktestOptimizationHeader">
+        <div>
+          <span className="tradeBacktestOptimizationEyebrow"><SlidersHorizontal size={14} />参数研究</span>
+          <h3>A × B 组合回测优化</h3>
+          <p>寻找总盈亏最高的持仓上限与每日亏损线；仅生成研究结果，不自动套用规则。</p>
+        </div>
+        {catalog ? <span className="statusPill info">最多 {catalog.max_candidate_count} 组</span> : null}
+      </header>
+
+      <div className="tradeBacktestOptimizationControls">
+        <label>
+          <span>规则 A · 单轮单边持仓上限（股）</span>
+          <input
+            aria-label="规则 A 持仓上限候选"
+            onChange={(event) => setPositionValues(event.target.value)}
+            placeholder="50, 100, 150, 200, 300, 500, 1000"
+            type="text"
+            value={positionValues}
+          />
+          <small>用逗号分隔 1–{catalog?.bounds.max_position_quantity.max ?? 100000} 的正整数；部分平仓后恢复额度。</small>
+        </label>
+        <label>
+          <span>规则 B · 每日组合亏损线（USD）</span>
+          <input
+            aria-label="规则 B 每日亏损线候选"
+            onChange={(event) => setLossValues(event.target.value)}
+            placeholder="500, 1000, 1500, 2000, 2500, 3000, 3500, 4000, 4500, 5000"
+            type="text"
+            value={lossValues}
+          />
+          <small>取值不超过 {catalog?.bounds.daily_loss_limit.max ?? 1000000} USD；已实现与浮动盈亏触线即清仓并停止当日开仓。</small>
+        </label>
+        <div className="tradeBacktestOptimizationAction">
+          <span>优化目标</span>
+          <strong>{catalog?.objective.label ?? "总盈亏最大"}</strong>
+          <button
+            className="primaryButton"
+            disabled={loading || running || !catalog}
+            onClick={() => void onRunOptimization()}
+            type="button"
+          >
+            <Play size={15} />{running ? "组合运行中…" : "运行组合优化"}
+          </button>
+        </div>
+      </div>
+
+      <p className="tradeBacktestOptimizationScope">数据范围：{props.rangeLabel} · 排名与色阶均来自后端候选账本</p>
+      {error ? <p className="formError">{error}</p> : null}
+      {loading ? (
+        <div className="tradeBacktestOptimizationLoading"><RefreshCw className="spin" size={17} />正在读取当前范围的优化记录</div>
+      ) : !run ? (
+        <div className="tradeBacktestOptimizationEmpty">
+          <Activity size={18} />
+          <div><strong>尚未运行参数优化</strong><span>输入 A 与 B 候选值后，将保存完整组合结果并标出最佳值。</span></div>
+        </div>
+      ) : run.status === "failed" || run.status === "no_trades" ? (
+        <div className="tradeBacktestOptimizationEmpty danger">
+          <AlertTriangle size={18} />
+          <div>
+            <strong>{run.status === "no_trades" ? "当前范围暂无闭合交易" : "本次优化不可用"}</strong>
+            <span>{tradeBacktestOptimizationFailureLabel(run.failure_reason)}</span>
+          </div>
+        </div>
+      ) : (
+        <>
+          <div className="tradeBacktestOptimizationMeta" aria-live="polite">
+            <span className={`statusPill ${run.status === "completed" ? "ok" : "warn"}`}>
+              {run.status === "completed" ? "组合已完成" : "部分候选失败"}
+            </span>
+            <span>{run.completed_candidate_count} / {run.total_candidates} 组可用</span>
+            <span>目标 {run.objective_version}</span>
+            <span>生成于 {formatDateTime(run.created_at)}</span>
+          </div>
+
+          {best && bestMetrics ? (
+            <section className="tradeBacktestBest" aria-label="组合回测最佳参数">
+              <div className="tradeBacktestBestLead">
+                <span>最佳组合</span>
+                <strong>A {formatShareQuantity(best.max_position_quantity)} 股</strong>
+                <strong>B {formatInteger(best.daily_loss_limit)} USD</strong>
+                <small>候选排名 #{best.rank} · 不自动套用</small>
+              </div>
+              <dl>
+                <div><dt>总盈亏</dt><dd className={summaryTone(bestMetrics.pnl)}>{formatPnl(bestMetrics.pnl)}</dd></div>
+                <div><dt>较基准</dt><dd className={summaryTone(bestMetrics.delta_vs_baseline)}>{formatPnl(bestMetrics.delta_vs_baseline)}</dd></div>
+                <div><dt>胜率</dt><dd>{formatPercentValue(bestMetrics.win_rate)}</dd></div>
+                <div><dt>盈亏比</dt><dd>{formatNullable(bestMetrics.profit_factor)}</dd></div>
+                <div><dt>单笔期望</dt><dd>{formatSignedNullable(bestMetrics.expected_value_per_trade)}</dd></div>
+                <div><dt>止损天数</dt><dd>{formatInteger(bestMetrics.stop_trigger_days)}</dd></div>
+              </dl>
+            </section>
+          ) : null}
+
+          <section className="tradeBacktestMatrixSection">
+            <header><div><h4>参数收益矩阵</h4><p>行是每日亏损线，列是持仓上限；色阶由 API 返回的候选等级决定。</p></div></header>
+            <div className="tableWrap tradeBacktestMatrixWrap">
+              <table className="tradeBacktestMatrix">
+                <thead><tr><th>B \ A</th>{run.parameter_space.max_position_quantities.map((value) => <th key={value}>{formatShareQuantity(value)} 股</th>)}</tr></thead>
+                <tbody>{run.matrix.map((row) => (
+                  <tr key={row.daily_loss_limit}>
+                    <th>{formatInteger(row.daily_loss_limit)} USD</th>
+                    {row.cells.map((cell, index) => <TradeBacktestOptimizationMatrixCell cell={cell} key={`${row.daily_loss_limit}-${run.parameter_space.max_position_quantities[index]}`} />)}
+                  </tr>
+                ))}</tbody>
+              </table>
+            </div>
+          </section>
+
+          <section className="tradeBacktestRankingSection">
+            <header><div><h4>Top 10 候选</h4><p>完整 {run.returned_candidate_count} 组候选均已保存；此处仅展示前十名。</p></div></header>
+            <div className="tableWrap">
+              <table className="tradeBacktestRankingTable">
+                <thead><tr><th>排名</th><th>A 持仓上限</th><th>B 每日亏损线</th><th>总盈亏</th><th>较基准</th><th>胜率</th><th>盈亏比</th><th>止损天数</th></tr></thead>
+                <tbody>{run.top_candidates.map((candidate) => {
+                  const metrics = candidate.metrics as TradeBacktestMetrics;
+                  return <tr key={candidate.id}>
+                    <td data-label="排名">#{candidate.rank}</td><td data-label="A 持仓上限">{formatShareQuantity(candidate.max_position_quantity)} 股</td>
+                    <td data-label="B 每日亏损线">{formatInteger(candidate.daily_loss_limit)} USD</td><td className={summaryTone(metrics.pnl)} data-label="总盈亏">{formatPnl(metrics.pnl)}</td>
+                    <td className={summaryTone(metrics.delta_vs_baseline)} data-label="较基准">{formatPnl(metrics.delta_vs_baseline)}</td>
+                    <td data-label="胜率">{formatPercentValue(metrics.win_rate)}</td><td data-label="盈亏比">{formatNullable(metrics.profit_factor)}</td><td data-label="止损天数">{formatInteger(metrics.stop_trigger_days)}</td>
+                  </tr>;
+                })}</tbody>
+              </table>
+            </div>
+          </section>
+        </>
+      )}
+    </section>
+  );
+}
+
+function TradeBacktestOptimizationMatrixCell(props: { cell: TradeBacktestOptimizationCandidate | null }) {
+  if (!props.cell) return <td aria-label="候选结果不可用" className="tradeBacktestMatrixCell unavailable">N/A</td>;
+  if (props.cell.status !== "completed") {
+    return <td aria-label={`持仓上限 ${formatShareQuantity(props.cell.max_position_quantity)} 股，每日亏损线 ${formatInteger(props.cell.daily_loss_limit)} USD，候选失败`} className="tradeBacktestMatrixCell unavailable">N/A</td>;
+  }
+  const metrics = props.cell.metrics as TradeBacktestMetrics;
+  return (
+    <td
+      aria-label={`持仓上限 ${formatShareQuantity(props.cell.max_position_quantity)} 股，每日亏损线 ${formatInteger(props.cell.daily_loss_limit)} USD，总盈亏 ${formatPnl(metrics.pnl)}，排名 ${props.cell.rank}`}
+      className={`tradeBacktestMatrixCell ${props.cell.tone}`}
+      title={`排名 #${props.cell.rank} · 胜率 ${formatPercentValue(metrics.win_rate)}`}
+    >
+      <strong>{formatPnl(metrics.pnl)}</strong><small>#{props.cell.rank}</small>
+    </td>
+  );
+}
+
+function parseTradeBacktestOptimizationValues(value: string, requireInteger: boolean): number[] {
+  const values = value.split(/[，,\s]+/).filter(Boolean).map(Number);
+  if (!values.length || values.some((item) => !Number.isFinite(item) || item <= 0 || (requireInteger && !Number.isInteger(item)))) {
+    throw new Error(requireInteger ? "规则 A 候选必须是用逗号分隔的正整数。" : "规则 B 候选必须是用逗号分隔的正数。");
+  }
+  return values;
+}
+
+function tradeBacktestOptimizationFailureLabel(reason: string | null) {
+  if (!reason) return "后端未生成可用候选结果。";
+  if (reason === "trade_backtest_open_trade_group_unsupported") return "当前范围存在未闭合交易，不能生成伪造最佳值。";
+  if (reason === "trade_backtest_cross_day_position_unsupported") return "当前范围存在跨日仓位，首版参数优化暂不支持。";
+  if (reason.includes("archive") || reason === "no_bars_returned") return "分钟线归档缺失、不可用或证据校验失败。";
+  return "候选执行未生成可用结果，请检查数据证据后重试。";
+}
+
+function TradeBacktestScenarioRow(props: { scenario: TradeBacktestScenarioResult }) {
+  const meta = tradeBacktestScenarioStatusMeta[props.scenario.status];
+  const metrics = props.scenario.status === "completed" ? (props.scenario.metrics as TradeBacktestMetrics) : null;
+  const detail = tradeBacktestScenarioDetail(props.scenario, meta.detail);
+  return (
+    <tr>
+      <td className="tradeBacktestScenarioName" data-label="场景"><strong>{props.scenario.label}</strong><small>{props.scenario.description}</small></td>
+      <td data-label="状态"><span className={`statusPill ${meta.tone}`} title={detail}>{meta.label}</span></td>
+      <td className={metrics ? summaryTone(metrics.pnl) : undefined} data-label="总盈亏">{metrics ? formatPnl(metrics.pnl) : "N/A"}</td>
+      <td className={metrics ? summaryTone(metrics.delta_vs_baseline) : undefined} data-label="较基准">{metrics ? formatPnl(metrics.delta_vs_baseline) : "N/A"}</td>
+      <td data-label="交易轮数">{metrics ? formatInteger(metrics.closed_trade_count) : "N/A"}</td>
+      <td data-label="交易股数">{metrics ? formatShareQuantity(metrics.traded_quantity) : "N/A"}</td>
+      <td data-label="胜率">{metrics ? formatPercentValue(metrics.win_rate) : "N/A"}</td>
+      <td data-label="盈亏比">{metrics ? formatNullable(metrics.profit_factor) : "N/A"}</td>
+      <td data-label="单笔期望">{metrics ? formatSignedNullable(metrics.expected_value_per_trade) : "N/A"}</td>
+      <td data-label="每股净收益">{metrics ? formatSignedNullable(metrics.net_profit_per_share) : "N/A"}</td>
+      <td data-label="最差日内盈亏">{metrics ? formatSignedNullable(metrics.worst_intraday_pnl) : "N/A"}</td>
+      <td data-label="限仓忽略股数">{metrics ? formatShareQuantity(metrics.capped_open_quantity) : "N/A"}</td>
+      <td data-label="强制清仓">{metrics ? formatInteger(metrics.forced_exit_count) : "N/A"}</td>
+      <td data-label="止损天数">{metrics ? formatInteger(metrics.stop_trigger_days) : "N/A"}</td>
+      <td data-label="止损后拦截">{metrics ? `${formatShareQuantity(metrics.blocked_open_quantity)} 股 / ${formatInteger(metrics.blocked_open_trade_count)} 轮` : detail}</td>
+      <td data-label="忽略不完整时段">{metrics ? `${formatInteger(metrics.ignored_incomplete_archive_target_count ?? 0)} 个日期/标的` : "N/A"}</td>
+    </tr>
+  );
+}
+
+function tradeBacktestScenarioDetail(scenario: TradeBacktestScenarioResult, fallback: string) {
+  const failedTarget = scenario.evidence.failed_archive_target;
+  if (!failedTarget || typeof failedTarget !== "object") return fallback;
+  const tradeDate = "trade_date" in failedTarget ? failedTarget.trade_date : null;
+  const symbol = "symbol" in failedTarget ? failedTarget.symbol : null;
+  if (typeof tradeDate !== "string" || typeof symbol !== "string") return fallback;
+  return `${fallback}（${tradeDate} · ${symbol}）`;
 }
 
 const tradeSummaryGenerationMeta: Record<

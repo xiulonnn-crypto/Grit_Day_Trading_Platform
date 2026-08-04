@@ -8,6 +8,10 @@ import type {
   MarketMinuteArchive,
   QuarantineRow,
   TradeReview,
+  TradeBacktestPresetCatalog,
+  TradeBacktestOptimizationPresetCatalog,
+  TradeBacktestOptimizationRun,
+  TradeBacktestRun,
   TradeSummary,
   ReviewSummary,
   ReviewSummaryGroup,
@@ -31,6 +35,7 @@ function responsePath(response: Response): string {
 }
 
 function apiLabel(pathname: string): string {
+  if (pathname.includes("/api/review/trade-backtest")) return "交易回测";
   if (pathname.includes("/api/trade-groups/") && pathname.includes("/review")) return "亏损复盘保存";
   if (pathname.includes("/api/trade-groups")) return "交易组读取";
   if (pathname.includes("/api/imports/stp-txt")) return "STP TXT 上传";
@@ -69,6 +74,16 @@ const apiErrorDetailMessages: Record<string, string> = {
   trade_summary_llm_invalid_base_url: "本地复盘模型地址无效，必须使用包含 /v1 的 loopback 地址。",
   trade_summary_llm_non_loopback_rejected: "复盘模型只允许使用本机 loopback 地址。",
   trade_summary_date_range_invalid: "交易总结开始日期不能晚于结束日期。",
+  trade_backtest_not_found: "没有找到这次交易回测，请刷新回测记录后重试。",
+  trade_backtest_date_invalid: "交易回测日期格式不正确，请使用 YYYY-MM-DD。",
+  trade_backtest_date_range_invalid: "交易回测开始日期不能晚于结束日期。",
+  trade_backtest_optimization_not_found: "没有找到这次参数组合优化，请刷新记录后重试。",
+  trade_backtest_optimization_candidate_cap_exceeded: "参数组合超过 120 组，请缩小 A 或 B 的取值范围。",
+  trade_backtest_optimization_max_position_quantities_empty: "请至少输入一个持仓上限。",
+  trade_backtest_optimization_daily_loss_limits_empty: "请至少输入一个每日亏损线。",
+  trade_backtest_optimization_max_position_quantities_invalid: "持仓上限必须是有效的正整数。",
+  trade_backtest_optimization_daily_loss_limits_invalid: "每日亏损线必须是有效的正数。",
+  trade_backtest_optimization_objective_invalid: "当前只支持按总盈亏最大寻找最佳组合。",
   unsupported_trade_review_category: "请选择有效的亏损原因分类。",
   unsupported_trade_review_reason: "请选择有效的亏损原因。",
   archive_symbol_required: "请选择要归档的标的。",
@@ -368,6 +383,84 @@ export async function generateTradeSummary(startDate?: string, endDate?: string)
       body: JSON.stringify({
         start_date: startDate || null,
         end_date: endDate || null
+      })
+    })
+  );
+}
+
+export async function fetchTradeBacktestPresets(
+  options: GetRequestOptions = {}
+): Promise<TradeBacktestPresetCatalog> {
+  return readGetJson<TradeBacktestPresetCatalog>("/api/review/trade-backtest-presets", options);
+}
+
+export async function fetchTradeBacktests(
+  startDate?: string,
+  endDate?: string,
+  options: GetRequestOptions = {}
+): Promise<TradeBacktestRun[]> {
+  const search = new URLSearchParams({ limit: "20" });
+  if (startDate) search.set("start_date", startDate);
+  if (endDate) search.set("end_date", endDate);
+  const payload = await readGetJson<{ items: TradeBacktestRun[] }>(
+    `/api/review/trade-backtests?${search.toString()}`,
+    options
+  );
+  return payload.items;
+}
+
+export async function runTradeBacktest(startDate?: string, endDate?: string): Promise<TradeBacktestRun> {
+  return readJson<TradeBacktestRun>(
+    await fetch("/api/review/trade-backtests", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ start_date: startDate || null, end_date: endDate || null })
+    })
+  );
+}
+
+export async function fetchTradeBacktestOptimizationPresets(
+  options: GetRequestOptions = {}
+): Promise<TradeBacktestOptimizationPresetCatalog> {
+  return readGetJson<TradeBacktestOptimizationPresetCatalog>(
+    "/api/review/trade-backtest-optimization-presets",
+    options
+  );
+}
+
+export async function fetchTradeBacktestOptimizations(
+  startDate?: string,
+  endDate?: string,
+  options: GetRequestOptions = {}
+): Promise<TradeBacktestOptimizationRun[]> {
+  const search = new URLSearchParams({ limit: "20" });
+  if (startDate) search.set("start_date", startDate);
+  if (endDate) search.set("end_date", endDate);
+  const payload = await readGetJson<{ items: TradeBacktestOptimizationRun[] }>(
+    `/api/review/trade-backtest-optimizations?${search.toString()}`,
+    options
+  );
+  return payload.items;
+}
+
+export async function runTradeBacktestOptimization(
+  payload: {
+    startDate?: string;
+    endDate?: string;
+    maxPositionQuantities: number[];
+    dailyLossLimits: number[];
+  }
+): Promise<TradeBacktestOptimizationRun> {
+  return readJson<TradeBacktestOptimizationRun>(
+    await fetch("/api/review/trade-backtest-optimizations", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        start_date: payload.startDate || null,
+        end_date: payload.endDate || null,
+        max_position_quantities: payload.maxPositionQuantities,
+        daily_loss_limits: payload.dailyLossLimits,
+        objective: "maximize_pnl_v1"
       })
     })
   );

@@ -26,6 +26,12 @@ def test_login_launcher_auto_fallbacks_when_default_backend_is_stale():
     assert "REQUIRED_TRADE_REVIEW_ROUTE=/api/trade-groups/{trade_group_id}/review" in launcher
     assert "REQUIRED_TRADE_SUMMARY_ROUTE=/api/review/trade-summary" in launcher
     assert "REQUIRED_TRADE_SUMMARY_GENERATION_ROUTE=/api/review/trade-summary/generations" in launcher
+    assert "REQUIRED_TRADE_BACKTEST_PRESETS_ROUTE=/api/review/trade-backtest-presets" in launcher
+    assert "REQUIRED_TRADE_BACKTEST_ROUTE=/api/review/trade-backtests" in launcher
+    assert "REQUIRED_TRADE_BACKTEST_DETAIL_ROUTE=/api/review/trade-backtests/{run_id}" in launcher
+    assert "REQUIRED_TRADE_BACKTEST_OPTIMIZATION_PRESETS_ROUTE=/api/review/trade-backtest-optimization-presets" in launcher
+    assert "REQUIRED_TRADE_BACKTEST_OPTIMIZATION_ROUTE=/api/review/trade-backtest-optimizations" in launcher
+    assert "REQUIRED_TRADE_BACKTEST_OPTIMIZATION_DETAIL_ROUTE=/api/review/trade-backtest-optimizations/{run_id}" in launcher
     assert "REQUIRED_STRATEGY_TEMPLATE=five_minute_opening_range_breakout_v1" in launcher
     assert "REQUIRED_STRATEGY_RUN_DETAIL_ROUTE=/api/strategy-runs/{run_id}" in launcher
     assert "REQUIRED_AI_STRATEGY_ROUTE=/api/ai-strategy-recommendations" in launcher
@@ -34,15 +40,24 @@ def test_login_launcher_auto_fallbacks_when_default_backend_is_stale():
     assert "REQUIRED_TRADE_EXCURSION_CONTRACT=trade_group_excursion_v2" in launcher
     assert "REQUIRED_AI_STRATEGY_CATALOG=ai_strategy_catalog_v2" in launcher
     assert "REQUIRED_TRADE_SUMMARY_CONTRACT=trade_summary_contract_v3" in launcher
+    assert "REQUIRED_TRADE_BACKTEST_CONTRACT=trade_backtest_contract_v5" in launcher
+    assert "REQUIRED_TRADE_BACKTEST_OPTIMIZATION_CONTRACT=trade_backtest_optimization_contract_v1" in launcher
     assert "REQUIRED_MINUTE_ARCHIVE_CONTRACT=yahoo_futu_quality_fallback_v2" in launcher
     assert "REQUIRED_FRONTEND_MARKER=AiStrategyWorkspace" in launcher
     assert "REQUIRED_TRADE_SUMMARY_FRONTEND_MARKER=TradeSummaryPanel" in launcher
-    assert "FRONTEND_CACHE_BUSTER=ai-strategy-recommendation-v2" in launcher
+    assert "REQUIRED_TRADE_BACKTEST_FRONTEND_MARKER=TradeBacktestPanel" in launcher
+    assert "FRONTEND_CACHE_BUSTER=trade-backtest-rules-v5" in launcher
     assert "%REQUIRED_AI_STRATEGY_ROUTE%" in launcher
     assert "%REQUIRED_STRATEGY_RUN_DETAIL_ROUTE%" in launcher
     assert "%REQUIRED_TRADE_REVIEW_ROUTE%" in launcher
     assert "%REQUIRED_TRADE_SUMMARY_ROUTE%" in launcher
     assert "%REQUIRED_TRADE_SUMMARY_GENERATION_ROUTE%" in launcher
+    assert "%REQUIRED_TRADE_BACKTEST_PRESETS_ROUTE%" in launcher
+    assert "%REQUIRED_TRADE_BACKTEST_ROUTE%" in launcher
+    assert "%REQUIRED_TRADE_BACKTEST_DETAIL_ROUTE%" in launcher
+    assert "%REQUIRED_TRADE_BACKTEST_OPTIMIZATION_PRESETS_ROUTE%" in launcher
+    assert "%REQUIRED_TRADE_BACKTEST_OPTIMIZATION_ROUTE%" in launcher
+    assert "%REQUIRED_TRADE_BACKTEST_OPTIMIZATION_DETAIL_ROUTE%" in launcher
     assert "%FRONTEND_URL%/api/healthz" in launcher
     assert "%FRONTEND_URL%/openapi.json" in launcher
     assert "$h.live_signal_contract -ne '%REQUIRED_LIVE_SIGNAL_CONTRACT%'" in launcher
@@ -50,6 +65,8 @@ def test_login_launcher_auto_fallbacks_when_default_backend_is_stale():
     assert "$h.trade_excursion_contract -ne '%REQUIRED_TRADE_EXCURSION_CONTRACT%'" in launcher
     assert "$h.ai_strategy_catalog -ne '%REQUIRED_AI_STRATEGY_CATALOG%'" in launcher
     assert "$h.trade_summary_contract -ne '%REQUIRED_TRADE_SUMMARY_CONTRACT%'" in launcher
+    assert "$h.trade_backtest_contract -ne '%REQUIRED_TRADE_BACKTEST_CONTRACT%'" in launcher
+    assert "$h.trade_backtest_optimization_contract -ne '%REQUIRED_TRADE_BACKTEST_OPTIMIZATION_CONTRACT%'" in launcher
     assert "$h.minute_archive_contract -ne '%REQUIRED_MINUTE_ARCHIVE_CONTRACT%'" in launcher
     assert "%FRONTEND_URL%/src/App.tsx" in launcher
     assert ".Contains('%REQUIRED_FRONTEND_MARKER%')" in launcher

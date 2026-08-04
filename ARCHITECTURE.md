@@ -1,5 +1,18 @@
 # Architecture
 
+## P3 交易回测研究 read model 边界
+
+- Canonical source: 去重后的 committed fills 决定账户、标的、方向、成交时间、成交价格和数量；既有 `orders`、`fills`、Trade Groups、Review Journal 与 P2 策略配置始终只读，回测结果不得覆盖任何成交事实或策略参数。
+- Market artifact source: 规则 B/C 按交易日期和标的选择 `market_minute_archives`，并保存 archive id、provider、`bars_hash`、bar 数、质量投影与覆盖状态组成的 manifest。结构/hash 有效但未完整覆盖成交窗口时，缺失分钟不参与风控检查，其余真实成交与已有分钟证据继续重放；只有局部质量异常的 `partial` 归档会忽略整个日期/标的，确保异常价格不进入模拟。归档缺失、provider 不可用或 JSON/hash 无效时不得生成风险规则成功结果。
+- Read model: `GET /api/review/trade-backtest-presets` 返回版本化基准/A/B/C 预设；`POST /api/review/trade-backtests` 只接收日期范围并运行或复用四组结果。组合优化通过独立 presets、运行、列表和详情 API 接收 A/B 搜索空间，并返回后端已排名的最佳组合、完整候选、矩阵与 Top 10 投影。前端不读取 bars，也不自行计算 PnL、排名或色阶。
+- Artifact source: `trade_backtest_runs` 和 `trade_backtest_scenario_results` 保存四场景来源与结果；`trade_backtest_optimization_runs` 保存精确来源 run、目标/引擎版本、参数空间/hash、成交与归档 hash、parser/mapper 版本和候选 manifest；`trade_backtest_optimization_candidates` 保存每一组 A/B 参数、状态、汇总指标、证据和结果 hash。Top 10 不是事实源，完整候选表才是 canonical optimization ledger。
+- Idempotency: 四场景 run 由 `start_date + end_date + trade_backtest_rule_catalog_v5 + trade_backtest_engine_v4 + source_fill_hash + archive_scope_hash` 组成稳定 SHA-256；优化 run 再加入精确 `source_trade_backtest_run_id`、`maximize_pnl_v1`、优化引擎版本和规范化参数空间 hash。相同输入复用原 run；成交、归档、固定规则目录或搜索空间变化后创建新 artifact。
+- Ranking: `trade_backtest_optimization_contract_v1` 默认完整网格为 A=`[50,100,150,200,300,500,1000]` × B=`[500,1000,1500,2000,2500,3000,3500,4000,4500,5000]`，共 70 组；自定义搜索保留宽范围安全校验，并继续受 120 组候选上限约束。候选先按总盈亏降序，再按更低持仓上限、更低每日亏损线和稳定参数 hash 排序。最佳候选只读展示，不写回策略配置、订单、成交或 Review Journal。
+- Simulation contract: 规则 A 在原账户、标的和交易轮次内把模拟绝对持仓限制为 200 股，平仓恢复额度且超量平仓不制造反向仓位。规则 B 汇总全账户已实现与持仓浮动 PnL，达到或低于 -1000 USD 时同步清仓并阻止当日后续开仓；规则 C 先限仓，再对限仓后的组合执行止损。成交分钟只使用真实成交价，变更仓位从下一根完整分钟开始使用 OHLC；多头取 low、空头取 high，开盘已越线按 open，否则按共同插值点清仓。覆盖缺口不会补造价格，局部质量异常的 target 不应用任何 bars，两者都由 `ignored_incomplete_archive_target_count` 留证。
+- Failure contract: 没有闭合交易返回 `no_trades`；缺失、provider 不可用或 JSON/hash 无效归档只让规则 B/C 失败，基准/A 仍可按 committed fills 输出且最差日内组合 PnL 为 N/A。覆盖不完整或局部质量异常的归档允许 B/C 完成，但最差日内组合 PnL 为 N/A 并记录忽略目标；跨日持仓或未闭合轮次使四个场景都返回明确不支持状态，不能输出零值成功态；场景可部分失败，run 状态为 `partial_failed`。
+- Parser/mapper boundary: 本切片不升级 parser version 或 field mapper version，但 run 保存所有来源版本集合，确保回测 artifact 可追溯到原始 committed-fill 解析合同。
+- Phase boundary: 该功能属于 P3 交易复盘研究 read model，不属于 P2 策略信号测试，不调用行情 provider、不产生自动下单、不修改策略配置，也不把模拟结果写回 P0/P1/P2 事实源。
+
 ## P3 GitHub Pages 交易复盘快照边界
 
 - Canonical source: 云端不成为新事实源；数据下钻仍以 committed fills 构成的 closed Trade Groups 为准，盈亏归因仍以 Review Journal 为准，交易总结仍引用已保存分钟归档证据和版本化规则目录。

@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>交易回测组合参数优化</title>
+  <style>
+    *{box-sizing:border-box}body{margin:0;background:#f3f6fb;color:#10233f;font:14px/1.5 "Microsoft YaHei",Arial,sans-serif}main{width:min(1180px,calc(100% - 32px));margin:28px auto}.tabs{display:grid;grid-template-columns:repeat(4,110px);gap:6px;width:max-content;padding:4px;background:#fff;border:1px solid #d8e1ef;border-radius:12px}.tab{padding:9px 14px;text-align:center;font-weight:700}.tab.active{color:#1769e0;background:#edf4ff;border:1px solid #9ec0ff;border-radius:8px}.panel{margin-top:16px;padding:22px;background:#fff;border:1px solid #d8e1ef;border-radius:14px;box-shadow:0 14px 34px rgba(30,55,90,.08)}header{display:flex;justify-content:space-between;gap:16px;align-items:flex-start}h1,h2{margin:0}h1{font-size:24px}h2{font-size:18px}.sub{margin:5px 0 0;color:#5d6f88}.filter{margin-top:18px;padding:12px 14px;border:1px solid #d8e1ef;border-radius:10px;background:#f9fbfe}.scenario{margin-top:16px;padding:14px;border:1px solid #d8e1ef;border-radius:10px;color:#5d6f88}.optimization{margin-top:18px;padding:18px;border:1px solid #c9d8ec;border-radius:13px;background:#fbfdff}.optimization-head{display:flex;justify-content:space-between;gap:16px}.objective{color:#1769e0;font-weight:700}.fields{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:16px}.field{padding:13px;border:1px solid #d8e1ef;border-radius:10px;background:#fff}.field label{display:block;font-weight:700;margin-bottom:7px}.input{padding:10px;border:1px solid #aebdd1;border-radius:8px;color:#344b6a;background:#fff}.help{margin-top:5px;color:#72839a;font-size:12px}.action{display:flex;justify-content:space-between;align-items:center;margin-top:14px;color:#5d6f88}.button{padding:10px 18px;border-radius:8px;background:#1769e0;color:#fff;font-weight:700}.best{display:grid;grid-template-columns:1.4fr repeat(4,1fr);gap:10px;margin-top:18px;padding:14px;border:1px solid #9ec0ff;border-radius:11px;background:#eaf3ff}.best div{display:flex;flex-direction:column}.best span{font-size:12px;color:#5d6f88}.best strong{font-size:18px}.positive{color:#0a7a42}.content{display:grid;grid-template-columns:1.2fr .8fr;gap:14px;margin-top:14px}.card{padding:14px;border:1px solid #d8e1ef;border-radius:11px;background:#fff}.card-title{display:flex;justify-content:space-between;margin-bottom:10px}.matrix-wrap{overflow:auto}.matrix{display:grid;grid-template-columns:88px repeat(7,1fr);min-width:690px;gap:4px;font-size:12px}.cell{min-height:40px;padding:5px;border-radius:6px;background:#f1f5fb;text-align:center}.cell.head{background:transparent;font-weight:700}.cell.best-cell{background:#cfe3ff;color:#0b4fa8;font-weight:700}.cell.strong{background:#e4f1e9;color:#0a6a3b}.rank{width:100%;border-collapse:collapse;font-size:12px}.rank th,.rank td{padding:8px;border-bottom:1px solid #e2e8f1;text-align:right}.rank th:first-child,.rank td:first-child{text-align:left}.foot{margin-top:12px;color:#5d6f88;font-size:12px}@media(max-width:700px){main{width:min(100% - 20px,460px);margin:12px auto}.tabs{width:100%;grid-template-columns:1fr 1fr}.panel{padding:14px}header,.optimization-head,.action{flex-direction:column}.fields,.content{grid-template-columns:1fr}.button{width:100%;text-align:center}.best{grid-template-columns:1fr 1fr}.best div:first-child{grid-column:1/-1}.rank tr{display:grid;grid-template-columns:1fr 1fr}.rank thead{display:none}.rank td{text-align:left}.rank td:first-child{grid-column:1/-1;font-weight:700}}
+  </style>
+</head>
+<body>
+<main>
+  <nav class="tabs"><span class="tab">数据下钻</span><span class="tab">盈亏复盘</span><span class="tab">交易总结</span><span class="tab active">交易回测</span></nav>
+  <section class="panel">
+    <header><div><h1>历史交易规则回测</h1><p class="sub">用 committed fills 比较交易纪律，不修改成交事实。</p></div><strong>四场景已完成</strong></header>
+    <div class="filter">范围：全部闭合交易</div>
+    <div class="scenario">基准、规则 A、规则 B、规则 C 的既有汇总结果保持在本区上方。</div>
+    <section class="optimization">
+      <div class="optimization-head"><div><h2>组合参数优化</h2><p class="sub">组合规则 A 的持仓上限与规则 B 的每日亏损线，按总盈亏寻找最佳值。</p></div><span class="objective">优化目标：总盈亏最大</span></div>
+      <div class="fields">
+        <div class="field"><label>规则 A 候选值（股）</label><div class="input">50, 100, 150, 200, 300, 500, 1000</div><div class="help">每轮实时绝对持仓上限；正整数、去重、升序</div></div>
+        <div class="field"><label>规则 B 候选值</label><div class="input">500, 1000, 1500, 2000, 2500, 3000, 3500, 4000, 4500, 5000</div><div class="help">全账户已实现与浮动盈亏触线后停手</div></div>
+      </div>
+      <div class="action"><span>70 个完整候选组合 · 上限 120</span><span class="button">运行组合优化</span></div>
+      <div class="best"><div><span>最佳组合</span><strong>500 股 / 1,000</strong></div><div><span>总盈亏</span><strong>-1,623.82</strong></div><div><span>较基准</span><strong class="positive">+8,981.25</strong></div><div><span>止损天数</span><strong>19</strong></div><div><span>排名</span><strong>1 / 70</strong></div></div>
+      <div class="content">
+        <div class="card"><div class="card-title"><strong>完整候选矩阵</strong><span>行：亏损线 · 列：持仓上限</span></div><div class="matrix-wrap"><div class="matrix">
+          <span class="cell head">B \ A</span><span class="cell head">50</span><span class="cell head">100</span><span class="cell head">150</span><span class="cell head">200</span><span class="cell head">300</span><span class="cell head">500</span><span class="cell head">1000</span>
+          <span class="cell head">500</span><span class="cell strong">-8.0k</span><span class="cell">-12.6k</span><span class="cell">-12.5k</span><span class="cell">-12.5k</span><span class="cell">-12.5k</span><span class="cell">-12.5k</span><span class="cell">-12.5k</span>
+          <span class="cell head">1000</span><span class="cell">-3.9k</span><span class="cell strong">-3.2k</span><span class="cell strong">-2.3k</span><span class="cell strong">-1.6k</span><span class="cell strong">-1.6k</span><span class="cell best-cell">-1.6k · #1</span><span class="cell strong">-1.6k · #2</span>
+        </div></div></div>
+        <div class="card"><div class="card-title"><strong>Top 10 候选</strong><span>完整 70 组已保存</span></div><table class="rank"><thead><tr><th>排名</th><th>A</th><th>B</th><th>总盈亏</th></tr></thead><tbody><tr><td>#1</td><td>500</td><td>1,000</td><td class="positive">-1,624</td></tr><tr><td>#2</td><td>1,000</td><td>1,000</td><td>-1,624</td></tr><tr><td>#3</td><td>300</td><td>1,000</td><td>-1,624</td></tr><tr><td>#4</td><td>200</td><td>1,000</td><td>-1,633</td></tr></tbody></table></div>
+      </div>
+      <p class="foot">结果仅用于规则研究，不会自动修改交易配置。</p>
+    </section>
+  </section>
+</main>
+</body>
+</html>
